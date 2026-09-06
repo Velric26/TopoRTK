@@ -1,0 +1,30 @@
+# Hardware Documentation
+
+> Update hardware records only from manufacturer documentation, physical inspection, or validated measurements.
+
+## Devices
+
+| Device | Role | Documentation | Validation |
+|---|---|---|---|
+| Waveshare ESP32-S3-Touch-LCD-3.5 | Controller, display, touch, logging, and communications | [Board documentation](waveshare-esp32-s3-touch-lcd-3.5/README.md) | Both displays and TTL2 links passed; Unit A touch passed; per-unit A/B firmware builds validated by 2026-09-06 |
+| Unicore UM980 on BDRTK-980 | Base and rover RTK engine | [Module, carrier, and connected receiver](unicore-um980/README.md) | Both units passed USB and bidirectional TTL2; Unit A passed standalone GPS and ESP32-relayed temporary base mode; Unit B rover mode confirmed; RTK pending |
+| Holybro SiK 1 W 915 MHz pair | RTCM correction link | Planned | Pending |
+| K700 GNSS antenna | Primary survey antenna | [K700 hardware note](k700-gnss-antenna/README.md) | On hold: antenna-side cable center-contact gender mismatch |
+| HA-609 GNSS antenna | Compact comparison antenna | Planned | Battery-powered standalone GPS fix passed 2026-09-05; controlled comparison pending |
+| BNO085 | Experimental orientation/tilt input | Planned | Pending |
+
+## Documentation Rules
+
+For each hardware device, keep:
+
+- One device folder with a `README.md` as its entry point.
+- Locally embedded diagrams under `assets/`.
+- Critical manufacturer documents under `references/`.
+- Original URLs, retrieval dates, and checksums in `SOURCES.md`.
+- Exact model/revision notes and links to real test records.
+
+Do not assign a GPIO from a product image alone. Check the complete schematic for onboard conflicts, electrical levels, boot-strapping behavior, and power domains.
+
+## System-Level Records
+
+As assemblies are designed, add verified wiring, power, connector, antenna-reference, enclosure, and revision records here or in focused system documents. Never overwrite older test evidence when hardware changes.

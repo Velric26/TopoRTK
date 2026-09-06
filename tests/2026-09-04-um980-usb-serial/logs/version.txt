@@ -1,0 +1,2 @@
+$command,VERSION,response: OK*04
+#VERSION,98,GPS,UNKNOWN,1,173000,0,0,18,36;UM980,R4.10Build13504,HRPT00-S10C-P,<receiver-serial-redacted>,<firmware-fingerprint-redacted>,2024/04/03*<checksum-redacted>

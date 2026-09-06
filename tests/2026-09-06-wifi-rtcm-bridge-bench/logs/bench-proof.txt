@@ -1,0 +1,22 @@
+Sanitized native USB excerpts, 2026-09-06
+Unique device identifiers omitted.
+
+Pre-activation:
+A> WIFI TEST A: clients=1 peer=YES TX=75 hello_RX=10 bad=0 RTCM_UART=0 RTCM_TX=0 RTCM_BAD=0 last=0
+B> WIFI TEST B: link=UP RSSI=-56 TX_hello=9 RX=36 gap=0 bad=0 last=93 RTCM_RX=0 bytes=0 type=0
+
+RTCM command acknowledgements:
+A> $command,RTCM1006 COM2 10,response: OK
+A> $command,RTCM1033 COM2 10,response: OK
+A> $command,RTCM1074 COM2 1,response: OK
+A> $command,RTCM1124 COM2 1,response: OK
+A> $command,RTCM1084 COM2 1,response: OK
+A> $command,RTCM1094 COM2 1,response: OK
+
+Role verification after restoring temporary base mode:
+A> MODE BASE TIME 60 2.5 3.5
+B> MODE ROVER SURVEY
+
+Final bridge status:
+A> clients=1 peer=YES bad=0 RTCM_UART=0 RTCM_TX=0 RTCM_BAD=0
+B> link=UP gap=0 bad=0 RTCM_RX=0 bytes=0 type=0

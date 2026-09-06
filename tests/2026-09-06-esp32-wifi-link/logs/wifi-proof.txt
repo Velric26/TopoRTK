@@ -1,0 +1,18 @@
+Unit A and Unit B native USB excerpts, 2026-09-06
+Unique hardware identifiers omitted.
+
+A> WIFI TEST A: clients=1 peer=YES TX=26 hello_RX=7 bad=0
+A> WIFI TEST A: clients=1 peer=YES TX=34 hello_RX=9 bad=0
+B> WIFI TEST B: link=UP RSSI=-53 TX_hello=7 RX=28 gap=0 bad=0 last=28
+A> WIFI TEST A: clients=1 peer=YES TX=42 hello_RX=11 bad=0
+B> WIFI TEST B: link=UP RSSI=-50 TX_hello=11 RX=44 gap=0 bad=0 last=44
+A> WIFI TEST A: clients=1 peer=YES TX=50 hello_RX=13 bad=0
+B> WIFI TEST B: link=UP RSSI=-49 TX_hello=13 RX=52 gap=0 bad=0 last=52
+A> WIFI TEST A: clients=1 peer=YES TX=58 hello_RX=15 bad=0
+B> WIFI TEST B: link=UP RSSI=-49 TX_hello=15 RX=60 gap=0 bad=0 last=60
+A> WIFI TEST A: clients=1 peer=YES TX=66 hello_RX=17 bad=0
+B> WIFI TEST B: link=UP RSSI=-48 TX_hello=17 RX=68 gap=0 bad=0 last=68
+A> WIFI TEST A: clients=1 peer=YES TX=74 hello_RX=19 bad=0
+B> WIFI TEST B: link=UP RSSI=-47 TX_hello=19 RX=76 gap=0 bad=0 last=76
+A> WIFI TEST A: clients=1 peer=YES TX=82 hello_RX=21 bad=0
+B> WIFI TEST B: link=UP RSSI=-50 TX_hello=21 RX=84 gap=0 bad=0 last=84

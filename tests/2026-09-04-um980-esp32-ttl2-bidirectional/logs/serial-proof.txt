@@ -1,0 +1,22 @@
+Precondition: GGA was active on UM980 COM2 and visible through ESP32 COM4.
+
+Command sent through BDRTK USB/UM980 COM3:
+$command,UNLOG COM2,response: OK*52
+
+ESP32 COM4 observation after UNLOG COM2:
+No lines received during the observation interval.
+
+Action:
+Only the ESP32 was reset. The UM980 remained powered.
+
+ESP32 COM4 observation after reset:
+UM980> $GNGGA,,,,,,0,,,,,,,,*78
+UM980> $GNGGA,,,,,,0,,,,,,,,*78
+UM980> $GNGGA,,,,,,0,,,,,,,,*78
+UM980> $GNGGA,,,,,,0,,,,,,,,*78
+UM980> $GNGGA,,,,,,0,,,,,,,,*78
+UM980> $GNGGA,,,,,,0,,,,,,,,*78
+UM980> $GNGGA,,,,,,0,,,,,,,,*78
+UM980> $GNGGA,,,,,,0,,,,,,,,*78
+UM980> $GNGGA,,,,,,0,,,,,,,,*78
+UM980> $GNGGA,,,,,,0,,,,,,,,*78

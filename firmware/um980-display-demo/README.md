@@ -1,0 +1,135 @@
+# UM980 Display Demo
+
+> Status: Both units have validated bidirectional TTL Channel 2 and rotation `0`. Unit A has also validated an ESP32-relayed runtime switch to temporary base mode; Unit B is the confirmed rover. A checksummed, sequenced ESP-to-ESP Wi-Fi test link passed on 2026-09-06. A battery-powered standalone GPS fix with the HA-609 antenna was validated by 2026-09-05.
+
+This firmware keeps the validated display initialization and adds a dedicated UART connection to the UM980. It displays the most recent NMEA GGA position and mirrors receiver lines to native USB serial.
+
+Display rotation is selected per instrument so the two printed bodies can use different physical orientations without editing source code:
+
+| PlatformIO environment | Instrument badge | Rotation |
+|---|---:|---:|
+| `unit_a` | `A` | `0` (original portrait orientation) |
+| `unit_b` | `B` | `0` (original portrait orientation) |
+
+Both units' rotation `0` settings were visually confirmed on real hardware.
+
+The yellow `A`/`B` badge identifies the physical instrument only. It does not indicate GNSS role; either instrument may later operate as base or rover.
+
+Unit B's yellow `B` badge was visually confirmed on real hardware on 2026-09-06. Its connected UM980 was separately commanded to and read back as `MODE ROVER SURVEY`.
+
+## Bench Wiring
+
+The initial controlled receive-only test powered each board from its own USB connection and did not join their 5 V rails. In a later confirmation, only the ESP32 was connected to the PC by USB: Waveshare `VBUS`/5 V powered BDRTK `5V_IN`, the boards shared ground, and GGA reception continued. This later setup validates startup and short receive-only operation from one USB source, but not current draw, voltage margin, temperature, or long-duration stability.
+
+| BDRTK-980 8-pin header | Waveshare J8 header |
+|---|---|
+| `GND` | Pin 29 or 30, `GND` |
+| `TTL_TXD2` | Pin 27, `ESP_RXD` / GPIO44 |
+| `TTL_RXD2` | Pin 25, `ESP_TXD` / GPIO43; connected only after receive-only validation passed |
+
+The ESP32 GPIO43/TX wire remained disconnected for the receive-only checkpoint, then was connected to `TTL_RXD2` for the bidirectional checkpoint. Never leave the 5 V interconnection wire installed when connecting the BDRTK USB port; doing so could tie two USB VBUS sources together.
+
+## Receiver Behavior
+
+When a bidirectional UART is connected, the ESP32 sends at startup:
+
+```text
+VERSION
+GPGGA 1
+```
+
+`VERSION` is read-only. `GPGGA 1` enables GGA at 1 Hz only in volatile receiver configuration. The demo never sends `SAVECONFIG`, so the setting is not intentionally written to receiver flash.
+
+Bidirectional operation was proven by stopping COM2 output from the separate BDRTK USB/COM3 interface, observing silence on the ESP32, and resetting only the ESP32. GGA resumed after the ESP32 sent its startup command over GPIO43 to `TTL_RXD2`.
+
+## Displayed Fields
+
+- UART activity and age of the most recent received byte.
+- `NO FIX`, `GPS FIX`, `DGPS`, `RTK FIXED`, `RTK FLOAT`, or another GGA quality state.
+- UTC time.
+- Decimal latitude and longitude.
+- Satellite count and HDOP.
+- Antenna altitude from GGA.
+- Valid GGA count, line count, and checksum-error count.
+
+## Build, Flash, and Monitor
+
+From this directory, select the instrument explicitly:
+
+```powershell
+pio run --environment unit_a
+pio run --environment unit_a --target upload
+pio device monitor --environment unit_a
+
+pio run --environment unit_b
+pio run --environment unit_b --target upload
+pio device monitor --environment unit_b
+```
+
+## Pass Criteria
+
+- Display initializes and remains stable.
+- USB log contains a successful response to `VERSION`.
+- GGA messages arrive at approximately 1 Hz over GPIO44.
+- The on-screen values match the raw GGA fields.
+- Neither board resets, overheats, or shows unstable power behavior.
+
+A `NO FIX` result still passes UART integration when the GGA messages are complete and checksummed. GNSS positioning is a separate outdoor antenna test.
+
+See the [validated Channel 2 receive test](../../tests/2026-09-04-um980-esp32-ttl2-receive/README.md). The earlier [integrated test record](../../tests/2026-09-04-um980-esp32-display/README.md) is retained as historical evidence but its assumed Channel 1 wiring was not reproduced.
+
+See also the [validated bidirectional Channel 2 test](../../tests/2026-09-04-um980-esp32-ttl2-bidirectional/README.md).
+
+The [HA-609 standalone-fix test](../../tests/2026-09-05-ha609-standalone-fix/README.md) validates the complete battery-powered GNSS-to-display path. It does not validate RTK accuracy.
+
+## Safe USB Role Console
+
+The ESP32 accepts a small allowlisted command set through its native USB serial port and relays the corresponding UM980 commands over TTL Channel 2:
+
+| Console command | UM980 action |
+|---|---|
+| `help` | Print the safe command list |
+| `role?` | Send read-only `MODE` query |
+| `role rover` | Send `MODE ROVER SURVEY`, then query `MODE` |
+| `role base-test` | Send bare `MODE BASE`, then query `MODE` |
+
+`role base-test` starts the UM980's default averaged-base behavior and is for functional testing only. It does not establish a survey-quality base. The console intentionally provides no arbitrary passthrough, `SAVECONFIG`, factory reset, baud-rate, firmware-update, or RTCM configuration commands.
+
+The relay was validated on Unit A on 2026-09-06: the receiver acknowledged the ESP32's `MODE BASE` and verification query, then read back `MODE BASE TIME 60 2.5 3.5`. The project owner also confirmed that `BASE` appeared beneath `UM980 OK` on the physical display. This proves runtime configuration relay and role display without an ESP32 or UM980 reflash. It does not prove a valid base coordinate or RTCM output. See the [Unit A command-relay test](../../tests/2026-09-06-unit-a-base-relay/README.md).
+
+## Wi-Fi Link Checkpoint
+
+The current test-only network roles are selected by instrument identity:
+
+| Instrument | Wi-Fi role | Test behavior |
+|---|---|---|
+| Unit A | Access point at `192.168.4.1` | Accept Unit B handshakes and send sequenced test packets |
+| Unit B | Station | Join Unit A, send handshakes, validate received sequence and checksum |
+
+The test uses UDP port `22345`. Each packet carries a protocol marker, version, type, sequence number, sender timestamp, and application checksum. The display and USB log expose transmitted/received packets, sequence gaps, invalid packets, client state, and RSSI.
+
+The SSID and password compiled into this checkpoint are test credentials and must not be treated as production security. This firmware does not yet put NMEA, RTCM, commands, or survey information onto Wi-Fi.
+
+The [ESP32 Wi-Fi link test](../../tests/2026-09-06-esp32-wifi-link/README.md) passed through packet 84 with zero detected gaps and zero invalid packets.
+
+## RTCM-over-Wi-Fi Checkpoint
+
+The firmware now includes an RTCM v3 frame parser and bridge:
+
+1. Unit A recognizes RTCM only after the `0xD3` preamble and complete 10-bit frame length.
+2. It validates the RTCM CRC-24Q before transmission.
+3. The complete frame is wrapped in a sequenced, checksummed Wi-Fi envelope.
+4. Unit B validates the envelope, message metadata, and RTCM CRC-24Q again.
+5. Unit B writes only a fully validated original RTCM frame to its UM980 UART.
+
+NMEA and receiver command responses are not forwarded as correction data. Both displays and USB logs show RTCM frame/error counters.
+
+Safe console additions:
+
+| Console command | Behavior |
+|---|---|
+| `rtcm?` | Print bridge counters without changing configuration |
+| `rtcm base-test` | Unit A only: enable the volatile manufacturer-example COM2 MSM4 stream |
+| `rtcm off` | Unit A only: stop COM2 output, restore GGA, and query role |
+
+The receiver commands for RTCM 1006, 1033, 1074, 1084, 1094, and 1124 were acknowledged on Unit A. No frames were emitted in the antenna-less bench state because there was no completed base position or satellite observation data. The [Wi-Fi RTCM bridge bench test](../../tests/2026-09-06-wifi-rtcm-bridge-bench/README.md) records this partial checkpoint.

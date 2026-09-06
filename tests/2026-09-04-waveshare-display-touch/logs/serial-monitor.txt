@@ -1,0 +1,11 @@
+Observed after the first TopoRTK demo flash:
+
+HEARTBEAT uptime_s=10 free_heap=365596
+HEARTBEAT uptime_s=40 free_heap=365596
+HEARTBEAT uptime_s=65 free_heap=365596
+HEARTBEAT uptime_s=80 free_heap=365596
+HEARTBEAT uptime_s=105 free_heap=365596
+HEARTBEAT uptime_s=110 free_heap=365596
+
+No touch events were received during this monitor session.
+
