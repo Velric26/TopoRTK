@@ -23,6 +23,18 @@ The first objective is a prototype that can be tested alongside established surv
 
 This applies to firmware, wiring, power, GNSS settings, RTCM, radio settings, storage, user interfaces, and system integration.
 
+### Field-interface rules
+
+- Keep the main display limited to correction-link state, required GNSS fix, link quality, horizontal uncertainty, and an actionable warning. Put GNSS and network diagnostics one swipe away.
+- Use centralized, explicit definitions of `READY`, `CONNECTED`, and `GPS FIXED` across banners, text, warnings, logs, and future mobile interfaces.
+- Use green banners only for the required ready/connected/fixed state and grey otherwise; always repeat the state in text and never rely on color alone.
+- Optimize for direct sunlight with high contrast, consistent typography, and concise labels.
+- Keep equivalent dashboard information sections equal in height and spacing, and repaint only changed regions to avoid visible LCD flicker.
+- Use checksum-validated GNSS UTC date/time, show project-local time at fixed `UTC-6`, retain UTC in diagnostics, and show a clear waiting state when time is unavailable.
+- With no onboard ambient-light sensor, use gradual GNSS-time-based brightness and bias toward full brightness whenever daylight is possible or time is uncertain. Preserve a manual override.
+
+Detailed screen layout, state logic, navigation, and brightness behavior belong in `docs/interface.md`.
+
 ## 3. Project Goals
 
 - Produce repeatable high-precision RTK positions for topographic surveying.
@@ -38,11 +50,11 @@ This applies to firmware, wiring, power, GNSS settings, RTCM, radio settings, st
 
 | Qty. | Component | Role | Current status |
 |---:|---|---|---|
-| 2 | Unicore UM980 RTK GNSS modules | RTK engine; one per instrument | Both units passed USB and bidirectional TTL2; Unit A also passed standalone GPS; RTK pending |
+| 2 | Unicore UM980 RTK GNSS modules | RTK engine; one per instrument | Both passed USB and bidirectional TTL2; Unit A generated live base RTCM and Unit B reached `RTK FIXED` over Wi-Fi |
 | 1 pair | Holybro SiK Telemetry Radio, long-range 1 W, 915 MHz, open source | Base-to-rover RTCM transport | Selected; configuration, range, and legal use must be validated |
-| 2 | Waveshare ESP32-S3 3.5-inch capacitive touch display boards, 320 x 480, Wi-Fi and Bluetooth 5 | Control, local UI, logging, and phone/tablet connectivity | Both displays and TTL2 links validated; per-unit A/B builds established; touch validated on Unit A |
+| 2 | Waveshare ESP32-S3 3.5-inch capacitive touch display boards, 320 x 480, Wi-Fi and Bluetooth 5 | Control, local UI, logging, and phone/tablet connectivity | Both displays, TTL2 links, automatic A/B profiles, and Wi-Fi RTCM bridge validated; touch hardware works but is not required for startup |
 | 2 | K700 full-band L1/L2/L5 BeiDou/GPS/GLONASS/Galileo survey GNSS antennas | Primary base and rover antennas | Validation on hold: purchased cable has the wrong antenna-side center-contact gender; exact connector must be verified before replacement |
-| 2 | GNSS HA-609 helix antennas | Compact prototypes and comparison testing | Standalone battery-powered GPS fix validated on one unit; comparison pending |
+| 2 | GNSS HA-609 helix antennas | Compact prototypes and comparison testing | First two-unit open-sky Wi-Fi RTK test reached `RTK FIXED`; controlled accuracy and K700 comparison pending |
 | 2 | BNO085 IMUs | Orientation experiments and possible future pole-tilt work | Available; not accepted as survey tilt compensation |
 
 The UM980 modules are mounted on BDRTK-980 carrier boards. The seller manual is archived under `docs/hardware/unicore-um980/`; the exact physical PCB revision, active-antenna supply behavior, USB-to-UART channel mapping, and full power budget still require bench verification.
@@ -249,17 +261,17 @@ For every test, save the configuration, reference coordinates, antenna setup, en
 
 | Decision | Status |
 |---|---|
-| Two UM980 receivers for interchangeable base/rover instruments | Both passed USB and bidirectional TTL2; Unit B is confirmed `MODE ROVER SURVEY`; Unit A passed an ESP32-relayed switch to temporary base mode, but its base position and RTCM remain unvalidated |
+| Two UM980 receivers for interchangeable base/rover instruments | Both passed USB and bidirectional TTL2; Unit A generated live RTCM as a temporary base and Unit B reached `RTK FIXED`; controlled base coordinates and accuracy remain unvalidated |
 | K700 antennas as primary survey antennas | Selected; validation on hold until the correct cable is obtained after exact connector identification |
-| HA-609 antennas for compact tests | Standalone GPS acquisition passed; controlled comparison still required |
+| HA-609 antennas for compact tests | Standalone acquisition and first two-unit `RTK FIXED` session passed; controlled accuracy and K700 comparison still required |
 | Holybro SiK 1 W 915 MHz correction link | Selected; throughput, range, interference, and compliance pending |
-| Waveshare ESP32-S3 touch boards as controllers/displays | Selected; pinout, UART, storage, and outdoor tests pending |
+| Waveshare ESP32-S3 touch boards as controllers/displays | Display, UART, automatic role/profile recovery, BESTNAV horizontal-accuracy parsing, Wi-Fi RTCM path, and Unit A SD mount/read-back validated; Unit A structured logging is the current increment and Unit B SD support remains pending |
 | Rover-hosted offline web UI | Preferred first implementation; prototype pending |
 | BNO085 orientation/tilt experiments | Deferred until the basic level-pole RTK system is validated |
 
-The direct ESP-to-ESP Wi-Fi checkpoint passed on 2026-09-06 using Unit A as an access point and Unit B as a station. Checksummed, sequenced test packets reached Unit B with no detected gap or invalid packet during the short bench observation. A CRC-validated RTCM frame bridge was subsequently built and flashed to both units, and Unit A accepted the manufacturer-example COM2 MSM4 output commands. The antenna-less bench setup produced no RTCM frames, so live forwarding, sustained throughput, recovery, range, security, and RTK operation remain unvalidated.
+The direct ESP-to-ESP Wi-Fi checkpoint passed on 2026-09-06 using Unit A as an access point and Unit B as a station. Checksummed, sequenced test packets reached Unit B without detected gaps or invalid packets. The CRC-validated RTCM bridge then passed its antenna-less bench checkpoint. In the subsequent HA-609 open-sky test, Unit A generated live corrections and Unit B reached `RTK FIXED` with 27-28 satellites, HDOP 0.5, increasing RTCM counters, and zero displayed RTCM/network or NMEA checksum errors. This validates one functional RTK session, not absolute accuracy, repeatability, recovery, range, or security.
 
-Current temporary role assignment: Unit A = base-test; Unit B = confirmed rover. The unit letter identifies hardware, not a permanent role. Allowlisted runtime role switching through the ESP32 USB console is now proven without reflashing; touch/web selection and full survey-safe base configuration remain future work.
+Current temporary role assignment: Unit A = base-test; Unit B = confirmed rover. After every successful UART startup handshake, each ESP32 now applies its assigned volatile UM980 profile automatically: base plus RTCM on A and survey rover on B. The safe USB console remains available for diagnosis and recovery. The unit letter identifies hardware, not a permanent role; future web role selection and full survey-safe base configuration remain open work.
 
 ### Open items
 

@@ -40,9 +40,10 @@ Every command was sent through Unit A's allowlisted ESP32 console and acknowledg
 | Restore temporary Unit A base role | PASS | `MODE BASE` acknowledged and read back as `MODE BASE TIME 60 2.5 3.5` |
 | Unit B rover role | PASS | Read back as `MODE ROVER SURVEY` |
 | RTCM output commands | PASS | All six commands returned OK responses from Unit A |
-| Unit A RTCM UART parsing | BLOCKED | `RTCM_UART=0`; no antenna, satellite observations, or completed base position |
-| Unit A-to-B RTCM forwarding | BLOCKED | No source RTCM frames existed to forward |
+| Unit A RTCM UART parsing | PASS | Later observation reached `RTCM_UART=143` with `RTCM_BAD=0` |
+| Unit A-to-B RTCM forwarding | PASS | Unit B reached `RTCM_RX=143`, 5,402 bytes, with zero reported errors |
 | Physical bridge counters | PASS | Project owner confirmed Unit A showed `BASE`, `RTCM:0`, `R-BAD:0`; Unit B showed `ROVER`, Wi-Fi up, `RTCM:0`, `BAD:0` |
+| Guarded touch actions | PASS | Project owner confirmed the two-second field actions behaved as expected on both units |
 | Receiver configuration persistence | AVOIDED | No `SAVECONFIG` sent |
 | Survey base coordinate | NOT TESTED | Autonomous temporary base has no accepted survey-control value |
 | Rover RTK state | NOT TESTED | No live corrections or open-sky rover observations |
@@ -51,6 +52,6 @@ The sanitized serial evidence is preserved in [`logs/bench-proof.txt`](logs/benc
 
 ## Conclusion
 
-The firmware build, flash, existing network regression, receiver role control, and volatile RTCM-output configuration pass. Live RTCM production and forwarding are blocked by the current antenna-less indoor setup, not by a detected Wi-Fi or CRC error.
+The firmware build, flash, existing network regression, receiver role control, volatile RTCM-output configuration, RTCM parsing, Wi-Fi transport, and rover-UART write path pass. The first observation contained no RTCM frames; after the touch-control firmware restart, the still-powered base receiver supplied CRC-valid RTCM frames and the bridge counters increased on both units.
 
-The next live checkpoint requires Unit A and Unit B antennas with sky view. Its first pass criterion is increasing RTCM counters on both displays with zero RTCM errors; RTK `FLOAT` or `FIXED` is a later criterion and must not be inferred from packet delivery alone.
+Both receivers continued to report GGA quality 0, zero satellites, and HDOP 9999.0. The transported frames therefore do not establish useful correction content, a valid base coordinate, or RTK. The next checkpoint requires Unit A and Unit B antennas with sky view. Its first pass criterion is increasing RTCM counters on both displays with zero RTCM errors; RTK `FLOAT` or `FIXED` is a later criterion and must not be inferred from packet delivery alone.

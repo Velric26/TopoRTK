@@ -36,6 +36,8 @@
 
 These are manufacturer specifications, not yet demonstrated by this project. Supported accuracy requires correct antenna, corrections, base coordinates, environment, configuration, and survey procedure.
 
+The horizontal figure `0.8 cm + 1 ppm` is in the normal survey-RTK receiver class. It means an RMS horizontal uncertainty of approximately 8 mm plus 1 mm per kilometre of base-to-rover baseline under the manufacturer's test conditions: about 9 mm at 1 km and 18 mm at 10 km. RMS is a statistical specification, not a maximum-error guarantee. A displayed `H-ACC` near `0.8 cm` is therefore plausible and good, but it does not include every source of absolute field error. Incorrect base control, antenna height or centering, pole movement, multipath, antenna phase-center effects, datum/epoch/projection mistakes, and poor field procedure can each dominate the receiver estimate. TopoRTK must establish its own repeatability and known-control error before making an accuracy claim.
+
 ## Connected Receiver Identification
 
 Observed on 2026-09-04:

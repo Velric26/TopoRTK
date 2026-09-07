@@ -20,3 +20,13 @@ B> MODE ROVER SURVEY
 Final bridge status:
 A> clients=1 peer=YES bad=0 RTCM_UART=0 RTCM_TX=0 RTCM_BAD=0
 B> link=UP gap=0 bad=0 RTCM_RX=0 bytes=0 type=0
+
+Continuation after the touch-control firmware flash:
+A> MODE BASE TIME 60 2.5 3.5
+B> MODE ROVER SURVEY
+A> RTCM STATUS: UART=119 TX=115 UART_BAD=0 NET_BAD=0 last=1124
+B> RTCM STATUS: RX=115 bytes=4366 UART_BAD=0 NET_BAD=0 last=1124
+A> WIFI TEST A: RTCM_UART=143 RTCM_TX=139 RTCM_BAD=0 last=1124
+B> WIFI TEST B: RTCM_RX=143 bytes=5402 type=1124 gap=0 bad=0
+A> GGA quality=0 satellites=0 HDOP=9999.0
+B> GGA quality=0 satellites=0 HDOP=9999.0

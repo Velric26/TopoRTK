@@ -62,14 +62,16 @@ The table follows the numbering printed in Waveshare's pinout. Always verify the
 | MCU | ESP32-S3R8 | Dual core, 240 MHz, 8 MB embedded PSRAM |
 | Flash | W25Q128 | 16 MB |
 | Display | ST7796 over SPI | MOSI GPIO1, MISO GPIO2, DC GPIO3, SCLK GPIO5, no CS |
-| Backlight | GPIO output | GPIO6, active high |
+| Backlight | GPIO output | GPIO6, active high; PWM brightness is supported by the prototype |
 | Shared I2C | ESP32-S3 I2C | SDA GPIO8, SCL GPIO7 |
 | LCD reset | TCA9554 at `0x20` | Expander pin 1 |
 | Touch | FT6336/FT6X36 on I2C | Address `0x38` |
 | Onboard IMU | QMI8658 | Pending test |
 | RTC | PCF85063 | Pending test |
 | Power management | AXP2101 | Pending test |
-| Storage | microSD/TF | Pending test |
+| Storage | microSD/TF | 1-bit SD_MMC mount and read-back test passed on Unit A; structured session logging is in progress |
+
+The archived seller schematic does not show an ambient-light sensor. Automatic brightness must therefore use another input, currently checksum-validated GNSS time, and default to full brightness whenever that input is uncertain.
 
 ## Onboard Port Allocation
 
@@ -82,7 +84,7 @@ This allocation comes from the archived schematic and the official Arduino examp
 | LCD reset | TCA9554 pin 1 | I/O expander is at I2C address `0x20` |
 | Shared I2C | 7 SCL, 8 SDA | Touch, TCA9554, QMI8658, PCF85063, AXP2101, and ES8311 |
 | Touch | Shared I2C, address `0x38` | FT6336/FT6X36 family |
-| microSD, 1-bit SD_MMC | 9 D0, 10 CMD, 11 CLK | Official Arduino example mapping |
+| microSD, 1-bit SD_MMC | 9 D0, 10 CMD, 11 CLK | Official Arduino example mapping; Unit A mount/read-back validated |
 | Audio I2S | 12 MCLK, 13 BCLK, 14 DIN, 15 LRCLK, 16 DOUT | ES8311 audio path |
 | Camera control | Shared I2C 7/8 | Camera SCCB/TWI control bus |
 | Camera signals | 17, 18, 21, 38-42, 45-48 | Conflict with expansion use even though exposed |
@@ -130,4 +132,3 @@ The serial port is machine-specific and may change after reconnecting the board.
 ## First Validated Checkpoint
 
 On 2026-09-04, the project demo was built and flashed to the connected board. USB serial remained stable for more than one minute, and the project owner confirmed the display, colors, touch markers, and coordinate updates. See the [test record](../../../tests/2026-09-04-waveshare-display-touch/README.md).
-

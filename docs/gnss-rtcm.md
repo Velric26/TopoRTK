@@ -1,6 +1,6 @@
 # GNSS and RTCM
 
-> Status: Unit B is confirmed in `MODE ROVER SURVEY`. Unit A is confirmed in temporary `MODE BASE TIME 60 2.5 3.5`. The recommended COM2 RTCM MSM4 commands were accepted, and a CRC-validated Wi-Fi bridge is installed, but the antenna-less bench setup produced no RTCM frames. A usable base position and live RTCM forwarding remain untested.
+> Status: Unit B is confirmed in `MODE ROVER SURVEY`. Unit A is confirmed in temporary `MODE BASE TIME 60 2.5 3.5`. On 2026-09-06 the HA-609 open-sky test produced a rover `RTK FIXED` solution using RTCM carried over the ESP32 Wi-Fi bridge, with zero displayed RTCM or NMEA checksum errors. Absolute accuracy and repeatability remain untested.
 
 ## Receiver Identification
 
@@ -26,8 +26,8 @@ The unit letter and operating role are separate concepts. `A` and `B` identify p
 
 Current temporary assignment:
 
-- Unit A: temporary base-test role confirmed through the ESP32; no valid averaged position or RTCM validation yet.
-- Unit B: confirmed rover in `MODE ROVER SURVEY`.
+- Unit A: temporary self-optimizing base; live RTCM generation and transport passed, but its autonomous coordinate is not survey control.
+- Unit B: confirmed rover in `MODE ROVER SURVEY`; achieved `RTK FIXED` in the first documented HA-609 open-sky Wi-Fi test.
 - Future: select and verify either role from the ESP32 interface without reflashing.
 
 ### Role-Switching Rules
@@ -52,22 +52,38 @@ A later power/reconnection cycle returned Unit A to the receiver's default `MODE
 
 Record the complete commands/settings for controlled base coordinates, observation mode, RTCM messages, rates, and output UART. The first project base test must use either a deliberately temporary test coordinate or a documented control coordinate and must include recovery to `MODE ROVER SURVEY`.
 
+### Base GGA State
+
+The UM980 NMEA GGA table defines quality 1 as single-point positioning, 4 as RTK integer fixed, 5 as RTK float, and 7 as manual input mode. During the 2026-09-06 self-optimizing base test, Unit A first showed `GPS FIX` while it averaged its standalone position, then GGA quality 7 after selecting and holding the base coordinate. The role-aware firmware now renders these base states as `BASE SURVEY` and `BASE LOCKED` while retaining raw quality information in USB diagnostics.
+
+An RTK base is the correction reference and is not expected to report `RTK FLOAT` or `RTK FIXED` unless it is itself consuming corrections from another reference. Its critical states are instead whether its coordinate has been established correctly and whether it is outputting the expected RTCM stream.
+
 ## Rover Configuration
 
 Use `MODE ROVER SURVEY` for the intended survey-rover dynamics. Record RTCM input, solution output, raw observations, and status messages separately.
+
+## Horizontal Accuracy Estimate
+
+The ESP32 enables `BESTNAVA COM2 1` and validates each Unicore ASCII CRC-32 before using the record. UM980 `BESTNAV` fields 9 and 10 are latitude and longitude standard deviations in metres. The display reports their root-sum-square as `H-ACC` (1DRMS):
+
+```text
+H-ACC = sqrt(latitude_sigma^2 + longitude_sigma^2)
+```
+
+Values are formatted as mm, cm, or m. This is a live receiver uncertainty estimate, not a guaranteed error bound and not proof of absolute survey accuracy. The display suppresses it without a valid fix and after an autonomous base is locked, because that base coordinate's true control accuracy is not established by its held solution.
 
 ## RTCM Profile
 
 | Message | Rate | Purpose | Measured bytes/s | Validated |
 |---|---:|---|---:|---|
-| RTCM 1006 | 0.1 Hz | Base antenna reference point with height | Pending live stream | Command accepted on Unit A COM2 |
-| RTCM 1033 | 0.1 Hz | Receiver and antenna descriptors | Pending live stream | Command accepted on Unit A COM2 |
-| RTCM 1074 | 1 Hz | GPS MSM4 observations | Pending live stream | Command accepted on Unit A COM2 |
-| RTCM 1084 | 1 Hz | GLONASS MSM4 observations | Pending live stream | Command accepted on Unit A COM2 |
-| RTCM 1094 | 1 Hz | Galileo MSM4 observations | Pending live stream | Command accepted on Unit A COM2 |
-| RTCM 1124 | 1 Hz | BeiDou MSM4 observations | Pending live stream | Command accepted on Unit A COM2 |
+| RTCM 1006 | 0.1 Hz | Base antenna reference point with height | Not isolated by type | Included in field-validated COM2 profile |
+| RTCM 1033 | 0.1 Hz | Receiver and antenna descriptors | Not isolated by type | Included in field-validated COM2 profile |
+| RTCM 1074 | 1 Hz | GPS MSM4 observations | Not isolated by type | Included in field-validated COM2 profile |
+| RTCM 1084 | 1 Hz | GLONASS MSM4 observations | Not isolated by type | Included in field-validated COM2 profile |
+| RTCM 1094 | 1 Hz | Galileo MSM4 observations | Not isolated by type | Included in field-validated COM2 profile |
+| RTCM 1124 | 1 Hz | BeiDou MSM4 observations | Not isolated by type | Included in field-validated COM2 profile |
 
-The initial command set follows the manufacturer's base-station example. All commands were sent without `SAVECONFIG`. During the antenna-less bench test, both bridge counters remained zero because Unit A had no valid base position or satellite observations. See the [Wi-Fi RTCM bridge bench test](../tests/2026-09-06-wifi-rtcm-bridge-bench/README.md).
+The initial command set follows the manufacturer's base-station example. All commands were sent without `SAVECONFIG`. The antenna-less bench checkpoint validated framing and transport but not useful correction content. The subsequent HA-609 open-sky checkpoint produced `RTK FIXED` at Unit B while the RTCM counters increased at both ends with zero displayed bridge errors. See the [Wi-Fi RTCM bridge bench test](../tests/2026-09-06-wifi-rtcm-bridge-bench/README.md) and [HA-609 Wi-Fi RTK open-sky test](../tests/2026-09-06-ha609-wifi-rtk-open-sky/README.md).
 
 ## Known-Good Configuration
 

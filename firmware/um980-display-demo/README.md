@@ -1,8 +1,21 @@
 # UM980 Display Demo
 
-> Status: Both units have validated bidirectional TTL Channel 2 and rotation `0`. Unit A has also validated an ESP32-relayed runtime switch to temporary base mode; Unit B is the confirmed rover. A checksummed, sequenced ESP-to-ESP Wi-Fi test link passed on 2026-09-06. A battery-powered standalone GPS fix with the HA-609 antenna was validated by 2026-09-05.
+> Status: Both units have validated bidirectional TTL Channel 2, rotation `0`, automatic startup profiles, and CRC-validated BESTNAV accuracy parsing. On 2026-09-06 Unit A generated live base RTCM over the ESP32 Wi-Fi bridge and Unit B reached `RTK FIXED` using HA-609 antennas. Absolute accuracy and repeatability remain untested.
 
 This firmware keeps the validated display initialization and adds a dedicated UART connection to the UM980. It displays the most recent NMEA GGA position and mirrors receiver lines to native USB serial.
+
+## SD Logging (Unit A Checkpoint)
+
+Unit A now mounts the Waveshare microSD/TF slot in 1-bit SD_MMC mode using GPIO9 (`D0`), GPIO10 (`CMD`), and GPIO11 (`CLK`). The first boot performs a non-destructive read/write/read-back check at `/TOPO-RTK/SD-READBACK-TEST.TXT` and creates a session directory under `/TOPO-RTK/UNIT-A/SESSIONS/`.
+
+Each session contains:
+
+- `session.json`: unit, boot uptime, and card capacity.
+- `events.csv`: boot, UART, link, GNSS-fix, role, and configuration state changes.
+- `config.csv`: automatic profiles and allowlisted manual configuration requests.
+- `solution.csv`: approximately 1 Hz GGA solution values, H-ACC, correction age, link RSSI, RTCM frame/byte counters, and network error counters.
+
+The logger is append-oriented and flushes after each record in this initial reliability checkpoint. It does not yet record raw observations or a binary RTCM archive. Only Unit A has been flashed with SD support; Unit B remains on the prior validated firmware until a separate SD hardware test is performed.
 
 Display rotation is selected per instrument so the two printed bodies can use different physical orientations without editing source code:
 
@@ -31,26 +44,36 @@ The ESP32 GPIO43/TX wire remained disconnected for the receive-only checkpoint, 
 
 ## Receiver Behavior
 
-When a bidirectional UART is connected, the ESP32 sends at startup:
+When a bidirectional UART is connected, the ESP32 retries this handshake until it receives a valid identity response and fresh GGA data:
 
 ```text
 VERSION
-GPGGA 1
+GPGGA COM2 1
+GPRMC COM2 1
+MODE
 ```
 
-`VERSION` is read-only. `GPGGA 1` enables GGA at 1 Hz only in volatile receiver configuration. The demo never sends `SAVECONFIG`, so the setting is not intentionally written to receiver flash.
+It then enables `BESTNAVA COM2 1` and automatically applies the unit-specific profile described below. `GPRMC` supplies checksum-validated UTC date/time. These settings are volatile. The demo never sends `SAVECONFIG`, so the settings are not intentionally written to receiver flash.
 
 Bidirectional operation was proven by stopping COM2 output from the separate BDRTK USB/COM3 interface, observing silence on the ESP32, and resetting only the ESP32. GGA resumed after the ESP32 sent its startup command over GPIO43 to `TTL_RXD2`.
 
-## Displayed Fields
+## Display and Navigation
 
-- UART activity and age of the most recent received byte.
-- `NO FIX`, `GPS FIX`, `DGPS`, `RTK FIXED`, `RTK FLOAT`, or another GGA quality state.
-- UTC time.
-- Decimal latitude and longitude.
-- Satellite count and HDOP.
-- Antenna altitude from GGA.
-- Valid GGA count, line count, and checksum-error count.
+The main screen shows only correction-link state, role-aware GNSS state, horizontal 1DRMS uncertainty, link RSSI/quality, and the highest-priority warning. A top-origin downward swipe opens GPS details; a bottom-origin upward swipe opens Wi-Fi details. The opposite gesture returns to the main screen. There are no permanent gesture instructions.
+
+The four main information cards use equal height and spacing. The renderer caches each header, card, warning, and detail row and repaints only a region whose content or color changed. This avoids the previous four-times-per-second full-region repaint that caused visible flicker.
+
+All screens use the same centralized definitions:
+
+- Rover `GPS FIXED` requires GGA quality 4; base `GPS FIXED` requires quality 7.
+- `CONNECTED` requires a current peer packet and active network link.
+- `READY` requires current UM980 communication, applied profile, connected peer, required GNSS state, and fresh rover corrections.
+
+The main banner is green only when `READY`; GPS details only when `GPS FIXED`; Wi-Fi details only when `CONNECTED`. Otherwise each banner is grey, and explicit text states the condition. The role appears in each header as `Rover` or `Base`.
+
+GPS details contain UART, fix, local `UTC-6`, UTC date/time, coordinates, satellites/HDOP, altitude, `H-ACC`, component sigmas, and RTCM activity. Wi-Fi details contain mode, SSID, IP, link, RSSI, peer, transport counters, correction data, last-peer age, and brightness mode.
+
+Base mode uses `BASE WAIT`, `BASE SURVEY`, and `BASE LOCKED` instead of the misleading generic `MANUAL` label. `H-ACC` shows `---` without a usable fix and `N/A (BASE)` after the autonomous base coordinate is locked.
 
 ## Build, Flash, and Monitor
 
@@ -92,6 +115,11 @@ The ESP32 accepts a small allowlisted command set through its native USB serial 
 | `role?` | Send read-only `MODE` query |
 | `role rover` | Send `MODE ROVER SURVEY`, then query `MODE` |
 | `role base-test` | Send bare `MODE BASE`, then query `MODE` |
+| `accuracy?` | Report BESTNAV parser count, component sigmas, horizontal 1DRMS, age, and usability |
+| `time?` | Report GNSS UTC date/time, fixed UTC-6 local time, and RMC navigation-valid status |
+| `brightness auto` | Use GNSS local time, gradual dawn/dusk transitions, and full brightness if time is uncertain |
+| `brightness day` | Force full daylight brightness |
+| `brightness night` | Force reduced night brightness |
 
 `role base-test` starts the UM980's default averaged-base behavior and is for functional testing only. It does not establish a survey-quality base. The console intentionally provides no arbitrary passthrough, `SAVECONFIG`, factory reset, baud-rate, firmware-update, or RTCM configuration commands.
 
@@ -108,7 +136,7 @@ The current test-only network roles are selected by instrument identity:
 
 The test uses UDP port `22345`. Each packet carries a protocol marker, version, type, sequence number, sender timestamp, and application checksum. The display and USB log expose transmitted/received packets, sequence gaps, invalid packets, client state, and RSSI.
 
-The SSID and password compiled into this checkpoint are test credentials and must not be treated as production security. This firmware does not yet put NMEA, RTCM, commands, or survey information onto Wi-Fi.
+The SSID and password compiled into this checkpoint are test credentials and must not be treated as production security. The bridge carries validated RTCM frames only; it does not forward NMEA, receiver commands, or survey records.
 
 The [ESP32 Wi-Fi link test](../../tests/2026-09-06-esp32-wifi-link/README.md) passed through packet 84 with zero detected gaps and zero invalid packets.
 
@@ -132,4 +160,16 @@ Safe console additions:
 | `rtcm base-test` | Unit A only: enable the volatile manufacturer-example COM2 MSM4 stream |
 | `rtcm off` | Unit A only: stop COM2 output, restore GGA, and query role |
 
-The receiver commands for RTCM 1006, 1033, 1074, 1084, 1094, and 1124 were acknowledged on Unit A. No frames were emitted in the antenna-less bench state because there was no completed base position or satellite observation data. The [Wi-Fi RTCM bridge bench test](../../tests/2026-09-06-wifi-rtcm-bridge-bench/README.md) records this partial checkpoint.
+The receiver commands for RTCM 1006, 1033, 1074, 1084, 1094, and 1124 were acknowledged on Unit A. The bench checkpoint captured and forwarded CRC-valid RTCM frames with zero reported bridge errors. The subsequent HA-609 open-sky checkpoint produced `RTK FIXED` at Unit B, validating useful end-to-end correction flow for one session but not absolute accuracy or repeatability.
+
+## Automatic Unit Profiles
+
+No touch action is required for receiver configuration. Touch is used only for page navigation. After the startup handshake confirms UM980 identity and fresh GGA traffic, Unit A automatically applies temporary `MODE BASE` plus the six volatile RTCM outputs, while Unit B applies `MODE ROVER SURVEY`. Both also enable `GPGGA`, `GPRMC`, and `BESTNAVA` at 1 Hz. The profile is reapplied after a detected GNSS-link loss.
+
+These actions intentionally send no `SAVECONFIG`. The allowlisted USB console remains available for role queries, controlled recovery, RTCM counters, and `accuracy?` diagnostics.
+
+The [Wi-Fi RTCM bridge bench test](../../tests/2026-09-06-wifi-rtcm-bridge-bench/README.md) records the transport checkpoint.
+
+The [HA-609 Wi-Fi RTK open-sky test](../../tests/2026-09-06-ha609-wifi-rtk-open-sky/README.md) records the first `RTK FIXED` field checkpoint.
+
+The [automatic-profile and horizontal-accuracy bench test](../../tests/2026-09-06-auto-profile-horizontal-accuracy/README.md) records the first real-hardware validation of the new startup behavior and BESTNAV parser.
