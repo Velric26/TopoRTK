@@ -157,7 +157,9 @@ Each unit should record, as available:
 
 ### Power
 
-The final power system is not yet validated. Any proposed 3S 18650 design must include matched cells, reverse-insertion protection, undervoltage protection, a fuse near the battery, a physical power switch, regulated electronics power, clean GNSS power, locking connectors, and safe USB/back-feed behavior.
+Each unit now has a dedicated 3S 18650 pack and a 12 V-to-5 V, 15 W buck converter. The provisional design feeds the Holybro 1 W radio directly from the 3S pack and the ESP32/BDRTK carrier from regulated 5 V. Use a 3 A time-delay fuse near each battery positive lead for the initial design, subject to measured peak current and wiring limits. Matched cells, reverse-insertion protection, undervoltage protection, a physical switch, clean GNSS power, locking connectors, a BMS before field use, and safe USB/back-feed behavior remain mandatory.
+
+See the detailed [power architecture](docs/power.md).
 
 Do not connect a 3S pack to a Waveshare single-cell battery input. Confirm every board's allowable input voltage before assembly.
 
@@ -265,7 +267,7 @@ For every test, save the configuration, reference coordinates, antenna setup, en
 | K700 antennas as primary survey antennas | Selected; validation on hold until the correct cable is obtained after exact connector identification |
 | HA-609 antennas for compact tests | Standalone acquisition and first two-unit `RTK FIXED` session passed; controlled accuracy and K700 comparison still required |
 | Holybro SiK 1 W 915 MHz correction link | Selected; throughput, range, interference, and compliance pending |
-| Waveshare ESP32-S3 touch boards as controllers/displays | Display, UART, automatic role/profile recovery, BESTNAV horizontal-accuracy parsing, Wi-Fi RTCM path, and Unit A SD mount/read-back validated; Unit A structured logging is the current increment and Unit B SD support remains pending |
+| Waveshare ESP32-S3 touch boards as controllers/displays | Display, UART, automatic role/profile recovery, BESTNAV horizontal-accuracy parsing, Wi-Fi RTCM path, and SD mount/read-back validated on both units; structured logging is ready for a two-sided field session |
 | Rover-hosted offline web UI | Preferred first implementation; prototype pending |
 | BNO085 orientation/tilt experiments | Deferred until the basic level-pole RTK system is validated |
 
@@ -295,7 +297,8 @@ PROJECT.md                 Project scope and current system decisions
 docs/hardware/             Hardware index plus one self-contained folder per device
 docs/firmware.md           Build, flash, configuration, and firmware architecture
 docs/gnss-rtcm.md          UM980 configuration and RTCM message set
-docs/radio.md              SiK configuration, compliance, and range tests
+docs/radio.md              SiK connector, configuration, compliance, and range tests
+docs/power.md              Battery, regulator, fuse, BMS, and USB power architecture
 docs/coordinates.md        UTM, datum/epoch, geoid, localization, and base control
 docs/interface.md          Local and mobile UI behavior
 docs/validation.md         Test procedures and acceptance criteria

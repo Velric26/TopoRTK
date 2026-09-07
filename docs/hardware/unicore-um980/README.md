@@ -70,6 +70,16 @@ The carrier manual identifies:
 - An 8-pin, 1.25 mm connector carrying `EVENT`, two RS-232 channels, `GND`, `TTL_TXD2`, and `TTL_RXD2`.
 - A stated 5 V current of 160 mA. Treat this as a nominal board figure, not a complete power budget for the display, active antenna, radio, battery charging, and transients.
 
+### Connector and cable identification
+
+The seller manual specifies the two carrier connectors only as **1.25 mm pitch, locking-seat** connectors; it does not provide a JST series or manufacturer part number. They are mechanically consistent with JST-GH, but this must be confirmed against the physical latch/keying before ordering or crimping a replacement cable.
+
+- The 5-pin cable carries `PPS_OUT`, `5V_IN`, `GND`, `TTL_TXD1`, and `TTL_RXD1`.
+- The 8-pin cable carries `EVENT`, the two RS-232 channels, `GND`, `TTL_TXD2`, and `TTL_RXD2`.
+- A Holybro SiK cable is also 1.25 mm JST-GH style, but it is **6-pin** and has a different pinout. It is not a direct replacement for either UM980 carrier cable.
+
+For a replacement, request a 1.25 mm locking 5-pin or 8-pin cable explicitly compatible with the BDRTK carrier, and verify pin-1 orientation and continuity with a meter before connecting power or UART signals.
+
 The project owner measured `TTL_RXD1` and `TTL_RXD2` idling at approximately 3.3 V. Before connection, also verify each carrier TX output idles near 3.3 V relative to carrier ground.
 
 ### Validated Port Mapping

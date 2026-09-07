@@ -6,7 +6,7 @@ This firmware keeps the validated display initialization and adds a dedicated UA
 
 ## SD Logging (Unit A Checkpoint)
 
-Unit A now mounts the Waveshare microSD/TF slot in 1-bit SD_MMC mode using GPIO9 (`D0`), GPIO10 (`CMD`), and GPIO11 (`CLK`). The first boot performs a non-destructive read/write/read-back check at `/TOPO-RTK/SD-READBACK-TEST.TXT` and creates a session directory under `/TOPO-RTK/UNIT-A/SESSIONS/`.
+Each unit mounts the Waveshare microSD/TF slot in 1-bit SD_MMC mode using GPIO9 (`D0`), GPIO10 (`CMD`), and GPIO11 (`CLK`). The first boot performs a non-destructive read/write/read-back check at `/TOPO-RTK/SD-READBACK-TEST.TXT` and creates a session directory under `/TOPO-RTK/UNIT-A/SESSIONS/` or `/TOPO-RTK/UNIT-B/SESSIONS/`, depending on the build.
 
 Each session contains:
 
@@ -15,7 +15,7 @@ Each session contains:
 - `config.csv`: automatic profiles and allowlisted manual configuration requests.
 - `solution.csv`: approximately 1 Hz GGA solution values, H-ACC, correction age, link RSSI, RTCM frame/byte counters, and network error counters.
 
-The logger is append-oriented and flushes after each record in this initial reliability checkpoint. It does not yet record raw observations or a binary RTCM archive. Only Unit A has been flashed with SD support; Unit B remains on the prior validated firmware until a separate SD hardware test is performed.
+The logger is append-oriented and flushes after each record in this initial reliability checkpoint. It does not yet record raw observations or a binary RTCM archive. Both Unit A and Unit B have now been flashed with SD support; each unit must use its own card during a two-sided field session.
 
 Display rotation is selected per instrument so the two printed bodies can use different physical orientations without editing source code:
 
