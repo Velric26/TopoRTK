@@ -1,0 +1,1827 @@
+{
+  "samples": [
+    {
+      "elapsed_s": 0.5,
+      "ports": [
+        "COM10",
+        "COM4"
+      ],
+      "B": {
+        "boot_id": 3036431035,
+        "uptime_ms": 85317,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 227456,
+        "min_heap": 225740,
+        "free_psram": 8328199,
+        "records_used": 0,
+        "profile_verified": true
+      }
+    },
+    {
+      "elapsed_s": 8.7,
+      "ports": [
+        "COM10",
+        "COM4"
+      ],
+      "A": {
+        "boot_id": 2535764779,
+        "uptime_ms": 94751,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 224148,
+        "min_heap": 222364,
+        "free_psram": 8326435,
+        "records_used": 0,
+        "profile_verified": true,
+        "packets": 345,
+        "connected": true
+      },
+      "B": {
+        "boot_id": 3036431035,
+        "uptime_ms": 93775,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 227220,
+        "min_heap": 218228,
+        "free_psram": 8328199,
+        "records_used": 0,
+        "profile_verified": true
+      }
+    },
+    {
+      "elapsed_s": 17.4,
+      "ports": [
+        "COM10",
+        "COM4"
+      ],
+      "A": {
+        "boot_id": 2535764779,
+        "uptime_ms": 102308,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 224560,
+        "min_heap": 218412,
+        "free_psram": 8326435,
+        "records_used": 0,
+        "profile_verified": true,
+        "packets": 368,
+        "connected": true
+      },
+      "B": {
+        "boot_id": 3036431035,
+        "uptime_ms": 99510,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 227456,
+        "min_heap": 218040,
+        "free_psram": 8328199,
+        "records_used": 0,
+        "profile_verified": true
+      }
+    },
+    {
+      "elapsed_s": 23.0,
+      "ports": [
+        "COM10",
+        "COM4"
+      ],
+      "A": {
+        "boot_id": 2535764779,
+        "uptime_ms": 107860,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 224556,
+        "min_heap": 218412,
+        "free_psram": 8326435,
+        "records_used": 0,
+        "profile_verified": true,
+        "packets": 390,
+        "connected": true
+      },
+      "B": {
+        "boot_id": 3036431035,
+        "uptime_ms": 105063,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 227456,
+        "min_heap": 218040,
+        "free_psram": 8328199,
+        "records_used": 0,
+        "profile_verified": true
+      }
+    },
+    {
+      "elapsed_s": 28.6,
+      "ports": [
+        "COM10",
+        "COM4"
+      ],
+      "A": {
+        "boot_id": 2535764779,
+        "uptime_ms": 113514,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 224556,
+        "min_heap": 218412,
+        "free_psram": 8326435,
+        "records_used": 0,
+        "profile_verified": true,
+        "packets": 413,
+        "connected": true
+      },
+      "B": {
+        "boot_id": 3036431035,
+        "uptime_ms": 110666,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 227456,
+        "min_heap": 218040,
+        "free_psram": 8328199,
+        "records_used": 0,
+        "profile_verified": true
+      }
+    },
+    {
+      "elapsed_s": 34.1,
+      "ports": [
+        "COM10",
+        "COM4"
+      ],
+      "A": {
+        "boot_id": 2535764779,
+        "uptime_ms": 119017,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 224324,
+        "min_heap": 217208,
+        "free_psram": 8326435,
+        "records_used": 0,
+        "profile_verified": true,
+        "packets": 435,
+        "connected": true
+      },
+      "B": {
+        "boot_id": 3036431035,
+        "uptime_ms": 116168,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 227216,
+        "min_heap": 217652,
+        "free_psram": 8328199,
+        "records_used": 0,
+        "profile_verified": true
+      }
+    },
+    {
+      "elapsed_s": 39.6,
+      "ports": [
+        "COM10",
+        "COM4"
+      ],
+      "A": {
+        "boot_id": 2535764779,
+        "uptime_ms": 124518,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 224560,
+        "min_heap": 215564,
+        "free_psram": 8326435,
+        "records_used": 0,
+        "profile_verified": true,
+        "packets": 457,
+        "connected": true
+      },
+      "B": {
+        "boot_id": 3036431035,
+        "uptime_ms": 121673,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 227216,
+        "min_heap": 217652,
+        "free_psram": 8328199,
+        "records_used": 0,
+        "profile_verified": true
+      }
+    },
+    {
+      "elapsed_s": 45.3,
+      "ports": [
+        "COM10",
+        "COM4"
+      ],
+      "A": {
+        "boot_id": 2535764779,
+        "uptime_ms": 130225,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 224560,
+        "min_heap": 215564,
+        "free_psram": 8326435,
+        "records_used": 0,
+        "profile_verified": true,
+        "packets": 479,
+        "connected": true
+      },
+      "B": {
+        "boot_id": 3036431035,
+        "uptime_ms": 127381,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 227456,
+        "min_heap": 217652,
+        "free_psram": 8328199,
+        "records_used": 0,
+        "profile_verified": true
+      }
+    },
+    {
+      "elapsed_s": 50.8,
+      "ports": [
+        "COM10",
+        "COM4"
+      ],
+      "A": {
+        "boot_id": 2535764779,
+        "uptime_ms": 135726,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 224556,
+        "min_heap": 215564,
+        "free_psram": 8326435,
+        "records_used": 0,
+        "profile_verified": true,
+        "packets": 501,
+        "connected": true
+      },
+      "B": {
+        "boot_id": 3036431035,
+        "uptime_ms": 132842,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 227456,
+        "min_heap": 217652,
+        "free_psram": 8328199,
+        "records_used": 0,
+        "profile_verified": true
+      }
+    },
+    {
+      "elapsed_s": 56.6,
+      "ports": [
+        "COM10",
+        "COM4"
+      ],
+      "A": {
+        "boot_id": 2535764779,
+        "uptime_ms": 141531,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 224152,
+        "min_heap": 215564,
+        "free_psram": 8326435,
+        "records_used": 0,
+        "profile_verified": true,
+        "packets": 525,
+        "connected": true
+      },
+      "B": {
+        "boot_id": 3036431035,
+        "uptime_ms": 138746,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 226592,
+        "min_heap": 217652,
+        "free_psram": 8328199,
+        "records_used": 0,
+        "profile_verified": true
+      }
+    },
+    {
+      "elapsed_s": 62.6,
+      "ports": [
+        "COM10",
+        "COM4"
+      ],
+      "A": {
+        "boot_id": 2535764779,
+        "uptime_ms": 147537,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 224556,
+        "min_heap": 215564,
+        "free_psram": 8326435,
+        "records_used": 0,
+        "profile_verified": true,
+        "packets": 549,
+        "connected": true
+      },
+      "B": {
+        "boot_id": 3036431035,
+        "uptime_ms": 144705,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 227456,
+        "min_heap": 217652,
+        "free_psram": 8328199,
+        "records_used": 0,
+        "profile_verified": true
+      }
+    },
+    {
+      "elapsed_s": 68.3,
+      "ports": [
+        "COM10",
+        "COM4"
+      ],
+      "A": {
+        "boot_id": 2535764779,
+        "uptime_ms": 153188,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 224556,
+        "min_heap": 215564,
+        "free_psram": 8326435,
+        "records_used": 0,
+        "profile_verified": true,
+        "packets": 571,
+        "connected": true
+      },
+      "B": {
+        "boot_id": 3036431035,
+        "uptime_ms": 150358,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 227456,
+        "min_heap": 217652,
+        "free_psram": 8328199,
+        "records_used": 0,
+        "profile_verified": true
+      }
+    },
+    {
+      "elapsed_s": 74.1,
+      "ports": [
+        "COM10",
+        "COM4"
+      ],
+      "A": {
+        "boot_id": 2535764779,
+        "uptime_ms": 158997,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 224148,
+        "min_heap": 215564,
+        "free_psram": 8326435,
+        "records_used": 0,
+        "profile_verified": true,
+        "packets": 595,
+        "connected": true
+      },
+      "B": {
+        "boot_id": 3036431035,
+        "uptime_ms": 156210,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 227456,
+        "min_heap": 217652,
+        "free_psram": 8328199,
+        "records_used": 0,
+        "profile_verified": true
+      }
+    },
+    {
+      "elapsed_s": 79.6,
+      "ports": [
+        "COM10",
+        "COM4"
+      ],
+      "A": {
+        "boot_id": 2535764779,
+        "uptime_ms": 164499,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 224556,
+        "min_heap": 215564,
+        "free_psram": 8326435,
+        "records_used": 0,
+        "profile_verified": true,
+        "packets": 616,
+        "connected": true
+      },
+      "B": {
+        "boot_id": 3036431035,
+        "uptime_ms": 161714,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 227456,
+        "min_heap": 217652,
+        "free_psram": 8328199,
+        "records_used": 0,
+        "profile_verified": true
+      }
+    },
+    {
+      "elapsed_s": 85.3,
+      "ports": [
+        "COM10",
+        "COM4"
+      ],
+      "A": {
+        "boot_id": 2535764779,
+        "uptime_ms": 170154,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 224556,
+        "min_heap": 215564,
+        "free_psram": 8326435,
+        "records_used": 0,
+        "profile_verified": true,
+        "packets": 639,
+        "connected": true
+      },
+      "B": {
+        "boot_id": 3036431035,
+        "uptime_ms": 167401,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 227040,
+        "min_heap": 217488,
+        "free_psram": 8328199,
+        "records_used": 0,
+        "profile_verified": true
+      }
+    },
+    {
+      "elapsed_s": 91.0,
+      "ports": [
+        "COM10",
+        "COM4"
+      ],
+      "A": {
+        "boot_id": 2535764779,
+        "uptime_ms": 175911,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 224556,
+        "min_heap": 215564,
+        "free_psram": 8326435,
+        "records_used": 0,
+        "profile_verified": true,
+        "packets": 662,
+        "connected": true
+      },
+      "B": {
+        "boot_id": 3036431035,
+        "uptime_ms": 173113,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 227452,
+        "min_heap": 217488,
+        "free_psram": 8328199,
+        "records_used": 0,
+        "profile_verified": true
+      }
+    },
+    {
+      "elapsed_s": 96.9,
+      "ports": [
+        "COM10",
+        "COM4"
+      ],
+      "A": {
+        "boot_id": 2535764779,
+        "uptime_ms": 181762,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 224552,
+        "min_heap": 215564,
+        "free_psram": 8326435,
+        "records_used": 0,
+        "profile_verified": true,
+        "packets": 685,
+        "connected": true
+      },
+      "B": {
+        "boot_id": 3036431035,
+        "uptime_ms": 178974,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 227456,
+        "min_heap": 217488,
+        "free_psram": 8328199,
+        "records_used": 0,
+        "profile_verified": true
+      }
+    },
+    {
+      "elapsed_s": 102.9,
+      "ports": [
+        "COM10",
+        "COM4"
+      ],
+      "A": {
+        "boot_id": 2535764779,
+        "uptime_ms": 187769,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 224556,
+        "min_heap": 215564,
+        "free_psram": 8326435,
+        "records_used": 0,
+        "profile_verified": true,
+        "packets": 709,
+        "connected": true
+      },
+      "B": {
+        "boot_id": 3036431035,
+        "uptime_ms": 184978,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 227452,
+        "min_heap": 217488,
+        "free_psram": 8328199,
+        "records_used": 0,
+        "profile_verified": true
+      }
+    },
+    {
+      "elapsed_s": 108.4,
+      "ports": [
+        "COM10",
+        "COM4"
+      ],
+      "A": {
+        "boot_id": 2535764779,
+        "uptime_ms": 193322,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 224556,
+        "min_heap": 215564,
+        "free_psram": 8326435,
+        "records_used": 0,
+        "profile_verified": true,
+        "packets": 731,
+        "connected": true
+      },
+      "B": {
+        "boot_id": 3036431035,
+        "uptime_ms": 190480,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 227456,
+        "min_heap": 217488,
+        "free_psram": 8328199,
+        "records_used": 0,
+        "profile_verified": true
+      }
+    },
+    {
+      "elapsed_s": 114.1,
+      "ports": [
+        "COM10",
+        "COM4"
+      ],
+      "A": {
+        "boot_id": 2535764779,
+        "uptime_ms": 198973,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 224560,
+        "min_heap": 213312,
+        "free_psram": 8326435,
+        "records_used": 0,
+        "profile_verified": true,
+        "packets": 754,
+        "connected": true
+      },
+      "B": {
+        "boot_id": 3036431035,
+        "uptime_ms": 196135,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 227444,
+        "min_heap": 217488,
+        "free_psram": 8328199,
+        "records_used": 0,
+        "profile_verified": true
+      }
+    },
+    {
+      "elapsed_s": 119.8,
+      "ports": [
+        "COM10",
+        "COM4"
+      ],
+      "A": {
+        "boot_id": 2535764779,
+        "uptime_ms": 204729,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 223940,
+        "min_heap": 213312,
+        "free_psram": 8326435,
+        "records_used": 0,
+        "profile_verified": true,
+        "packets": 777,
+        "connected": true
+      },
+      "B": {
+        "boot_id": 3036431035,
+        "uptime_ms": 201890,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 227456,
+        "min_heap": 217488,
+        "free_psram": 8328199,
+        "records_used": 0,
+        "profile_verified": true
+      }
+    },
+    {
+      "elapsed_s": 125.8,
+      "ports": [
+        "COM10",
+        "COM4"
+      ],
+      "A": {
+        "boot_id": 2535764779,
+        "uptime_ms": 210681,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 224556,
+        "min_heap": 213312,
+        "free_psram": 8326435,
+        "records_used": 0,
+        "profile_verified": true,
+        "packets": 801,
+        "connected": true
+      },
+      "B": {
+        "boot_id": 3036431035,
+        "uptime_ms": 207921,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 226824,
+        "min_heap": 217488,
+        "free_psram": 8328199,
+        "records_used": 0,
+        "profile_verified": true
+      }
+    },
+    {
+      "elapsed_s": 131.8,
+      "ports": [
+        "COM10",
+        "COM4"
+      ],
+      "A": {
+        "boot_id": 2535764779,
+        "uptime_ms": 216635,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 224556,
+        "min_heap": 213312,
+        "free_psram": 8326435,
+        "records_used": 0,
+        "profile_verified": true,
+        "packets": 824,
+        "connected": true
+      },
+      "B": {
+        "boot_id": 3036431035,
+        "uptime_ms": 213828,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 227456,
+        "min_heap": 217488,
+        "free_psram": 8328199,
+        "records_used": 0,
+        "profile_verified": true
+      }
+    },
+    {
+      "elapsed_s": 137.5,
+      "ports": [
+        "COM10",
+        "COM4"
+      ],
+      "A": {
+        "boot_id": 2535764779,
+        "uptime_ms": 222442,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 224560,
+        "min_heap": 213312,
+        "free_psram": 8326435,
+        "records_used": 0,
+        "profile_verified": true,
+        "packets": 847,
+        "connected": true
+      },
+      "B": {
+        "boot_id": 3036431035,
+        "uptime_ms": 219584,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 227456,
+        "min_heap": 217488,
+        "free_psram": 8328199,
+        "records_used": 0,
+        "profile_verified": true
+      }
+    },
+    {
+      "elapsed_s": 143.1,
+      "ports": [
+        "COM10",
+        "COM4"
+      ],
+      "A": {
+        "boot_id": 2535764779,
+        "uptime_ms": 228042,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 224556,
+        "min_heap": 213312,
+        "free_psram": 8326435,
+        "records_used": 0,
+        "profile_verified": true,
+        "packets": 870,
+        "connected": true
+      },
+      "B": {
+        "boot_id": 3036431035,
+        "uptime_ms": 225148,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 227456,
+        "min_heap": 217488,
+        "free_psram": 8328199,
+        "records_used": 0,
+        "profile_verified": true
+      }
+    },
+    {
+      "elapsed_s": 148.7,
+      "ports": [
+        "COM10",
+        "COM4"
+      ],
+      "A": {
+        "boot_id": 2535764779,
+        "uptime_ms": 233645,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 224144,
+        "min_heap": 213312,
+        "free_psram": 8326435,
+        "records_used": 0,
+        "profile_verified": true,
+        "packets": 892,
+        "connected": true
+      },
+      "B": {
+        "boot_id": 3036431035,
+        "uptime_ms": 230814,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 227452,
+        "min_heap": 217488,
+        "free_psram": 8328199,
+        "records_used": 0,
+        "profile_verified": true
+      }
+    },
+    {
+      "elapsed_s": 154.5,
+      "ports": [
+        "COM10",
+        "COM4"
+      ],
+      "A": {
+        "boot_id": 2535764779,
+        "uptime_ms": 239449,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 224556,
+        "min_heap": 213312,
+        "free_psram": 8326435,
+        "records_used": 0,
+        "profile_verified": true,
+        "packets": 916,
+        "connected": true
+      },
+      "B": {
+        "boot_id": 3036431035,
+        "uptime_ms": 236640,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 227456,
+        "min_heap": 217488,
+        "free_psram": 8328199,
+        "records_used": 0,
+        "profile_verified": true
+      }
+    },
+    {
+      "elapsed_s": 160.2,
+      "ports": [
+        "COM10",
+        "COM4"
+      ],
+      "A": {
+        "boot_id": 2535764779,
+        "uptime_ms": 245102,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 224560,
+        "min_heap": 213312,
+        "free_psram": 8326435,
+        "records_used": 0,
+        "profile_verified": true,
+        "packets": 939,
+        "connected": true
+      },
+      "B": {
+        "boot_id": 3036431035,
+        "uptime_ms": 242493,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 227040,
+        "min_heap": 217488,
+        "free_psram": 8328199,
+        "records_used": 0,
+        "profile_verified": true
+      }
+    },
+    {
+      "elapsed_s": 166.0,
+      "ports": [
+        "COM10",
+        "COM4"
+      ],
+      "B": {
+        "boot_id": 3036431035,
+        "uptime_ms": 250800,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 227456,
+        "min_heap": 217488,
+        "free_psram": 8328199,
+        "records_used": 0,
+        "profile_verified": true
+      }
+    },
+    {
+      "elapsed_s": 174.2,
+      "ports": [
+        "COM10",
+        "COM4"
+      ],
+      "A": {
+        "boot_id": 819904139,
+        "uptime_ms": 12372,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 223576,
+        "min_heap": 222176,
+        "free_psram": 8326435,
+        "records_used": 1,
+        "profile_verified": true,
+        "packets": 31,
+        "connected": true
+      },
+      "B": {
+        "boot_id": 3036431035,
+        "uptime_ms": 258703,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 227456,
+        "min_heap": 217488,
+        "free_psram": 8328199,
+        "records_used": 0,
+        "profile_verified": true
+      }
+    },
+    {
+      "elapsed_s": 182.2,
+      "ports": [
+        "COM10",
+        "COM4"
+      ],
+      "A": {
+        "boot_id": 819904139,
+        "uptime_ms": 19421,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 223500,
+        "min_heap": 216212,
+        "free_psram": 8326435,
+        "records_used": 1,
+        "profile_verified": true,
+        "packets": 68,
+        "connected": true
+      },
+      "B": {
+        "boot_id": 3036431035,
+        "uptime_ms": 268022,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 227076,
+        "min_heap": 217488,
+        "free_psram": 8325871,
+        "records_used": 0,
+        "profile_verified": true
+      }
+    },
+    {
+      "elapsed_s": 191.7,
+      "ports": [
+        "COM10",
+        "COM4"
+      ],
+      "A": {
+        "boot_id": 819904139,
+        "uptime_ms": 28856,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 223984,
+        "min_heap": 215220,
+        "free_psram": 8326435,
+        "records_used": 1,
+        "profile_verified": true,
+        "packets": 95,
+        "connected": true
+      },
+      "B": {
+        "boot_id": 3036431035,
+        "uptime_ms": 274716,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 227456,
+        "min_heap": 217488,
+        "free_psram": 8328199,
+        "records_used": 0,
+        "profile_verified": true
+      }
+    },
+    {
+      "elapsed_s": 198.5,
+      "ports": [
+        "COM10",
+        "COM4"
+      ],
+      "A": {
+        "boot_id": 819904139,
+        "uptime_ms": 35660,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 223972,
+        "min_heap": 215220,
+        "free_psram": 8326435,
+        "records_used": 1,
+        "profile_verified": true,
+        "packets": 120,
+        "connected": true
+      },
+      "B": {
+        "boot_id": 3036431035,
+        "uptime_ms": 281018,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 226828,
+        "min_heap": 217488,
+        "free_psram": 8328199,
+        "records_used": 0,
+        "profile_verified": true
+      }
+    },
+    {
+      "elapsed_s": 204.4,
+      "ports": [
+        "COM10",
+        "COM4"
+      ],
+      "A": {
+        "boot_id": 819904139,
+        "uptime_ms": 41577,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 223984,
+        "min_heap": 214988,
+        "free_psram": 8326435,
+        "records_used": 1,
+        "profile_verified": true,
+        "packets": 144,
+        "connected": true
+      },
+      "B": {
+        "boot_id": 3036431035,
+        "uptime_ms": 287019,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 226828,
+        "min_heap": 217488,
+        "free_psram": 8328199,
+        "records_used": 0,
+        "profile_verified": true
+      }
+    },
+    {
+      "elapsed_s": 210.7,
+      "ports": [
+        "COM10",
+        "COM4"
+      ],
+      "A": {
+        "boot_id": 819904139,
+        "uptime_ms": 47768,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 223984,
+        "min_heap": 214716,
+        "free_psram": 8326435,
+        "records_used": 1,
+        "profile_verified": true,
+        "packets": 168,
+        "connected": true
+      },
+      "B": {
+        "boot_id": 3036431035,
+        "uptime_ms": 293025,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 227456,
+        "min_heap": 217488,
+        "free_psram": 8328199,
+        "records_used": 0,
+        "profile_verified": true
+      }
+    },
+    {
+      "elapsed_s": 216.5,
+      "ports": [
+        "COM10",
+        "COM4"
+      ],
+      "A": {
+        "boot_id": 819904139,
+        "uptime_ms": 53630,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 223984,
+        "min_heap": 214560,
+        "free_psram": 8326435,
+        "records_used": 1,
+        "profile_verified": true,
+        "packets": 191,
+        "connected": true
+      },
+      "B": {
+        "boot_id": 3036431035,
+        "uptime_ms": 298880,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 227456,
+        "min_heap": 217488,
+        "free_psram": 8328199,
+        "records_used": 0,
+        "profile_verified": true
+      }
+    },
+    {
+      "elapsed_s": 222.4,
+      "ports": [
+        "COM10",
+        "COM4"
+      ],
+      "A": {
+        "boot_id": 819904139,
+        "uptime_ms": 59500,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 223976,
+        "min_heap": 214560,
+        "free_psram": 8326435,
+        "records_used": 1,
+        "profile_verified": true,
+        "packets": 215,
+        "connected": true
+      },
+      "B": {
+        "boot_id": 3036431035,
+        "uptime_ms": 304984,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 227048,
+        "min_heap": 217488,
+        "free_psram": 8328199,
+        "records_used": 0,
+        "profile_verified": true
+      }
+    },
+    {
+      "elapsed_s": 228.7,
+      "ports": [
+        "COM10",
+        "COM4"
+      ],
+      "A": {
+        "boot_id": 819904139,
+        "uptime_ms": 65855,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 223984,
+        "min_heap": 214560,
+        "free_psram": 8326435,
+        "records_used": 1,
+        "profile_verified": true,
+        "packets": 240,
+        "connected": true
+      },
+      "B": {
+        "boot_id": 3036431035,
+        "uptime_ms": 311035,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 227456,
+        "min_heap": 217488,
+        "free_psram": 8328199,
+        "records_used": 0,
+        "profile_verified": true
+      }
+    },
+    {
+      "elapsed_s": 234.5,
+      "ports": [
+        "COM10",
+        "COM4"
+      ],
+      "A": {
+        "boot_id": 819904139,
+        "uptime_ms": 71647,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 223984,
+        "min_heap": 214560,
+        "free_psram": 8326435,
+        "records_used": 1,
+        "profile_verified": true,
+        "packets": 263,
+        "connected": true
+      },
+      "B": {
+        "boot_id": 3036431035,
+        "uptime_ms": 316888,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 227456,
+        "min_heap": 217488,
+        "free_psram": 8328199,
+        "records_used": 0,
+        "profile_verified": true
+      }
+    },
+    {
+      "elapsed_s": 240.6,
+      "ports": [
+        "COM10",
+        "COM4"
+      ],
+      "A": {
+        "boot_id": 819904139,
+        "uptime_ms": 77739,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 223984,
+        "min_heap": 214560,
+        "free_psram": 8326435,
+        "records_used": 1,
+        "profile_verified": true,
+        "packets": 287,
+        "connected": true
+      },
+      "B": {
+        "boot_id": 3036431035,
+        "uptime_ms": 323148,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 227220,
+        "min_heap": 217488,
+        "free_psram": 8328199,
+        "records_used": 0,
+        "profile_verified": true
+      }
+    },
+    {
+      "elapsed_s": 246.6,
+      "ports": [
+        "COM10",
+        "COM4"
+      ],
+      "A": {
+        "boot_id": 819904139,
+        "uptime_ms": 83710,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 223984,
+        "min_heap": 214560,
+        "free_psram": 8326435,
+        "records_used": 1,
+        "profile_verified": true,
+        "packets": 312,
+        "connected": true
+      },
+      "B": {
+        "boot_id": 3036431035,
+        "uptime_ms": 329103,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 227048,
+        "min_heap": 217488,
+        "free_psram": 8328199,
+        "records_used": 0,
+        "profile_verified": true
+      }
+    },
+    {
+      "elapsed_s": 252.6,
+      "ports": [
+        "COM10",
+        "COM4"
+      ],
+      "A": {
+        "boot_id": 819904139,
+        "uptime_ms": 89703,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 223980,
+        "min_heap": 214308,
+        "free_psram": 8326435,
+        "records_used": 1,
+        "profile_verified": true,
+        "packets": 336,
+        "connected": true
+      },
+      "B": {
+        "boot_id": 3036431035,
+        "uptime_ms": 335391,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 227456,
+        "min_heap": 217488,
+        "free_psram": 8328199,
+        "records_used": 0,
+        "profile_verified": true
+      }
+    },
+    {
+      "elapsed_s": 258.9,
+      "ports": [
+        "COM10",
+        "COM4"
+      ],
+      "A": {
+        "boot_id": 819904139,
+        "uptime_ms": 96052,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 223980,
+        "min_heap": 214308,
+        "free_psram": 8326435,
+        "records_used": 1,
+        "profile_verified": true,
+        "packets": 361,
+        "connected": true
+      },
+      "B": {
+        "boot_id": 3036431035,
+        "uptime_ms": 341394,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 227456,
+        "min_heap": 217488,
+        "free_psram": 8328199,
+        "records_used": 0,
+        "profile_verified": true
+      }
+    },
+    {
+      "elapsed_s": 264.8,
+      "ports": [
+        "COM10",
+        "COM4"
+      ],
+      "A": {
+        "boot_id": 819904139,
+        "uptime_ms": 101955,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 223980,
+        "min_heap": 214308,
+        "free_psram": 8326435,
+        "records_used": 1,
+        "profile_verified": true,
+        "packets": 385,
+        "connected": true
+      },
+      "B": {
+        "boot_id": 3036431035,
+        "uptime_ms": 347500,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 227456,
+        "min_heap": 217488,
+        "free_psram": 8328199,
+        "records_used": 0,
+        "profile_verified": true
+      }
+    },
+    {
+      "elapsed_s": 270.9,
+      "ports": [
+        "COM10",
+        "COM4"
+      ],
+      "A": {
+        "boot_id": 819904139,
+        "uptime_ms": 108022,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 223984,
+        "min_heap": 214308,
+        "free_psram": 8326435,
+        "records_used": 1,
+        "profile_verified": true,
+        "packets": 410,
+        "connected": true
+      },
+      "B": {
+        "boot_id": 3036431035,
+        "uptime_ms": 353760,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 227456,
+        "min_heap": 217488,
+        "free_psram": 8328199,
+        "records_used": 0,
+        "profile_verified": true
+      }
+    },
+    {
+      "elapsed_s": 277.2,
+      "ports": [
+        "COM10",
+        "COM4"
+      ],
+      "A": {
+        "boot_id": 819904139,
+        "uptime_ms": 114367,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 223356,
+        "min_heap": 214308,
+        "free_psram": 8326435,
+        "records_used": 1,
+        "profile_verified": true,
+        "packets": 435,
+        "connected": true
+      },
+      "B": {
+        "boot_id": 3036431035,
+        "uptime_ms": 360024,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 227456,
+        "min_heap": 217488,
+        "free_psram": 8328199,
+        "records_used": 0,
+        "profile_verified": true
+      }
+    },
+    {
+      "elapsed_s": 283.5,
+      "ports": [
+        "COM10",
+        "COM4"
+      ],
+      "A": {
+        "boot_id": 819904139,
+        "uptime_ms": 120672,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 223364,
+        "min_heap": 214308,
+        "free_psram": 8326435,
+        "records_used": 1,
+        "profile_verified": true,
+        "packets": 459,
+        "connected": true
+      },
+      "B": {
+        "boot_id": 3036431035,
+        "uptime_ms": 365934,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 226820,
+        "min_heap": 217488,
+        "free_psram": 8328199,
+        "records_used": 0,
+        "profile_verified": true
+      }
+    },
+    {
+      "elapsed_s": 289.4,
+      "ports": [
+        "COM10",
+        "COM4"
+      ],
+      "A": {
+        "boot_id": 819904139,
+        "uptime_ms": 126511,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 223976,
+        "min_heap": 214308,
+        "free_psram": 8326435,
+        "records_used": 1,
+        "profile_verified": true,
+        "packets": 482,
+        "connected": true
+      },
+      "B": {
+        "boot_id": 3036431035,
+        "uptime_ms": 371820,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 226828,
+        "min_heap": 217488,
+        "free_psram": 8328199,
+        "records_used": 0,
+        "profile_verified": true
+      }
+    },
+    {
+      "elapsed_s": 295.5,
+      "ports": [
+        "COM10",
+        "COM4"
+      ],
+      "A": {
+        "boot_id": 819904139,
+        "uptime_ms": 132640,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 223352,
+        "min_heap": 214308,
+        "free_psram": 8326435,
+        "records_used": 1,
+        "profile_verified": true,
+        "packets": 507,
+        "connected": true
+      },
+      "B": {
+        "boot_id": 3036431035,
+        "uptime_ms": 377984,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 226828,
+        "min_heap": 217488,
+        "free_psram": 8328199,
+        "records_used": 0,
+        "profile_verified": true
+      }
+    },
+    {
+      "elapsed_s": 301.5,
+      "ports": [
+        "COM10",
+        "COM4"
+      ],
+      "A": {
+        "boot_id": 819904139,
+        "uptime_ms": 138625,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 223976,
+        "min_heap": 214308,
+        "free_psram": 8326435,
+        "records_used": 1,
+        "profile_verified": true,
+        "packets": 530,
+        "connected": true
+      },
+      "B": {
+        "boot_id": 3036431035,
+        "uptime_ms": 383950,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 227456,
+        "min_heap": 217488,
+        "free_psram": 8328199,
+        "records_used": 0,
+        "profile_verified": true
+      }
+    },
+    {
+      "elapsed_s": 307.5,
+      "ports": [
+        "COM10",
+        "COM4"
+      ],
+      "A": {
+        "boot_id": 819904139,
+        "uptime_ms": 144646,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 223444,
+        "min_heap": 214308,
+        "free_psram": 8321779,
+        "records_used": 1,
+        "profile_verified": true,
+        "packets": 554,
+        "connected": true
+      },
+      "B": {
+        "boot_id": 3036431035,
+        "uptime_ms": 390076,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 227456,
+        "min_heap": 217488,
+        "free_psram": 8328199,
+        "records_used": 0,
+        "profile_verified": true
+      }
+    },
+    {
+      "elapsed_s": 313.5,
+      "ports": [
+        "COM10",
+        "COM4"
+      ],
+      "A": {
+        "boot_id": 819904139,
+        "uptime_ms": 150639,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 223976,
+        "min_heap": 214308,
+        "free_psram": 8326435,
+        "records_used": 1,
+        "profile_verified": true,
+        "packets": 577,
+        "connected": true
+      },
+      "B": {
+        "boot_id": 3036431035,
+        "uptime_ms": 395885,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 227456,
+        "min_heap": 217488,
+        "free_psram": 8328199,
+        "records_used": 0,
+        "profile_verified": true
+      }
+    },
+    {
+      "elapsed_s": 319.3,
+      "ports": [
+        "COM10",
+        "COM4"
+      ],
+      "A": {
+        "boot_id": 819904139,
+        "uptime_ms": 156476,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 223984,
+        "min_heap": 214308,
+        "free_psram": 8326435,
+        "records_used": 1,
+        "profile_verified": true,
+        "packets": 601,
+        "connected": true
+      },
+      "B": {
+        "boot_id": 3036431035,
+        "uptime_ms": 401901,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 227220,
+        "min_heap": 217488,
+        "free_psram": 8328199,
+        "records_used": 0,
+        "profile_verified": true
+      }
+    },
+    {
+      "elapsed_s": 325.6,
+      "ports": [
+        "COM10",
+        "COM4"
+      ],
+      "A": {
+        "boot_id": 819904139,
+        "uptime_ms": 162783,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 223360,
+        "min_heap": 214308,
+        "free_psram": 8326435,
+        "records_used": 1,
+        "profile_verified": true,
+        "packets": 627,
+        "connected": true
+      },
+      "B": {
+        "boot_id": 3036431035,
+        "uptime_ms": 408380,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 227456,
+        "min_heap": 217488,
+        "free_psram": 8328199,
+        "records_used": 0,
+        "profile_verified": true
+      }
+    },
+    {
+      "elapsed_s": 332.0,
+      "ports": [
+        "COM10",
+        "COM4"
+      ],
+      "A": {
+        "boot_id": 819904139,
+        "uptime_ms": 169158,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 223984,
+        "min_heap": 214308,
+        "free_psram": 8326435,
+        "records_used": 1,
+        "profile_verified": true,
+        "packets": 652,
+        "connected": true
+      },
+      "B": {
+        "boot_id": 3036431035,
+        "uptime_ms": 414535,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 226828,
+        "min_heap": 217488,
+        "free_psram": 8328199,
+        "records_used": 0,
+        "profile_verified": true
+      }
+    },
+    {
+      "elapsed_s": 338.0,
+      "ports": [
+        "COM10",
+        "COM4"
+      ],
+      "A": {
+        "boot_id": 819904139,
+        "uptime_ms": 175154,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 223980,
+        "min_heap": 214308,
+        "free_psram": 8326435,
+        "records_used": 1,
+        "profile_verified": true,
+        "packets": 675,
+        "connected": true
+      },
+      "B": {
+        "boot_id": 3036431035,
+        "uptime_ms": 420445,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 227220,
+        "min_heap": 217488,
+        "free_psram": 8328199,
+        "records_used": 0,
+        "profile_verified": true
+      }
+    },
+    {
+      "elapsed_s": 343.9,
+      "ports": [
+        "COM10",
+        "COM4"
+      ],
+      "A": {
+        "boot_id": 819904139,
+        "uptime_ms": 181045,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 223984,
+        "min_heap": 214308,
+        "free_psram": 8326435,
+        "records_used": 1,
+        "profile_verified": true,
+        "packets": 699,
+        "connected": true
+      },
+      "B": {
+        "boot_id": 3036431035,
+        "uptime_ms": 426403,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 227444,
+        "min_heap": 217488,
+        "free_psram": 8325871,
+        "records_used": 0,
+        "profile_verified": true
+      }
+    },
+    {
+      "elapsed_s": 349.9,
+      "ports": [
+        "COM10",
+        "COM4"
+      ],
+      "A": {
+        "boot_id": 819904139,
+        "uptime_ms": 187063,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 223984,
+        "min_heap": 214308,
+        "free_psram": 8326435,
+        "records_used": 1,
+        "profile_verified": true,
+        "packets": 724,
+        "connected": true
+      },
+      "B": {
+        "boot_id": 3036431035,
+        "uptime_ms": 432568,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 227040,
+        "min_heap": 217488,
+        "free_psram": 8328199,
+        "records_used": 0,
+        "profile_verified": true
+      }
+    },
+    {
+      "elapsed_s": 356.2,
+      "ports": [
+        "COM10",
+        "COM4"
+      ],
+      "A": {
+        "boot_id": 819904139,
+        "uptime_ms": 193307,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 223980,
+        "min_heap": 214308,
+        "free_psram": 8326435,
+        "records_used": 1,
+        "profile_verified": true,
+        "packets": 747,
+        "connected": true
+      },
+      "B": {
+        "boot_id": 3036431035,
+        "uptime_ms": 438496,
+        "storage_ready": true,
+        "reset_reason": 0,
+        "free_heap": 227456,
+        "min_heap": 217488,
+        "free_psram": 8328199,
+        "records_used": 0,
+        "profile_verified": true
+      }
+    }
+  ],
+  "errors": [
+    {
+      "elapsed_s": 0.5,
+      "unit": "A",
+      "error": "TimeoutError"
+    },
+    {
+      "elapsed_s": 166.0,
+      "unit": "A",
+      "error": "URLError"
+    }
+  ],
+  "write_rejections": {
+    "192.168.100.20/api/v1/commandNone": 401,
+    "192.168.100.20/api/v1/commandhttp://untrusted.invalid": 403,
+    "192.168.100.20/api/v1/controlhttp://untrusted.invalid": 403,
+    "192.168.100.19/api/v1/commandNone": 401,
+    "192.168.100.19/api/v1/commandhttp://untrusted.invalid": 403,
+    "192.168.100.19/api/v1/controlhttp://untrusted.invalid": 403
+  }
+}

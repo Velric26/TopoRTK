@@ -1,0 +1,62 @@
+{
+  "firmware/um980-display-demo/src/main.cpp": {
+    "bytes": 107202,
+    "sha256": "775cbf00b1decb4d6b7a6971d75d6d6f17bed4b985dd1fb135b1568fba4a5ebb"
+  },
+  "firmware/um980-display-demo/src/survey_engine.cpp": {
+    "bytes": 21866,
+    "sha256": "6bb6716093b0531327f1831f71aa327aeae5b5204a3b5775583787d4e8a52409"
+  },
+  "firmware/um980-display-demo/src/survey_engine.h": {
+    "bytes": 2900,
+    "sha256": "e18cf904bdf319dfda8d3d3f60fa2a4a6318d95ada0104eeba96a96b1283a13f"
+  },
+  "firmware/um980-display-demo/src/survey_math.h": {
+    "bytes": 3315,
+    "sha256": "40536d1584c2b7fd991de28b142f57e0a12186b72520fe0b96638eea6cefe6fe"
+  },
+  "firmware/um980-display-demo/src/survey_store.cpp": {
+    "bytes": 2719,
+    "sha256": "2da2f7712ba361f086c2b41661cc52885cf5c224684b6b545c0b9e18ebc782f3"
+  },
+  "firmware/um980-display-demo/src/survey_store.h": {
+    "bytes": 483,
+    "sha256": "f26df11bdc6aefb7c72f0dde220ee995c74877d4e6cb0956ca7771a970d32caa"
+  },
+  "firmware/um980-display-demo/src/survey_service.cpp": {
+    "bytes": 4275,
+    "sha256": "74f452fd82dc7ab56bf0072f0f87c0a29e195f2fb437aac568a20d3471c437ca"
+  },
+  "firmware/um980-display-demo/src/survey_service.h": {
+    "bytes": 637,
+    "sha256": "a61e49e0378b87cd9217c5404fb27b3f82647cc61111a50d9b2e1d38fdb89814"
+  },
+  "firmware/um980-display-demo/src/survey_control.h": {
+    "bytes": 1359,
+    "sha256": "81029452836851293c9ec88bcee1d4680ce8bbb7da54a9880db039f156ae3600"
+  },
+  "firmware/um980-display-demo/src/survey_ui.h": {
+    "bytes": 23252,
+    "sha256": "e4370cc01bfd419952d02c4187e93cf3720f206f900e024321a88159fc6d4cf0"
+  },
+  "firmware/um980-display-demo/src/web_http.cpp": {
+    "bytes": 7623,
+    "sha256": "268ff76dac5456155963e84ed8e13cdcde4210d8376770efb79c0dd768198d8c"
+  },
+  "firmware/um980-display-demo/src/web_http.h": {
+    "bytes": 326,
+    "sha256": "216c577c118fa72638eb16e96bc70edd4f05cc4095fb31dc2c2798144ca97c42"
+  },
+  "firmware/um980-display-demo/src/web_ui.h": {
+    "bytes": 13262,
+    "sha256": "3f5947fa223b52f1f0a7a5788bd6d884c7c0c226140ded6e0015e3f57f9a0120"
+  },
+  "firmware/um980-display-demo/.pio/build/unit_a/firmware.bin": {
+    "bytes": 1056192,
+    "sha256": "15db5b5d0a22f3c1726e4963055e100420865c604f8f22f3c8f1536fa4345541"
+  },
+  "firmware/um980-display-demo/.pio/build/unit_b/firmware.bin": {
+    "bytes": 1056192,
+    "sha256": "74dc3a86fb20c77cf9bf5ed0f2da3d8b12eea9edea68556ab5a295b5f5aaad6a"
+  }
+}

@@ -1,0 +1,139 @@
+{
+  "result": "PASS",
+  "page_refreshes": 30,
+  "write_rejections": {
+    "POST /api/v1/status": {
+      "status": 405,
+      "body": {
+        "error": "read_only"
+      }
+    },
+    "PUT /api/v1/status": {
+      "status": 405,
+      "body": {
+        "error": "read_only"
+      }
+    },
+    "DELETE /": {
+      "status": 405,
+      "body": {
+        "error": "read_only"
+      }
+    },
+    "GET /api/v1/config": {
+      "status": 404,
+      "body": {
+        "error": "not_found"
+      }
+    }
+  },
+  "slow_request_seconds": 3,
+  "before": {
+    "api_version": 1,
+    "ui_version": "0.1.0",
+    "boot_id": "99e2d80a",
+    "uptime_ms": 134156,
+    "device": {
+      "unit": "A",
+      "role": "ROVER",
+      "profile": "VERIFIED"
+    },
+    "state": {
+      "ready": false,
+      "gps_fixed": false,
+      "correction_link_connected": true
+    },
+    "gnss": {
+      "online": true,
+      "fix": "NO FIX",
+      "gga_quality": 0,
+      "gga_age_ms": 332,
+      "satellites": 0,
+      "horizontal_uncertainty_m": null,
+      "horizontal_uncertainty_label": "---"
+    },
+    "link": {
+      "connected": true,
+      "transport": "LOCAL ROUTER",
+      "quality": "EXCELLENT",
+      "rssi_dbm": -50,
+      "peer_age_ms": 150,
+      "correction_age_ms": null,
+      "received_packets": 513,
+      "sequence_gaps": 0,
+      "invalid_packets": 0,
+      "rtcm_received_frames": 0
+    },
+    "time": {
+      "local": null,
+      "utc": null,
+      "utc_offset": "-06:00"
+    },
+    "warning": {
+      "title": "NO FRESH CORRECTIONS",
+      "detail": "Check base fix and RTCM output.",
+      "severity": "warning"
+    }
+  },
+  "after": {
+    "api_version": 1,
+    "ui_version": "0.1.0",
+    "boot_id": "99e2d80a",
+    "uptime_ms": 174248,
+    "device": {
+      "unit": "A",
+      "role": "ROVER",
+      "profile": "VERIFIED"
+    },
+    "state": {
+      "ready": false,
+      "gps_fixed": false,
+      "correction_link_connected": true
+    },
+    "gnss": {
+      "online": true,
+      "fix": "NO FIX",
+      "gga_quality": 0,
+      "gga_age_ms": 419,
+      "satellites": 0,
+      "horizontal_uncertainty_m": null,
+      "horizontal_uncertainty_label": "---"
+    },
+    "link": {
+      "connected": true,
+      "transport": "LOCAL ROUTER",
+      "quality": "EXCELLENT",
+      "rssi_dbm": -49,
+      "peer_age_ms": 108,
+      "correction_age_ms": null,
+      "received_packets": 673,
+      "sequence_gaps": 0,
+      "invalid_packets": 0,
+      "rtcm_received_frames": 0
+    },
+    "time": {
+      "local": null,
+      "utc": null,
+      "utc_offset": "-06:00"
+    },
+    "warning": {
+      "title": "NO FRESH CORRECTIONS",
+      "detail": "Check base fix and RTCM output.",
+      "severity": "warning"
+    }
+  },
+  "serial": {
+    "COM4": [
+      "CONFIG: role=ROVER brightness=2 rtcm=ON wifi=LOCAL ROUTER storage=SAVED profile=VERIFIED",
+      "RTCM STATUS: UART=0 TX=0 RX=0 bytes=0 UART_BAD=0 NET_BAD=0 last=0 age_ms=0",
+      "CONFIG: role=ROVER brightness=2 rtcm=ON wifi=LOCAL ROUTER storage=SAVED profile=VERIFIED",
+      "RTCM STATUS: UART=0 TX=0 RX=0 bytes=0 UART_BAD=0 NET_BAD=0 last=0 age_ms=0"
+    ],
+    "COM10": [
+      "CONFIG: role=BASE brightness=2 rtcm=ON wifi=LOCAL ROUTER storage=SAVED profile=VERIFIED",
+      "RTCM STATUS: UART=0 TX=0 RX=0 bytes=0 UART_BAD=0 NET_BAD=0 last=0 age_ms=0",
+      "CONFIG: role=BASE brightness=2 rtcm=ON wifi=LOCAL ROUTER storage=SAVED profile=VERIFIED",
+      "RTCM STATUS: UART=0 TX=0 RX=0 bytes=0 UART_BAD=0 NET_BAD=0 last=0 age_ms=0"
+    ]
+  }
+}

@@ -4,6 +4,46 @@
 
 This firmware keeps the validated display initialization and adds a dedicated UART connection to the UM980. It displays the most recent NMEA GGA position and mirrors receiver lines to native USB serial.
 
+## Phone / Tablet Wi-Fi (2026-09-10)
+
+On the Rover touchscreen, open **Link → Phone / Tablet → Show key**. Join the displayed SSID (current Unit A: `TopoRTK-Rover-A-16C8`) and open **http://192.168.8.1** in Chrome. Choose **Stay connected** if Android reports no Internet. No router or mobile data is needed. Use the screen's address if subnet conflict handling selects `172.22.42.1` instead.
+
+The saved key has eight random digits and a middle period (`dddd.dddd`). The update replaces the original letter-based key once, so paired devices need the new key. **Show key** hides automatically after 30 seconds; **New key → Confirm** replaces it and disconnects phone clients. Neither changes the receiver configuration.
+
+The phone AP runs alongside the correction station in both **Local Router** and **Direct Link**, with up to three clients. The PC router address also works in Local Router mode. `phone?` provides non-secret USB diagnostics. See [phone Wi-Fi validation](../../tests/2026-09-10-rover-phone-wifi/README.md) and the [ranked next features](../../docs/web-app-roadmap.md).
+
+## Rover Browser Status (2026-09-10)
+
+From a PC on the same router, open the Rover's IP address from its **Link** screen. Unit A is currently the Rover at **http://192.168.100.20/**; Unit B remains Base. This is a DHCP address and may change. `/ui/v1/` serves the same UI and `/api/v1/status` returns the complete version 1 JSON snapshot.
+
+The read-only overview shows readiness, correction link, GNSS fix, horizontal uncertainty, Wi-Fi signal, GNSS time and actionable warnings. Expand **Connection & GNSS details** for ages and counters. It refreshes once per second, clears outdated values on connection loss and recovers automatically. Assets are compiled into firmware, so no Internet or separate filesystem upload is needed.
+
+The original status endpoint remains read-only. UI 0.3 keeps an HTTP listener on both roles and adds paired survey commands; the HTTP task queues these for the survey/receiver workers. The Rover field access point is implemented; extended Android and field validation remain tracked in the phone Wi-Fi checkpoint.
+
+Build both hardware variants with `pio run -e unit_a -e unit_b`. Unit A uses COM4 and Unit B uses COM10; normal uploads use `pio run -e unit_a -t upload` / `pio run -e unit_b -t upload`. Both now have UI 0.3. The survey checkpoint records USB recovery and verified flashing alongside the [earlier status validation](../../tests/2026-09-10-rover-web-status/README.md).
+
+## Survey jobs and collection (UI 0.3)
+
+Open **Open survey jobs** from the Rover status page, or `/survey` directly. Pair using the **six-digit WEB CONTROL PIN** shown locally by **Link → Phone / Tablet → Show key**. Create/open a job, review the Zapopan starter profile (WGS84 / UTM 13N, metres, ellipsoidal height and HA-609 models), complete the required antenna/base measurements, then collect quality-controlled stationary points. Jobs and points persist on SD; no point is acknowledged until write/readback succeeds. The same job reopens on startup. A new job still requires explicit review, measurements and confirmation before it is configured.
+
+On the Base, `/survey` (also `/`) provides separately paired fixed-coordinate or temporary survey-in setup with receiver verification and NVS startup persistence. Enter receiver-reference ellipsoidal height, including the base antenna height/offset. This page changes the local Base only.
+
+See the [workflow and limits](../../docs/survey-workflow.md), [test record](../../tests/2026-09-10-survey-workflow/README.md), and [ranked roadmap](../../docs/web-app-roadmap.md). This first implementation has 16 jobs, 512 durable command IDs and 1,024 journal records; WGS84 standard-zone UTM; ellipsoidal or locally validated constant-geoid heights; and a last-point preview. Full point management/plot, export, datum transforms, installed geoid grids and validated field accuracy remain later checkpoints.
+
+## Touch Roles and Remembered Settings (2026-09-08)
+
+Use **Setup → Base / Rover → Use Base / Use Rover** to change either instrument's role. Base also becomes the Wi-Fi access point and RTCM sender; Rover becomes the station and correction receiver. Hardware letters do not change. Set the other instrument to the opposite role separately.
+
+Role, brightness (`Auto`, `Day`, `Night`), and the base RTCM enable flag survive restart in ESP32 NVS. Brightness buttons save immediately. Missing settings preserve the original A=Base/B=Rover defaults. Saved preferences load before networking, and receiver setup runs automatically after the UART handshake. No SD card or startup touch is needed.
+
+Every profile clears old COM2 streams, waits for command acknowledgements, and verifies the final receiver role before permitting correction forwarding. Failed saves retain the previous active settings; failed receiver setup provides a retry action. No `SAVECONFIG` is sent. Base still uses temporary autonomous survey-in: base coordinates are not saved or certified by this feature.
+
+The redesigned portrait interface has larger status values, four equal-height cards, two-line actionable warnings, and permanent **Home / GPS / Link / Setup** tabs. Existing vertical swipes remain available. Detailed text is fitted to the available width, and unchanged regions do not repaint.
+
+Backlight brightness uses GPIO6 PWM at 5 kHz, matching the Waveshare example. `DAY` is full duty, `NIGHT` is approximately 10% duty, and transitions complete in about 1.2 seconds. `AUTO` uses checksum-validated GNSS UTC time converted to fixed UTC-6; when GNSS time is invalid or stale it deliberately remains full brightness and labels the state `AUTO: NO GNSS TIME`. The `brightness?` console command reports the requested mode, current/target duty, hardware duty, and PWM frequency.
+
+Unit B has passed runtime role reversal, saved settings across ESP32 hardware resets, and profile verification on the bench. Physical touchscreen usability, complete power-off/on, and two-unit role reversal under RTK remain separate checks. See the [test record](../../tests/2026-09-08-touch-role-settings/README.md).
+
 ## SD Logging (Unit A Checkpoint)
 
 Each unit mounts the Waveshare microSD/TF slot in 1-bit SD_MMC mode using GPIO9 (`D0`), GPIO10 (`CMD`), and GPIO11 (`CLK`). The first boot performs a non-destructive read/write/read-back check at `/TOPO-RTK/SD-READBACK-TEST.TXT` and creates a session directory under `/TOPO-RTK/UNIT-A/SESSIONS/` or `/TOPO-RTK/UNIT-B/SESSIONS/`, depending on the build.
@@ -26,7 +66,7 @@ Display rotation is selected per instrument so the two printed bodies can use di
 
 Both units' rotation `0` settings were visually confirmed on real hardware.
 
-The yellow `A`/`B` badge identifies the physical instrument only. It does not indicate GNSS role; either instrument may later operate as base or rover.
+The yellow `A`/`B` badge identifies the physical instrument only. Either instrument can operate as base or rover through Setup. The interface supports portrait rotations `0` and `2`.
 
 Unit B's yellow `B` badge was visually confirmed on real hardware on 2026-09-06. Its connected UM980 was separately commanded to and read back as `MODE ROVER SURVEY`.
 
@@ -53,13 +93,13 @@ GPRMC COM2 1
 MODE
 ```
 
-It then enables `BESTNAVA COM2 1` and automatically applies the unit-specific profile described below. `GPRMC` supplies checksum-validated UTC date/time. These settings are volatile. The demo never sends `SAVECONFIG`, so the settings are not intentionally written to receiver flash.
+It then applies the saved role profile described above. `GPRMC` supplies checksum-validated UTC date/time. Receiver settings remain volatile; the demo never sends `SAVECONFIG`. The ESP32 independently stores the selected role and display preferences in its own NVS.
 
 Bidirectional operation was proven by stopping COM2 output from the separate BDRTK USB/COM3 interface, observing silence on the ESP32, and resetting only the ESP32. GGA resumed after the ESP32 sent its startup command over GPIO43 to `TTL_RXD2`.
 
 ## Display and Navigation
 
-The main screen shows only correction-link state, role-aware GNSS state, horizontal 1DRMS uncertainty, link RSSI/quality, and the highest-priority warning. A top-origin downward swipe opens GPS details; a bottom-origin upward swipe opens Wi-Fi details. The opposite gesture returns to the main screen. There are no permanent gesture instructions.
+The main screen shows correction-link state, role-aware GNSS state, horizontal 1DRMS uncertainty, link RSSI/quality, and the highest-priority warning. Use the bottom tabs to open Home, GPS, Link, or Setup. A top-origin downward swipe opens GPS details; a bottom-origin upward swipe opens Wi-Fi details. The opposite gesture returns to the main screen.
 
 The four main information cards use equal height and spacing. The renderer caches each header, card, warning, and detail row and repaints only a region whose content or color changed. This avoids the previous four-times-per-second full-region repaint that caused visible flicker.
 
@@ -113,30 +153,64 @@ The ESP32 accepts a small allowlisted command set through its native USB serial 
 |---|---|
 | `help` | Print the safe command list |
 | `role?` | Send read-only `MODE` query |
-| `role rover` | Send `MODE ROVER SURVEY`, then query `MODE` |
-| `role base-test` | Send bare `MODE BASE`, then query `MODE` |
+| `config?` | Report selected role, brightness, RTCM flag, storage, and profile verification |
+| `role rover` | Save Rover; switch Wi-Fi to station; apply and verify the rover profile |
+| `role base-test` | Save temporary Base; switch Wi-Fi to AP; apply and verify base plus RTCM |
 | `accuracy?` | Report BESTNAV parser count, component sigmas, horizontal 1DRMS, age, and usability |
 | `time?` | Report GNSS UTC date/time, fixed UTC-6 local time, and RMC navigation-valid status |
 | `brightness auto` | Use GNSS local time, gradual dawn/dusk transitions, and full brightness if time is uncertain |
 | `brightness day` | Force full daylight brightness |
 | `brightness night` | Force reduced night brightness |
 
-`role base-test` starts the UM980's default averaged-base behavior and is for functional testing only. It does not establish a survey-quality base. The console intentionally provides no arbitrary passthrough, `SAVECONFIG`, factory reset, baud-rate, firmware-update, or RTCM configuration commands.
+`role base-test` starts the UM980's default averaged-base behavior and is for functional testing only. It does not establish a survey-quality base. The console intentionally provides no arbitrary passthrough, `SAVECONFIG`, factory reset, baud-rate, or firmware-update commands. Brightness commands save the same preferences as the touchscreen.
 
 The relay was validated on Unit A on 2026-09-06: the receiver acknowledged the ESP32's `MODE BASE` and verification query, then read back `MODE BASE TIME 60 2.5 3.5`. The project owner also confirmed that `BASE` appeared beneath `UM980 OK` on the physical display. This proves runtime configuration relay and role display without an ESP32 or UM980 reflash. It does not prove a valid base coordinate or RTCM output. See the [Unit A command-relay test](../../tests/2026-09-06-unit-a-base-relay/README.md).
 
 ## Wi-Fi Link Checkpoint
 
-The current test-only network roles are selected by instrument identity:
+### Local Wi-Fi credentials
 
-| Instrument | Wi-Fi role | Test behavior |
+Do not put a network password in source, a commit, a screenshot, or a console
+log. Before the router-connected web-interface checkpoint, create the local
+credentials file once on this development PC:
+
+```powershell
+Copy-Item src/wifi_credentials.example.h src/wifi_credentials.h
+```
+
+Edit `src/wifi_credentials.h` and replace the two placeholder values with the
+local **2.4 GHz** Wi-Fi SSID and password. The real file is ignored by Git;
+only `wifi_credentials.example.h` is tracked. Use a separate IoT/guest SSID if
+the router provides one.
+
+The development command `wifi local` makes **both** instruments join this
+router as stations; neither instrument creates an access point in that mode.
+The Base discovers the Rover through its broadcast handshake and replies only
+to that discovered peer. The Wi-Fi Details screen and `wifi?` console command
+show the assigned DHCP address without exposing the password.
+
+`wifi direct` restores the validated self-hosted link immediately: Base runs
+the `TopoRTK-Link-Test` access point at `192.168.4.1` and Rover joins it. The
+selected transport is stored with the other device preferences and survives a
+restart. Direct is the safe default for old or missing settings.
+
+Network behavior follows the saved operating role and transport:
+
+| Transport | Base | Rover | Test behavior |
 |---|---|---|
-| Unit A | Access point at `192.168.4.1` | Accept Unit B handshakes and send sequenced test packets |
-| Unit B | Station | Join Unit A, send handshakes, validate received sequence and checksum |
+| `DIRECT LINK` | Access point at `192.168.4.1` | Station joins Base | Existing validated instrument-to-instrument bridge |
+| `LOCAL ROUTER` | Station joins configured router | Station joins configured router | Rover broadcasts a signed hello on UDP 22345; Base replies to that discovered peer |
 
 The test uses UDP port `22345`. Each packet carries a protocol marker, version, type, sequence number, sender timestamp, and application checksum. The display and USB log expose transmitted/received packets, sequence gaps, invalid packets, client state, and RSSI.
 
-The SSID and password compiled into this checkpoint are test credentials and must not be treated as production security. The bridge carries validated RTCM frames only; it does not forward NMEA, receiver commands, or survey records.
+The direct-link password is a development-only credential and must not be
+treated as production security. The local-router password is compiled from the
+ignored header. The bridge carries validated RTCM frames only; it does not
+forward NMEA, receiver commands, or survey records.
+
+Use `wifi?`, `wifi direct`, and `wifi local` on native USB during development.
+Changing transport clears link counters and peer state, reconnects Wi-Fi, and
+does not change the UM980 role or its profile.
 
 The [ESP32 Wi-Fi link test](../../tests/2026-09-06-esp32-wifi-link/README.md) passed through packet 84 with zero detected gaps and zero invalid packets.
 
@@ -157,14 +231,14 @@ Safe console additions:
 | Console command | Behavior |
 |---|---|
 | `rtcm?` | Print bridge counters without changing configuration |
-| `rtcm base-test` | Unit A only: enable the volatile manufacturer-example COM2 MSM4 stream |
-| `rtcm off` | Unit A only: stop COM2 output, restore GGA, and query role |
+| `rtcm base-test` | Base role only: save the enabled RTCM flag and reapply the complete base profile |
+| `rtcm off` | Base role only: save disabled RTCM and reapply the base profile with GGA/RMC/BESTNAV |
 
 The receiver commands for RTCM 1006, 1033, 1074, 1084, 1094, and 1124 were acknowledged on Unit A. The bench checkpoint captured and forwarded CRC-valid RTCM frames with zero reported bridge errors. The subsequent HA-609 open-sky checkpoint produced `RTK FIXED` at Unit B, validating useful end-to-end correction flow for one session but not absolute accuracy or repeatability.
 
 ## Automatic Unit Profiles
 
-No touch action is required for receiver configuration. Touch is used only for page navigation. After the startup handshake confirms UM980 identity and fresh GGA traffic, Unit A automatically applies temporary `MODE BASE` plus the six volatile RTCM outputs, while Unit B applies `MODE ROVER SURVEY`. Both also enable `GPGGA`, `GPRMC`, and `BESTNAVA` at 1 Hz. The profile is reapplied after a detected GNSS-link loss.
+No startup touch is required. The ESP32 restores its saved role, then applies that role's profile after the handshake confirms UM980 identity and fresh GGA traffic. Without saved settings, A defaults to Base and B to Rover. Both enable `GPGGA`, `GPRMC`, and `BESTNAVA` at 1 Hz. The profile is reapplied after a detected GNSS-link loss. Runtime touch and console selections update the same saved preferences.
 
 These actions intentionally send no `SAVECONFIG`. The allowlisted USB console remains available for role queries, controlled recovery, RTCM counters, and `accuracy?` diagnostics.
 

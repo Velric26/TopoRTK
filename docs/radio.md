@@ -17,6 +17,8 @@ The standard host wiring is crossed: radio `RX` receives from the ESP32 UART `TX
 
 Initial bench settings should match on both radios: 57.6 kbps serial, 8-N-1, same Network ID, same regional band, and transparent serial mode. The first firmware test should send a counter through the radios before inserting RTCM into the path.
 
+Once the SiK pair passes its correction-stream validation, it becomes the preferred base-to-rover RTCM transport. The Rover Wi-Fi network remains available for the tablet browser interface and local log transfer; it must not be required for correction delivery. Retain the validated Wi-Fi RTCM implementation only as an explicitly labelled diagnostic/fallback path.
+
 ## RTCM Capacity
 
 Record UART rate, air rate, measured RTCM throughput, correction age, packet loss, and recovery behavior.

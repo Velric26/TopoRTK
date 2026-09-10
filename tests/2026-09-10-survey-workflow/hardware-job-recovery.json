@@ -1,0 +1,12 @@
+{
+  "result": "PASS",
+  "job": "Bench test - persistence",
+  "job_id": "1aff9636beb949abbe934ee0d250aef3",
+  "one_record_after_retry": 1,
+  "restored_after_hardware_reset": true,
+  "new_job_unconfigured": true,
+  "points_collected": 0,
+  "before_boot": 2535764779,
+  "after_boot": 819904139,
+  "profile_verified": true
+}

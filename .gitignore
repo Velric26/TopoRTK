@@ -8,3 +8,7 @@
 # Python tooling
 __pycache__/
 *.py[cod]
+
+# Local Wi-Fi credentials. Copy the committed example, fill it locally, and
+# never add the resulting file to Git.
+/firmware/um980-display-demo/src/wifi_credentials.h

@@ -1,0 +1,371 @@
+{
+  "result": "PASS",
+  "before": {
+    "api_version": 1,
+    "ui_version": "0.2.0",
+    "boot_id": "c64bb044",
+    "uptime_ms": 121590,
+    "device": {
+      "unit": "A",
+      "role": "ROVER",
+      "profile": "VERIFIED"
+    },
+    "state": {
+      "ready": false,
+      "gps_fixed": false,
+      "correction_link_connected": true
+    },
+    "gnss": {
+      "online": true,
+      "fix": "NO FIX",
+      "gga_quality": 0,
+      "gga_age_ms": 711,
+      "satellites": 0,
+      "horizontal_uncertainty_m": null,
+      "horizontal_uncertainty_label": "---"
+    },
+    "link": {
+      "connected": true,
+      "transport": "LOCAL ROUTER",
+      "quality": "EXCELLENT",
+      "rssi_dbm": -58,
+      "peer_age_ms": 12,
+      "correction_age_ms": null,
+      "received_packets": 462,
+      "sequence_gaps": 0,
+      "invalid_packets": 0,
+      "rtcm_received_frames": 0
+    },
+    "time": {
+      "local": null,
+      "utc": null,
+      "utc_offset": "-06:00"
+    },
+    "phone_wifi": {
+      "available": true,
+      "ssid": "TopoRTK-Rover-A-16C8",
+      "address": "192.168.8.1",
+      "clients": 0
+    },
+    "warning": {
+      "title": "NO FRESH CORRECTIONS",
+      "detail": "Check base fix and RTCM output.",
+      "severity": "warning"
+    }
+  },
+  "after": {
+    "api_version": 1,
+    "ui_version": "0.2.0",
+    "boot_id": "c64bb044",
+    "uptime_ms": 150588,
+    "device": {
+      "unit": "A",
+      "role": "ROVER",
+      "profile": "VERIFIED"
+    },
+    "state": {
+      "ready": false,
+      "gps_fixed": false,
+      "correction_link_connected": true
+    },
+    "gnss": {
+      "online": true,
+      "fix": "NO FIX",
+      "gga_quality": 0,
+      "gga_age_ms": 721,
+      "satellites": 0,
+      "horizontal_uncertainty_m": null,
+      "horizontal_uncertainty_label": "---"
+    },
+    "link": {
+      "connected": true,
+      "transport": "LOCAL ROUTER",
+      "quality": "EXCELLENT",
+      "rssi_dbm": -58,
+      "peer_age_ms": 12,
+      "correction_age_ms": null,
+      "received_packets": 40,
+      "sequence_gaps": 0,
+      "invalid_packets": 0,
+      "rtcm_received_frames": 0
+    },
+    "time": {
+      "local": null,
+      "utc": null,
+      "utc_offset": "-06:00"
+    },
+    "phone_wifi": {
+      "available": true,
+      "ssid": "TopoRTK-Rover-A-16C8",
+      "address": "192.168.8.1",
+      "clients": 0
+    },
+    "warning": {
+      "title": "NO FRESH CORRECTIONS",
+      "detail": "Check base fix and RTCM output.",
+      "severity": "warning"
+    }
+  },
+  "serial": [
+    {
+      "stage": "initial",
+      "port": "COM10",
+      "text": "WIFI BASE: transport=LOCAL ROUTER station=UP clients=0 peer=YES TX=2388 hello_RX=532 bad=0 RTCM_UART=0 RTCM_TX=0 RTCM_BAD=0 last=0"
+    },
+    {
+      "stage": "initial",
+      "port": "COM4",
+      "text": "WIFI ROVER: transport=LOCAL ROUTER link=UP RSSI=-57 TX_hello=112 RX=444 gap=0 bad=0 last=2390 RTCM_RX=0 bytes=0 type=0"
+    },
+    {
+      "stage": "initial",
+      "port": "COM10",
+      "text": "WIFI BASE: transport=LOCAL ROUTER station=UP clients=0 peer=YES TX=2396 hello_RX=534 bad=0 RTCM_UART=0 RTCM_TX=0 RTCM_BAD=0 last=0"
+    },
+    {
+      "stage": "initial",
+      "port": "COM4",
+      "text": "WIFI ROVER: transport=LOCAL ROUTER link=UP RSSI=-58 TX_hello=114 RX=452 gap=0 bad=0 last=2398 RTCM_RX=0 bytes=0 type=0"
+    },
+    {
+      "stage": "initial",
+      "port": "COM10",
+      "text": "WIFI BASE: transport=LOCAL ROUTER station=UP clients=0 peer=YES TX=2404 hello_RX=536 bad=0 RTCM_UART=0 RTCM_TX=0 RTCM_BAD=0 last=0"
+    },
+    {
+      "stage": "initial",
+      "port": "COM4",
+      "text": "WIFI ROVER: transport=LOCAL ROUTER link=UP RSSI=-58 TX_hello=116 RX=460 gap=0 bad=0 last=2406 RTCM_RX=0 bytes=0 type=0"
+    },
+    {
+      "stage": "initial",
+      "port": "COM10",
+      "text": "CONFIG: role=BASE brightness=2 rtcm=ON wifi=LOCAL ROUTER storage=SAVED profile=VERIFIED"
+    },
+    {
+      "stage": "direct",
+      "port": "COM4",
+      "text": "CONFIG: role=ROVER brightness=2 rtcm=ON wifi=LOCAL ROUTER storage=SAVED profile=VERIFIED"
+    },
+    {
+      "stage": "direct",
+      "port": "COM10",
+      "text": "WIFI BASE: AP config=PASS start=PASS UDP=PASS IP=192.168.4.1"
+    },
+    {
+      "stage": "direct",
+      "port": "COM4",
+      "text": "PHONE WIFI: READY SSID=TopoRTK-Rover-A-16C8 IP=192.168.8.1 (key on touchscreen only)"
+    },
+    {
+      "stage": "direct",
+      "port": "COM4",
+      "text": "WIFI ROVER: DIRECT LINK connecting to TopoRTK-Link-Test"
+    },
+    {
+      "stage": "direct",
+      "port": "COM10",
+      "text": "WIFI BASE: transport=DIRECT LINK station=DOWN clients=0 peer=NO TX=0 hello_RX=0 bad=0 RTCM_UART=0 RTCM_TX=0 RTCM_BAD=0 last=0"
+    },
+    {
+      "stage": "direct",
+      "port": "COM4",
+      "text": "WIFI ROVER: transport=DIRECT LINK link=DOWN RSSI=0 TX_hello=0 RX=0 gap=0 bad=0 last=0 RTCM_RX=0 bytes=0 type=0"
+    },
+    {
+      "stage": "direct",
+      "port": "COM4",
+      "text": "WIFI ROVER: DIRECT LINK connected UDP=PASS IP=192.168.4.2 RSSI=-33 dBm"
+    },
+    {
+      "stage": "direct",
+      "port": "COM10",
+      "text": "WIFI BASE: transport=DIRECT LINK station=DOWN clients=1 peer=YES TX=7 hello_RX=2 bad=0 RTCM_UART=0 RTCM_TX=0 RTCM_BAD=0 last=0"
+    },
+    {
+      "stage": "direct",
+      "port": "COM4",
+      "text": "WIFI ROVER: transport=DIRECT LINK link=UP RSSI=-32 TX_hello=2 RX=8 gap=0 bad=0 last=8 RTCM_RX=0 bytes=0 type=0"
+    },
+    {
+      "stage": "direct",
+      "port": "COM10",
+      "text": "WIFI BASE: transport=DIRECT LINK station=DOWN clients=1 peer=YES TX=15 hello_RX=4 bad=0 RTCM_UART=0 RTCM_TX=0 RTCM_BAD=0 last=0"
+    },
+    {
+      "stage": "direct",
+      "port": "COM4",
+      "text": "WIFI ROVER: transport=DIRECT LINK link=UP RSSI=-32 TX_hello=4 RX=16 gap=0 bad=0 last=16 RTCM_RX=0 bytes=0 type=0"
+    },
+    {
+      "stage": "direct",
+      "port": "COM10",
+      "text": "WIFI BASE: transport=DIRECT LINK station=DOWN clients=1 peer=YES TX=23 hello_RX=6 bad=0 RTCM_UART=0 RTCM_TX=0 RTCM_BAD=0 last=0"
+    },
+    {
+      "stage": "direct",
+      "port": "COM4",
+      "text": "WIFI ROVER: transport=DIRECT LINK link=UP RSSI=-33 TX_hello=6 RX=24 gap=0 bad=0 last=24 RTCM_RX=0 bytes=0 type=0"
+    },
+    {
+      "stage": "direct",
+      "port": "COM10",
+      "text": "WIFI BASE: transport=DIRECT LINK station=DOWN clients=1 peer=YES TX=31 hello_RX=8 bad=0 RTCM_UART=0 RTCM_TX=0 RTCM_BAD=0 last=0"
+    },
+    {
+      "stage": "direct",
+      "port": "COM4",
+      "text": "WIFI ROVER: transport=DIRECT LINK link=UP RSSI=-32 TX_hello=8 RX=32 gap=0 bad=0 last=32 RTCM_RX=0 bytes=0 type=0"
+    },
+    {
+      "stage": "direct",
+      "port": "COM10",
+      "text": "WIFI BASE: transport=DIRECT LINK station=DOWN clients=1 peer=YES TX=39 hello_RX=10 bad=0 RTCM_UART=0 RTCM_TX=0 RTCM_BAD=0 last=0"
+    },
+    {
+      "stage": "direct",
+      "port": "COM4",
+      "text": "WIFI ROVER: transport=DIRECT LINK link=UP RSSI=-33 TX_hello=10 RX=40 gap=0 bad=0 last=40 RTCM_RX=0 bytes=0 type=0"
+    },
+    {
+      "stage": "direct",
+      "port": "COM10",
+      "text": "WIFI BASE: transport=DIRECT LINK station=DOWN clients=1 peer=YES TX=47 hello_RX=12 bad=0 RTCM_UART=0 RTCM_TX=0 RTCM_BAD=0 last=0"
+    },
+    {
+      "stage": "direct",
+      "port": "COM4",
+      "text": "WIFI ROVER: transport=DIRECT LINK link=UP RSSI=-33 TX_hello=12 RX=48 gap=0 bad=0 last=48 RTCM_RX=0 bytes=0 type=0"
+    },
+    {
+      "stage": "direct",
+      "port": "COM4",
+      "text": "CONFIG: role=ROVER brightness=2 rtcm=ON wifi=DIRECT LINK storage=SAVED profile=VERIFIED"
+    },
+    {
+      "stage": "direct",
+      "port": "COM4",
+      "text": "PHONE WIFI: READY SSID=TopoRTK-Rover-A-16C8 IP=192.168.8.1 clients=0 UI=0.2.0 error="
+    },
+    {
+      "stage": "direct",
+      "port": "COM10",
+      "text": "CONFIG: role=BASE brightness=2 rtcm=ON wifi=DIRECT LINK storage=SAVED profile=VERIFIED"
+    },
+    {
+      "stage": "direct",
+      "port": "COM10",
+      "text": "WIFI BASE: transport=DIRECT LINK station=DOWN clients=1 peer=YES TX=55 hello_RX=14 bad=0 RTCM_UART=0 RTCM_TX=0 RTCM_BAD=0 last=0"
+    },
+    {
+      "stage": "restored",
+      "port": "COM10",
+      "text": "WIFI BASE: LOCAL ROUTER connecting to Voidness"
+    },
+    {
+      "stage": "restored",
+      "port": "COM4",
+      "text": "PHONE WIFI: READY SSID=TopoRTK-Rover-A-16C8 IP=192.168.8.1 (key on touchscreen only)"
+    },
+    {
+      "stage": "restored",
+      "port": "COM4",
+      "text": "WIFI ROVER: LOCAL ROUTER connecting to Voidness"
+    },
+    {
+      "stage": "restored",
+      "port": "COM4",
+      "text": "WIFI ROVER: transport=LOCAL ROUTER link=DOWN RSSI=0 TX_hello=0 RX=0 gap=0 bad=0 last=0 RTCM_RX=0 bytes=0 type=0"
+    },
+    {
+      "stage": "restored",
+      "port": "COM10",
+      "text": "WIFI BASE: transport=LOCAL ROUTER station=DOWN clients=0 peer=NO TX=0 hello_RX=0 bad=0 RTCM_UART=0 RTCM_TX=0 RTCM_BAD=0 last=0"
+    },
+    {
+      "stage": "restored",
+      "port": "COM4",
+      "text": "WIFI ROVER: transport=LOCAL ROUTER link=DOWN RSSI=0 TX_hello=0 RX=0 gap=0 bad=0 last=0 RTCM_RX=0 bytes=0 type=0"
+    },
+    {
+      "stage": "restored",
+      "port": "COM10",
+      "text": "WIFI BASE: LOCAL ROUTER connected UDP=PASS IP=192.168.100.19 RSSI=-63 dBm"
+    },
+    {
+      "stage": "restored",
+      "port": "COM10",
+      "text": "WIFI BASE: transport=LOCAL ROUTER station=UP clients=0 peer=NO TX=0 hello_RX=0 bad=0 RTCM_UART=0 RTCM_TX=0 RTCM_BAD=0 last=0"
+    },
+    {
+      "stage": "restored",
+      "port": "COM4",
+      "text": "WIFI ROVER: LOCAL ROUTER connected UDP=PASS IP=192.168.100.20 RSSI=-58 dBm"
+    },
+    {
+      "stage": "restored",
+      "port": "COM4",
+      "text": "WIFI ROVER: transport=LOCAL ROUTER link=UP RSSI=-58 TX_hello=1 RX=2 gap=0 bad=0 last=2 RTCM_RX=0 bytes=0 type=0"
+    },
+    {
+      "stage": "restored",
+      "port": "COM10",
+      "text": "WIFI BASE: transport=LOCAL ROUTER station=UP clients=0 peer=YES TX=8 hello_RX=2 bad=0 RTCM_UART=0 RTCM_TX=0 RTCM_BAD=0 last=0"
+    },
+    {
+      "stage": "restored",
+      "port": "COM4",
+      "text": "WIFI ROVER: transport=LOCAL ROUTER link=UP RSSI=-58 TX_hello=3 RX=10 gap=0 bad=0 last=10 RTCM_RX=0 bytes=0 type=0"
+    },
+    {
+      "stage": "restored",
+      "port": "COM10",
+      "text": "WIFI BASE: transport=LOCAL ROUTER station=UP clients=0 peer=YES TX=16 hello_RX=4 bad=0 RTCM_UART=0 RTCM_TX=0 RTCM_BAD=0 last=0"
+    },
+    {
+      "stage": "restored",
+      "port": "COM4",
+      "text": "WIFI ROVER: transport=LOCAL ROUTER link=UP RSSI=-58 TX_hello=5 RX=18 gap=0 bad=0 last=18 RTCM_RX=0 bytes=0 type=0"
+    },
+    {
+      "stage": "restored",
+      "port": "COM10",
+      "text": "WIFI BASE: transport=LOCAL ROUTER station=UP clients=0 peer=YES TX=24 hello_RX=6 bad=0 RTCM_UART=0 RTCM_TX=0 RTCM_BAD=0 last=0"
+    },
+    {
+      "stage": "restored",
+      "port": "COM4",
+      "text": "WIFI ROVER: transport=LOCAL ROUTER link=UP RSSI=-58 TX_hello=7 RX=26 gap=0 bad=0 last=26 RTCM_RX=0 bytes=0 type=0"
+    },
+    {
+      "stage": "restored",
+      "port": "COM10",
+      "text": "WIFI BASE: transport=LOCAL ROUTER station=UP clients=0 peer=YES TX=32 hello_RX=8 bad=0 RTCM_UART=0 RTCM_TX=0 RTCM_BAD=0 last=0"
+    },
+    {
+      "stage": "restored",
+      "port": "COM4",
+      "text": "WIFI ROVER: transport=LOCAL ROUTER link=UP RSSI=-57 TX_hello=9 RX=34 gap=0 bad=0 last=34 RTCM_RX=0 bytes=0 type=0"
+    },
+    {
+      "stage": "restored",
+      "port": "COM10",
+      "text": "WIFI BASE: transport=LOCAL ROUTER station=UP clients=0 peer=YES TX=40 hello_RX=10 bad=0 RTCM_UART=0 RTCM_TX=0 RTCM_BAD=0 last=0"
+    },
+    {
+      "stage": "restored",
+      "port": "COM4",
+      "text": "CONFIG: role=ROVER brightness=2 rtcm=ON wifi=LOCAL ROUTER storage=SAVED profile=VERIFIED"
+    },
+    {
+      "stage": "restored",
+      "port": "COM4",
+      "text": "PHONE WIFI: READY SSID=TopoRTK-Rover-A-16C8 IP=192.168.8.1 clients=0 UI=0.2.0 error="
+    },
+    {
+      "stage": "restored",
+      "port": "COM10",
+      "text": "CONFIG: role=BASE brightness=2 rtcm=ON wifi=LOCAL ROUTER storage=SAVED profile=VERIFIED"
+    }
+  ]
+}

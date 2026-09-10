@@ -91,9 +91,11 @@ Base and rover should use the same enclosure and electronics layout where practi
 
 ## 6. Initial Interface Direction
 
-The preferred first implementation is an **offline, rover-hosted responsive web application** reached through local Wi-Fi. It avoids cellular service, internet access, app-store deployment, and device-specific installation.
+The chosen first implementation is an **offline, rover-hosted responsive web application** reached through local Wi-Fi. During development, both instruments can join a configured local 2.4 GHz router so a PC can reach the Rover directly; the saved `wifi local` / `wifi direct` toggle restores the self-hosted link when needed. For field use without a router, the Rover provides a password-protected access point and the tablet or phone opens the same local interface. This requires no cellular service, internet connection, app-store account, or device-specific installation.
 
-A native or hybrid mobile app remains an option if browser limitations prevent a reliable field workflow.
+Wi-Fi is the primary phone/tablet link for live status, configuration, point collection, and log/export transfer. Once the SiK link is validated, it is the preferred base-to-rover RTCM transport; Wi-Fi RTCM remains a test/fallback transport rather than a dependency of the field interface. The rover remains the source of truth: jobs, point records, configuration audit data, and logs are persisted on its SD card, not solely in the browser.
+
+Bluetooth LE is a later secondary link for provisioning, recovery, or compact diagnostics. It is not the primary survey UI or log-transfer transport. A browser-home-screen shortcut is sufficient initially; a full PWA is deferred because a local HTTP device address does not provide the HTTPS/service-worker environment needed for reliable PWA installation. A WebView/Capacitor-style Android APK may package the proven web UI later if native BLE, USB, filesystem/share integration, background behavior, or a dedicated field-app experience proves necessary. A fully native Android app is deferred until a concrete requirement cannot be met by the shared UI and an Android bridge.
 
 Minimum interface functions:
 
@@ -128,8 +130,8 @@ These are starting points, not validated final settings.
 |---|---|
 | UM980 UART | Configuration, NMEA/proprietary status, RTCM, and raw observations |
 | SiK 915 MHz | Base-to-rover RTCM correction stream |
-| Wi-Fi | Offline local web UI and data transfer |
-| Bluetooth 5 | Optional provisioning, diagnostics, or future native-app integration |
+| Wi-Fi | Local-router development/browser access plus Rover-hosted field UI, local status/control, and log/export transfer; current RTCM path retained only as a validated test/fallback transport |
+| Bluetooth 5 LE | Later provisioning, recovery, or compact diagnostics; not the primary survey UI or log-transfer path |
 
 Begin radio testing on the bench at low RF power. Validate serial framing, packet flow, correction age, loss recovery, interference, and legal settings before range tests.
 
@@ -228,8 +230,16 @@ No accuracy claim is accepted solely because the receiver reports `FIXED`.
 
 ### Phase 4 — Mobile workflow
 
-- [ ] Prototype the offline web interface.
-- [ ] Implement status, configuration, projects, point collection, UTM, and export.
+- [x] Validate `wifi local` / `wifi direct` development switching, local-router peer discovery, and Direct-Link fallback. Last-mode restoration across a physical power cycle remains pending.
+- [x] Implement the read-only Rover browser status page and `GET /api/v1/status`; PC/local-router bench validation completed on Unit A on 2026-09-10. See the [test record](tests/2026-09-10-rover-web-status/README.md).
+- [x] Implement a password-protected Rover Wi-Fi access point and touchscreen connection instructions. Initial Android connection reported working by the user on 2026-09-10; full device/recovery matrix remains open. See [phone Wi-Fi validation](tests/2026-09-10-rover-phone-wifi/README.md).
+- [x] Implement the initial scope of web roadmap ranks 2–5: SD jobs, controlled commands, WGS84 UTM/height setup, base/antenna setup and quality-controlled point collection. See [workflow and limits](docs/survey-workflow.md) and [validation](tests/2026-09-10-survey-workflow/README.md). Field accuracy and physical storage-failure acceptance remain open.
+- [ ] **Next:** rank 6, full point review/list and offline plot, followed by export/backup and independent check points. Complete the new workflow's hardware/field acceptance before treating it as survey validated.
+- [ ] Serve static UI assets and a versioned local API from the Rover; use a live status channel plus bounded request/response commands.
+- [ ] Implement status, configuration, projects, point collection, UTM, log/export download, and survey-quality warnings.
+- [x] Add an on-device connection aid identifying the Rover SSID, local address and UI version; show/hide the key locally and support confirmed replacement.
+- [ ] Test reconnection, accidental browser close, Android no-internet warnings, low battery, and SD failure without losing rover-side records.
+- [ ] Decide whether the proven UI needs an Android APK wrapper for native BLE/filesystem/USB or background behavior; do not create an APK solely for packaging.
 - [ ] Reproduce the essential workflow and settings of the existing survey system.
 
 ### Phase 5 — Field prototype
@@ -268,12 +278,12 @@ For every test, save the configuration, reference coordinates, antenna setup, en
 | HA-609 antennas for compact tests | Standalone acquisition and first two-unit `RTK FIXED` session passed; controlled accuracy and K700 comparison still required |
 | Holybro SiK 1 W 915 MHz correction link | Selected; throughput, range, interference, and compliance pending |
 | Waveshare ESP32-S3 touch boards as controllers/displays | Display, UART, automatic role/profile recovery, BESTNAV horizontal-accuracy parsing, Wi-Fi RTCM path, and SD mount/read-back validated on both units; structured logging is ready for a two-sided field session |
-| Rover-hosted offline web UI | Preferred first implementation; prototype pending |
+| Android tablet/phone interface | Rover-hosted responsive browser UI over local Wi-Fi selected as the first implementation; local-router mode and Direct-Link fallback passed a two-unit hardware transport test, with last-mode power-cycle restoration still pending; BLE is secondary and an APK/native app is deferred until a demonstrated requirement justifies it |
 | BNO085 orientation/tilt experiments | Deferred until the basic level-pole RTK system is validated |
 
 The direct ESP-to-ESP Wi-Fi checkpoint passed on 2026-09-06 using Unit A as an access point and Unit B as a station. Checksummed, sequenced test packets reached Unit B without detected gaps or invalid packets. The CRC-validated RTCM bridge then passed its antenna-less bench checkpoint. In the subsequent HA-609 open-sky test, Unit A generated live corrections and Unit B reached `RTK FIXED` with 27-28 satellites, HDOP 0.5, increasing RTCM counters, and zero displayed RTCM/network or NMEA checksum errors. This validates one functional RTK session, not absolute accuracy, repeatability, recovery, range, or security.
 
-Current temporary role assignment: Unit A = base-test; Unit B = confirmed rover. After every successful UART startup handshake, each ESP32 now applies its assigned volatile UM980 profile automatically: base plus RTCM on A and survey rover on B. The safe USB console remains available for diagnosis and recovery. The unit letter identifies hardware, not a permanent role; future web role selection and full survey-safe base configuration remain open work.
+Default temporary role assignment: Unit A = base-test; Unit B = rover. The touchscreen Setup page now selects Base or Rover on either instrument, with Wi-Fi and RTCM direction following that selection. Each ESP32 saves role, brightness mode, and the base RTCM enable flag in NVS and reapplies the selected volatile UM980 profile after startup or receiver-link loss. Commands require acknowledgement and final role verification. Unit B passed bench role reversal and settings restoration across ESP32 hardware resets; physical touch usability, full power-off/on, and two-unit reversed-role RTK validation remain pending. The redesigned display includes Home/GPS/Link/Setup tabs and cached high-contrast status cards. The safe USB console remains available. The unit letter identifies hardware, not a permanent role; web role selection and full survey-safe base configuration remain open work. See the [validation record](tests/2026-09-08-touch-role-settings/README.md).
 
 ### Open items
 
