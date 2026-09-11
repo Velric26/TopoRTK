@@ -1,4 +1,5 @@
 #include "survey_engine.h"
+#include "survey_json.h"
 #include <algorithm>
 #include <cstring>
 #include <cstdio>
@@ -25,7 +26,12 @@ static bool integer(JsonVariantConst v,int low,int high) {
   return number(v,low,high) && std::floor(v.as<double>())==v.as<double>();
 }
 static bool is(JsonVariantConst v,const char *s) { return v.is<const char *>() && std::strcmp(v.as<const char *>(),s)==0; }
-static std::string json(JsonVariantConst v) { std::string s; serializeJson(v,s); return s; }
+static std::string json(JsonVariantConst v) { return precise_json(v); }
+static bool same_reference(JsonObjectConst source,JsonObjectConst config){
+  for(const char *key:{"crs","frame","epoch","zone","south","units","vertical"})if(!source.containsKey(key)||json(source[key])!=json(config[key]))return false;
+  if(is(config["vertical"],"constant_geoid"))for(const char *key:{"geoid_name","geoid_n","geoid_lat","geoid_lon","geoid_radius"})if(!source.containsKey(key)||json(source[key])!=json(config[key]))return false;
+  return true;
+}
 static bool antenna(JsonObjectConst c,const char *prefix,double &height) {
   const std::string p=prefix;
   if (!text(c[p+"model"],40) || !number(c[p+"height"],0,10) || !number(c[p+"offset"],-1,1) ||
@@ -55,6 +61,7 @@ static const char *validate_config(JsonObjectConst c) {
 Job *Engine::find_job(const std::string &id) { for(auto &j:jobs_) if(j.id==id)return &j; return nullptr; }
 Job *Engine::active_job(){return find_job(active_);}
 Engine::PointIndex *Engine::find_point(const std::string &job,const std::string &id){for(auto &p:points_)if(p.job==job&&p.id==id)return &p;return nullptr;}
+Engine::Target *Engine::find_target(const std::string &job,const std::string &id){for(auto &t:targets_)if(t.job==job&&t.id==id)return &t;return nullptr;}
 bool Engine::point_data(const PointIndex &p,JsonDocument &d){
   std::string raw;bool exists=false;
   if(!store_.read(p.sequence,raw,exists)||!exists||deserializeJson(d,raw)){storage_ok_=false;storage_error_="Point record unreadable; recover storage.";return false;}
@@ -74,6 +81,10 @@ bool Engine::replay(JsonObjectConst e) {
   else if(op=="job.configure") {
     Job *j=find_job(job);if(!j || validate_config(e["config"]))return false;
     j->config=json(e["config"]);j->revision=e["revision"].as<unsigned>();
+  } else if(op=="target.create") {
+    auto *j=find_job(job);auto t=e["target"].as<JsonObjectConst>();
+    if(!j||targets_.size()>=64||!text(t["id"],32)||find_target(job,t["id"]|"")||t["configuration_revision"].as<unsigned>()!=j->revision)return false;
+    Target target;target.job=job;target.id=t["id"].as<std::string>();target.data=json(t);target.revision=j->revision;targets_.push_back(target);
   } else if(op=="point.saved") {
     Job *j=find_job(job);if(!j || !e["point"].is<JsonObjectConst>())return false;
     if(find_point(job,e["point"]["id"]|"")||!text(e["point"]["id"],32))return false;
@@ -84,12 +95,12 @@ bool Engine::replay(JsonObjectConst e) {
     p->code=e["code"]|"";p->description=e["description"]|"";p->note=e["note"]|"";p->deleted=e["deleted"]|false;++p->revision;
   } else if(op!="collect.start" && op!="collect.stop" && op!="collect.cancel" && op!="base.apply" && op!="base.result") return false;
   Receipt *r=receipt(id);if(!r) {if(receipts_.size()>=512)return false;receipts_.push_back({});r=&receipts_.back();r->id=id;}
-  r->payload_crc=e["payload_crc"].as<uint32_t>();r->state=e["state"].as<std::string>();r->message=e["message"]|"";
+  r->payload_crc=e["payload_crc"].as<uint32_t>();r->payload_format=e["payload_format"]|1U;r->state=e["state"].as<std::string>();r->message=e["message"]|"";
   result(id,r->state.c_str(),r->message);
   return true;
 }
 void Engine::recover() {
-  collecting_=false;pending_base_id_.clear();jobs_.clear();points_.clear();receipts_.clear();active_.clear();sequence_=0;result("","idle","");
+  collecting_=false;pending_base_id_.clear();jobs_.clear();points_.clear();targets_.clear();receipts_.clear();active_.clear();sequence_=0;result("","idle","");
   storage_ok_=store_.initialize();storage_error_=storage_ok_?"":"SD storage unavailable. Check card and restart.";
   if(!storage_ok_)return;
   for(unsigned i=1;i<=1024;++i){
@@ -107,7 +118,7 @@ void Engine::recover() {
 }
 bool Engine::commit(JsonDocument &e) {
   if(!storage_ok_||sequence_>=1024||(!receipt(e["id"]|"")&&receipts_.size()>=512)) {storage_error_="Storage unavailable or prototype journal limit reached.";return false;}
-  e["version"]=1;std::string raw;serializeJson(e,raw);
+  e["version"]=1;e["payload_format"]=2;std::string raw=json(e.as<JsonVariantConst>());
   if(e.overflowed()||raw.size()>max_record||!store_.commit(sequence_+1,raw)) {
     storage_ok_=false;storage_error_="Write not confirmed. Recover storage before retrying the same request.";return false;
   }
@@ -144,7 +155,7 @@ void Engine::command(const char *input,const Fix &f) {
   if(!valid_id(id)){result("","rejected","A 32-digit lowercase hexadecimal request ID is required.");return;}
   const std::string payload=json(d.as<JsonVariantConst>());const uint32_t hash=crc32(payload);
   if(std::strcmp(op,"storage.recover")==0){if(collecting_||!pending_base_id_.empty()){result(id,"rejected","Finish the active operation before recovery.");return;}recover();result(id,storage_ok_?"completed":"rejected",storage_ok_?"Storage journal recovered.":storage_error_);return;}
-  if(Receipt *r=receipt(id)) {result(id,r->payload_crc==hash?r->state.c_str():"rejected",r->payload_crc==hash?r->message:"Request ID already used for different data.");return;}
+  if(Receipt *r=receipt(id)) {uint32_t expected=hash;if(r->payload_format==1){std::string legacy;serializeJson(d,legacy);expected=crc32(legacy);}result(id,r->payload_crc==expected?r->state.c_str():"rejected",r->payload_crc==expected?r->message:"Request ID already used for different data.");return;}
   auto reject=[&](const char *message){result(id,"rejected",message);};
   if(!storage_ok_){reject(storage_error_.c_str());return;}
   if(collecting_ && std::strcmp(op,"collect.cancel")!=0){reject("Finish or cancel the active occupation first.");return;}
@@ -162,6 +173,22 @@ void Engine::command(const char *input,const Fix &f) {
     if(d["confirm"]!=true){reject("Review and confirm the job configuration.");return;}
     if(const char *error=validate_config(d["config"])){reject(error);return;}
     e["config"]=d["config"];e["revision"]=j->revision+1;
+  } else if(std::strcmp(op,"target.create")==0){
+    if(!f.rover||!j||j->id!=active_||j->config.empty()||!d["revision"].is<unsigned>()||d["revision"].as<unsigned>()!=j->revision){reject("Open the configured current job and reload its revision.");return;}
+    if(targets_.size()>=64){reject("The instrument target limit (64) is reached.");return;}
+    auto t=d["target"].as<JsonObjectConst>();DynamicJsonDocument c(8192);deserializeJson(c,j->config);
+    if(!is(c["crs"],"wgs84_utm")||!same_reference(t["reference"],c.as<JsonObjectConst>())||t["reference_confirmed"]!=true){reject("Confirm target coordinates use exactly this job's UTM reference, epoch, units and height model.");return;}
+    const double factor=is(c["units"],"ft")?1/.3048:1;
+    if(!text(t["id"],32)||!text(t["source"],120)||(!is(t["kind"],"control")&&!is(t["kind"],"design"))||
+       !number(t["easting"],100000*factor,900000*factor)||!number(t["northing"],0,10000000*factor)||!number(t["height"],-1000*factor,10000*factor)){
+      reject("Enter a target ID, documented source, control/design type and valid UTM coordinates.");return;}
+    if(is(t["kind"],"control")&&t["independent_source"]!=true){reject("Control targets require an explicitly confirmed independent source.");return;}
+    if(find_target(jobid,t["id"]|"")){reject("Target ID already exists. Keep its original coordinates; use a new ID for a correction.");return;}
+    JsonObject target=e.createNestedObject("target");for(const char *key:{"id","source","kind","easting","northing","height"})target[key]=t[key];
+    JsonObject reference=target.createNestedObject("reference");for(const char *key:{"crs","frame","epoch","zone","south","units","vertical"})reference[key]=c[key];
+    if(is(c["vertical"],"constant_geoid"))for(const char *key:{"geoid_name","geoid_n","geoid_lat","geoid_lon","geoid_radius"})reference[key]=c[key];
+    target["configuration_revision"]=j->revision;target["reference_confirmed"]=true;target["independent_source"]=is(t["kind"],"control");target["created_utc"]=f.utc;
+    e["message"]="Reference target saved; this is not a measured point.";
   } else if(std::strcmp(op,"point.edit")==0){
     auto *p=find_point(jobid,d["point_id"]|"");
     if(!f.rover||!p||!d["revision"].is<unsigned>()||d["revision"].as<unsigned>()!=p->revision){reject("Point changed or does not exist; reload it.");return;}
@@ -175,9 +202,30 @@ void Engine::command(const char *input,const Fix &f) {
     if(find_point(jobid,d["point_id"]|"")){reject("Point ID already exists, including deleted records. Use a new point ID.");return;}
     DynamicJsonDocument c(8192);deserializeJson(c,j->config);
     if(const char *error=quality(f,c.as<JsonObjectConst>())){reject(error);return;}
+    std::string comparison;
+    if(d.containsKey("comparison")){
+      auto request=d["comparison"].as<JsonObjectConst>();const double factor=is(c["units"],"ft")?1/.3048:1;
+      if(!is(c["crs"],"wgs84_utm")||(!is(request["purpose"],"check")&&!is(request["purpose"],"repeat")&&!is(request["purpose"],"stake"))||
+         (!is(request["phase"],"start")&&!is(request["phase"],"intermediate")&&!is(request["phase"],"end"))||
+         !number(request["h_tolerance"],.001*factor,100*factor)||!number(request["v_tolerance"],.001*factor,100*factor)){
+        reject("Check/repeat/stakeout requires UTM coordinates, a phase and explicit positive tolerances in job units.");return;}
+      JsonObject comp=e.createNestedObject("comparison");comp["purpose"]=request["purpose"];comp["phase"]=request["phase"];comp["h_tolerance"]=request["h_tolerance"];comp["v_tolerance"]=request["v_tolerance"];comp["units"]=c["units"];
+      if(!is(request["purpose"],"repeat")){
+        auto *target=find_target(jobid,request["target_id"]|"");DynamicJsonDocument t(4096);
+        if(!target||target->revision!=j->revision||deserializeJson(t,target->data)||(is(request["purpose"],"check")&&(!is(t["kind"],"control")||t["independent_source"]!=true))){reject("Choose an independent control target from the current setup revision.");return;}
+        comp["reference"]=t.as<JsonVariantConst>();comp["independent_control"]=is(request["purpose"],"check");
+      }else{
+        auto *p=find_point(jobid,request["reference_point"]|"");DynamicJsonDocument prior(max_record*3);
+        if(!p||p->deleted||!point_data(*p,prior)||prior["point"]["configuration_revision"].as<unsigned>()!=j->revision||!prior["point"]["easting"].is<double>()){
+          reject("Choose a non-deleted measured point from the current setup revision.");return;}
+        JsonObject ref=comp.createNestedObject("reference");for(const char *key:{"id","easting","northing","height","configuration_revision","record","utc_end"})ref[key]=prior["point"][key];ref["kind"]="measured_point";comp["independent_control"]=false;
+      }
+      comparison=json(comp);
+    }
     e["point_id"]=d["point_id"];e["state"]="collecting";e["message"]="Occupation started; point is not saved yet.";
     if(!commit(e)){reject(storage_error_.c_str());return;}
     collecting_=true;occupation_id_=id;occupation_payload_=payload;occupation_job_=jobid;
+    occupation_comparison_=comparison;
     point_id_=d["point_id"].as<std::string>();point_code_=d["code"].as<std::string>();point_description_=d["description"].as<std::string>();
     start_ms_=f.now;last_sample_ms_=0;last_epoch_=0;samples_=0;sum_={};worst_h_=worst_v_=0;worst_correction_=0;min_satellites_=65535;
     station_=f.station;base_reference_=f.reference;first_utc_=f.utc;tick(f);return;
@@ -237,6 +285,15 @@ void Engine::tick(const Fix &f) {
   point["correction_age_max_ms"]=worst_correction_;point["satellites_min"]=min_satellites_;point["fix"]="RTK FIXED";point["utc_start"]=first_utc_;point["utc_end"]=f.utc;
   point["configuration_revision"]=j->revision;point["configuration"]=config;point["base_reference_x_m"]=base_reference_.x;point["base_reference_y_m"]=base_reference_.y;point["base_reference_z_m"]=base_reference_.z;
   point["base_control_verified"]=is(config["base_mode"],"known");
+  if(!occupation_comparison_.empty()){
+    DynamicJsonDocument comparison(8192);deserializeJson(comparison,occupation_comparison_);auto ref=comparison["reference"];
+    const double de=east*factor-ref["easting"].as<double>(),dn=north*factor-ref["northing"].as<double>(),dh=point["height"].as<double>()-ref["height"].as<double>();
+    comparison["delta_e"]=de;comparison["delta_n"]=dn;comparison["delta_h"]=dh;comparison["horizontal"]=std::hypot(de,dn);
+    comparison["horizontal_pass"]=std::hypot(de,dn)<=comparison["h_tolerance"].as<double>();comparison["vertical_pass"]=std::abs(dh)<=comparison["v_tolerance"].as<double>();
+    comparison["pass"]=comparison["horizontal_pass"]==true&&comparison["vertical_pass"]==true;
+    point["kind"]=comparison["purpose"];point["comparison"]=comparison.as<JsonVariantConst>();
+    e["message"]=comparison["pass"]==true?"Observation saved; comparison is within the stated tolerances.":"Observation saved; comparison is OUTSIDE tolerance. Investigate before continuing survey work.";
+  }
   collecting_=false;if(!commit(e))result(occupation_id_,"rejected",storage_error_);
 }
 std::string Engine::read(const char *request,const Fix &) {
@@ -246,7 +303,12 @@ std::string Engine::read(const char *request,const Fix &) {
   const std::string job=q["job"]|"";auto *j=find_job(job);
   if(!j)return "{\"error\":\"job_not_found\"}";
   out["at"]=sequence_;out["job"]=job;out["revision"]=j->revision;
-  if(is(q["view"],"backup")){
+  if(is(q["view"],"targets")){
+    if(!integer(q["offset"],0,64))return "{\"error\":\"invalid_offset\"}";
+    unsigned total=0,added=0,offset=q["offset"];JsonArray rows=out.createNestedArray("targets");
+    for(const auto &t:targets_){if(t.job!=job)continue;if(total++<offset||added>=25)continue;DynamicJsonDocument target(4096);if(deserializeJson(target,t.data))return "{\"error\":\"target_read_failed\"}";rows.add(target.as<JsonVariantConst>());++added;}
+    out["total"]=total;if(offset+added<total)out["next"]=offset+added;
+  }else if(is(q["view"],"backup")){
     if(!integer(q["offset"],0,1024))return "{\"error\":\"invalid_offset\"}";
     out["format"]="TopoRTK job journal";out["version"]=1;out["name"]=j->name;
     JsonArray records=out.createNestedArray("records");unsigned cursor=q["offset"],scanned=0;
@@ -280,13 +342,14 @@ std::string Engine::read(const char *request,const Fix &) {
     }
     out["total"]=total;if(offset+added<total)out["next"]=offset+added;
   }else return "{\"error\":\"unknown_view\"}";
-  if(out.overflowed())return "{\"error\":\"read_capacity\"}";std::string result;serializeJson(out,result);return result.size()<max_read?result:"{\"error\":\"read_capacity\"}";
+  if(out.overflowed())return "{\"error\":\"read_capacity\"}";std::string result=json(out.as<JsonVariantConst>());return result.size()<max_read?result:"{\"error\":\"read_capacity\"}";
 }
 std::string Engine::snapshot(const Fix &f) {
   DynamicJsonDocument d(max_snapshot*2);d["version"]=1;d["role"]=f.rover?"ROVER":"BASE";d["storage_ready"]=storage_ok_;d["storage_error"]=storage_error_;
   char unit[2]={f.unit,0};d["unit"]=unit;d["boot_id"]=f.boot_id;d["uptime_ms"]=f.now;d["reset_reason"]=f.reset_reason;
   d["free_heap"]=f.free_heap;d["min_heap"]=f.min_heap;d["free_psram"]=f.free_psram;
   d["records_used"]=sequence_;d["record_limit"]=1024;d["active_job"]=active_;
+  d["targets_used"]=targets_.size();d["target_limit"]=64;
   JsonArray jobs=d.createNestedArray("jobs");for(const auto &j:jobs_){JsonObject row=jobs.createNestedObject();row["id"]=j.id;row["name"]=j.name;row["revision"]=j.revision;row["points"]=j.points;}
   Job *j=active_job();if(j){DynamicJsonDocument config(8192),point(max_record*2);if(!j->config.empty()&&!deserializeJson(config,j->config))d["config"]=config.as<JsonVariantConst>();
     if(!j->last_point.empty()&&!deserializeJson(point,j->last_point))d["last_point"]=point.as<JsonVariantConst>();
@@ -294,7 +357,7 @@ std::string Engine::snapshot(const Fix &f) {
     if(!j->config.empty()&&!quality(f,config.as<JsonObjectConst>())){
       double e,n,h=0;antenna(config.as<JsonObjectConst>(),"rover_",h);
       if(is(config["crs"],"wgs84_utm")&&utm(f.position,config["zone"],config["south"],e,n)){JsonObject rover=d.createNestedObject("rover_position");const double scale=is(config["units"],"ft")?1/.3048:1;
-        rover["easting"]=e*scale;rover["northing"]=n*scale;rover["height"]=(f.position.height-h-(is(config["vertical"],"constant_geoid")?config["geoid_n"].as<double>():0))*scale;rover["epoch"]=f.epoch;rover["configuration_revision"]=j->revision;}
+        rover["easting"]=e*scale;rover["northing"]=n*scale;rover["height"]=(f.position.height-h-(is(config["vertical"],"constant_geoid")?config["geoid_n"].as<double>():0))*scale;rover["epoch"]=f.epoch;rover["age_ms"]=f.now-f.received;rover["configuration_revision"]=j->revision;}
     }
   }else d["block_reason"]="Create or open a job.";
   JsonObject op=d.createNestedObject("operation");op["id"]=last_id_;op["state"]=last_state_;op["message"]=last_message_;
@@ -305,6 +368,6 @@ std::string Engine::snapshot(const Fix &f) {
   if(f.base_fixed){gnss["saved_base_latitude"]=f.base_setting.latitude;gnss["saved_base_longitude"]=f.base_setting.longitude;gnss["saved_base_reference_h"]=f.base_setting.height;}
   gnss["correction_age_ms"]=f.correction_age;gnss["h_uncertainty_m"]=f.hacc;gnss["v_uncertainty_m"]=f.vacc;
   if(f.reference_valid){const Position p=geodetic(f.reference);gnss["base_latitude"]=p.latitude;gnss["base_longitude"]=p.longitude;gnss["base_reference_h"]=p.height;}
-  std::string output;serializeJson(d,output);if(d.overflowed()||output.size()>=max_snapshot)return "{\"error\":\"snapshot_capacity\"}";return output;
+  std::string output=json(d.as<JsonVariantConst>());if(d.overflowed()||output.size()>=max_snapshot)return "{\"error\":\"snapshot_capacity\"}";return output;
 }
 }

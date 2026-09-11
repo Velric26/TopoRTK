@@ -48,12 +48,15 @@ class Engine {
   std::string snapshot(const Fix &fix);
   std::string read(const char *request,const Fix &fix);
  private:
-  struct Receipt { std::string id,state,message; uint32_t payload_crc=0; };
+  struct Receipt { std::string id,state,message; uint32_t payload_crc=0;unsigned payload_format=1; };
   Store &store_; Receiver &receiver_;
   std::vector<Job> jobs_;
   std::vector<Receipt> receipts_;
   struct PointIndex {std::string job,id,code,description,note;unsigned sequence=0,revision=1;bool deleted=false;};
   std::vector<PointIndex> points_;
+  struct Target {std::string job,id,data;unsigned revision=0;};
+  std::vector<Target> targets_;
+  Target *find_target(const std::string &job,const std::string &id);
   PointIndex *find_point(const std::string &job,const std::string &id);
   bool point_data(const PointIndex &point,JsonDocument &document);
   unsigned sequence_=0;
@@ -61,6 +64,7 @@ class Engine {
   std::string active_,last_id_,last_state_="idle",last_message_="",storage_error_;
   bool collecting_=false;
   std::string occupation_id_,occupation_payload_,occupation_job_,point_id_,point_code_,point_description_;
+  std::string occupation_comparison_;
   uint32_t start_ms_=0,last_sample_ms_=0;
   uint64_t last_epoch_=0;
   unsigned samples_=0;

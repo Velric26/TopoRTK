@@ -1,0 +1,10 @@
+{
+  "a": {
+    "bytes": 1096064,
+    "sha256": "7725562d077e478c16edbd863503f0b3ced622a1203f10bd9d09833288cc48cf"
+  },
+  "b": {
+    "bytes": 1096064,
+    "sha256": "8040aedafcb872055b72be1448127cab1fde8ffb1d178d17bda9764fe4d575ca"
+  }
+}

@@ -1,0 +1,65 @@
+Processing unit_a (platform: espressif32@7.0.1; board: esp32-s3-devkitc-1; framework: arduino)
+--------------------------------------------------------------------------------
+Verbose mode can be enabled via `-v, --verbose` option
+CONFIGURATION: https://docs.platformio.org/page/boards/espressif32/esp32-s3-devkitc-1.html
+PLATFORM: Espressif 32 (7.0.1) > Espressif ESP32-S3-DevKitC-1-N8 (8 MB QD, No PSRAM)
+HARDWARE: ESP32S3 240MHz, 320KB RAM, 16MB Flash
+DEBUG: Current (esp-builtin) On-board (esp-builtin) External (cmsis-dap, esp-bridge, esp-prog, iot-bus-jtag, jlink, minimodule, olimex-arm-usb-ocd, olimex-arm-usb-ocd-h, olimex-arm-usb-tiny-h, olimex-jtag-tiny, tumpa)
+PACKAGES:
+ - framework-arduinoespressif32 @ 3.20017.241212+sha.dcc1105b
+ - tool-esptoolpy @ 2.41100.0 (4.11.0)
+ - toolchain-riscv32-esp @ 8.4.0+2021r2-patch5
+ - toolchain-xtensa-esp32s3 @ 8.4.0+2021r2-patch5
+LDF: Library Dependency Finder -> https://bit.ly/configure-pio-ldf
+LDF Modes: Finder ~ chain, Compatibility ~ soft
+Found 36 compatible libraries
+Scanning dependencies...
+Dependency Graph
+|-- GFX Library for Arduino @ 1.5.5
+|-- TCA9554 @ 0.1.2
+|-- ArduinoJson @ 6.21.5
+|-- FS @ 2.0.0
+|-- Preferences @ 2.0.0
+|-- SD_MMC @ 2.0.0
+|-- WiFi @ 2.0.0
+|-- Wire @ 2.0.0
+Building in release mode
+Compiling .pio\build\unit_a\src\main.cpp.o
+Compiling .pio\build\unit_a\src\rover_ap.cpp.o
+Compiling .pio\build\unit_a\src\survey_engine.cpp.o
+Compiling .pio\build\unit_a\src\survey_service.cpp.o
+Compiling .pio\build\unit_a\src\survey_store.cpp.o
+Compiling .pio\build\unit_a\src\web_http.cpp.o
+Building .pio\build\unit_a\bootloader.bin
+esptool.py v4.11.0
+Creating esp32s3 image...
+Merged 1 ELF section
+Successfully created esp32s3 image.
+Generating partitions .pio\build\unit_a\partitions.bin
+Compiling .pio\build\unit_a\lib711\SPI\SPI.cpp.o
+Archiving .pio\build\unit_a\lib711\libSPI.a
+Indexing .pio\build\unit_a\lib711\libSPI.a
+Compiling .pio\build\unit_a\lib60e\Wire\Wire.cpp.o
+Archiving .pio\build\unit_a\lib60e\libWire.a
+Indexing .pio\build\unit_a\lib60e\libWire.a
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\Arduino_DataBus.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\Arduino_G.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\Arduino_GFX.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\Arduino_GFX_Library.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\Arduino_TFT.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\Arduino_TFT_18bit.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\canvas\Arduino_Canvas.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\canvas\Arduino_Canvas_3bit.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\canvas\Arduino_Canvas_Indexed.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\canvas\Arduino_Canvas_Mono.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\databus\Arduino_AVRPAR16.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\databus\Arduino_AVRPAR8.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\databus\Arduino_DUEPAR16.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\databus\Arduino_ESP32DSIPanel.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\databus\Arduino_ESP32LCD16.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\databus\Arduino_ESP32LCD8.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\databus\Arduino_ESP32PAR16.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\databus\Arduino_ESP32PAR16Q.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\databus\Arduino_ESP32PAR16QQ.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\databus\Arduino_ESP32PAR8.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\databus\Arduino_ESP32PAR8Q.cpp.o

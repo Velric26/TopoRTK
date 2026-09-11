@@ -1,0 +1,45 @@
+{
+  "format": "TopoRTK job journal",
+  "version": 1,
+  "job": "cce3fbb24d0b9ce18874e50665838f6b",
+  "name": "Browser field fixture",
+  "revision": 1,
+  "at": 7,
+  "records": [
+    {
+      "sequence": 1,
+      "crc32": 4257152828,
+      "json": "{\"id\":\"cce3fbb24d0b9ce18874e50665838f6b\",\"op\":\"job.create\",\"payload_crc\":1181218943,\"state\":\"completed\",\"message\":\"Saved on instrument.\",\"utc\":\"2026-09-10T12:00:00Z\",\"job\":\"cce3fbb24d0b9ce18874e50665838f6b\",\"name\":\"Browser field fixture\",\"version\":1,\"payload_format\":2}"
+    },
+    {
+      "sequence": 2,
+      "crc32": 2012742452,
+      "json": "{\"id\":\"efebc5c61c43d347ddd4947e06aac276\",\"op\":\"job.configure\",\"payload_crc\":2069917544,\"state\":\"completed\",\"message\":\"Saved on instrument.\",\"utc\":\"2026-09-10T12:00:00Z\",\"job\":\"cce3fbb24d0b9ce18874e50665838f6b\",\"config\":{\"crs\":\"wgs84_utm\",\"units\":\"m\",\"zone\":14,\"south\":false,\"frame\":\"WGS84\",\"epoch\":2026.7,\"reference_confirmed\":true,\"vertical\":\"ellipsoid\",\"geoid_name\":\"\",\"geoid_n\":null,\"geoid_lat\":null,\"geoid_lon\":null,\"geoid_radius\":null,\"rover_model\":\"Test reference\",\"rover_method\":\"vertical\",\"rover_height\":2,\"rover_offset\":0,\"rover_radius\":0,\"base_model\":\"Test reference\",\"base_method\":\"vertical\",\"base_height\":1.5,\"base_offset\":0,\"base_radius\":0,\"antenna_confirmed\":true,\"base_name\":\"Test control\",\"station\":7,\"base_mode\":\"known\",\"base_lat\":19.4,\"base_lon\":-99.1,\"base_ground_h\":2200,\"base_tolerance\":0.02,\"temporary_confirmed\":false,\"duration\":2,\"min_samples\":3,\"h_limit\":0.03,\"v_limit\":0.05,\"correction_limit\":3000},\"revision\":1,\"version\":1,\"payload_format\":2}"
+    },
+    {
+      "sequence": 3,
+      "crc32": 3306693169,
+      "json": "{\"id\":\"3ec9a5ecb730877fc05cd80408d8bdce\",\"op\":\"collect.start\",\"payload_crc\":778456251,\"state\":\"collecting\",\"message\":\"Occupation started; point is not saved yet.\",\"utc\":\"2026-09-10T12:00:00Z\",\"job\":\"cce3fbb24d0b9ce18874e50665838f6b\",\"point_id\":\"1001\",\"version\":1,\"payload_format\":2}"
+    },
+    {
+      "sequence": 4,
+      "crc32": 1939145200,
+      "json": "{\"id\":\"3ec9a5ecb730877fc05cd80408d8bdce\",\"payload_crc\":778456251,\"op\":\"point.saved\",\"job\":\"cce3fbb24d0b9ce18874e50665838f6b\",\"state\":\"completed\",\"message\":\"Point committed and read back from Rover SD.\",\"point\":{\"id\":\"1001\",\"code\":\"BM\",\"description\":\"Browser integration fixture\",\"latitude\":19.4001,\"longitude\":-99.1001,\"receiver_ellipsoidal_h_m\":2204,\"ground_ellipsoidal_h_m\":2202,\"height\":2202,\"easting\":489489.917803906,\"northing\":2145101.64551221,\"samples\":3,\"duration_ms\":2000,\"h_uncertainty_max_m\":0.01,\"v_uncertainty_max_m\":0.02,\"correction_age_max_ms\":0,\"satellites_min\":30,\"fix\":\"RTK FIXED\",\"utc_start\":\"2026-09-10T12:00:00Z\",\"utc_end\":\"2026-09-10T12:00:00Z\",\"configuration_revision\":1,\"configuration\":{\"crs\":\"wgs84_utm\",\"units\":\"m\",\"zone\":14,\"south\":false,\"frame\":\"WGS84\",\"epoch\":2026.7,\"reference_confirmed\":true,\"vertical\":\"ellipsoid\",\"geoid_name\":\"\",\"geoid_n\":null,\"geoid_lat\":null,\"geoid_lon\":null,\"geoid_radius\":null,\"rover_model\":\"Test reference\",\"rover_method\":\"vertical\",\"rover_height\":2,\"rover_offset\":0,\"rover_radius\":0,\"base_model\":\"Test reference\",\"base_method\":\"vertical\",\"base_height\":1.5,\"base_offset\":0,\"base_radius\":0,\"antenna_confirmed\":true,\"base_name\":\"Test control\",\"station\":7,\"base_mode\":\"known\",\"base_lat\":19.4,\"base_lon\":-99.1,\"base_ground_h\":2200,\"base_tolerance\":0.02,\"temporary_confirmed\":false,\"duration\":2,\"min_samples\":3,\"h_limit\":0.03,\"v_limit\":0.05,\"correction_limit\":3000},\"base_reference_x_m\":-952159.450915675,\"base_reference_y_m\":-5944530.07920059,\"base_reference_z_m\":2105895.52907723,\"base_control_verified\":true},\"version\":1,\"payload_format\":2}"
+    },
+    {
+      "sequence": 5,
+      "crc32": 2673183628,
+      "json": "{\"id\":\"b0ecbbd74a3d21c69d54cae6982f7305\",\"op\":\"point.edit\",\"payload_crc\":1487025210,\"state\":\"completed\",\"message\":\"Saved on instrument.\",\"utc\":\"2026-09-10T12:00:00Z\",\"job\":\"cce3fbb24d0b9ce18874e50665838f6b\",\"point_id\":\"1001\",\"revision\":2,\"code\":\"BM-EDIT\",\"description\":\"=1+1, \\\"survey note\\\"\",\"note\":\"Independent review\",\"deleted\":false,\"reason\":\"Review test\",\"before\":{\"code\":\"BM\",\"description\":\"Browser integration fixture\",\"note\":\"\",\"deleted\":false},\"version\":1,\"payload_format\":2}"
+    },
+    {
+      "sequence": 6,
+      "crc32": 3408186774,
+      "json": "{\"id\":\"603c6e936a7176492e3840279007ce5f\",\"op\":\"point.edit\",\"payload_crc\":1109980632,\"state\":\"completed\",\"message\":\"Saved on instrument.\",\"utc\":\"2026-09-10T12:00:00Z\",\"job\":\"cce3fbb24d0b9ce18874e50665838f6b\",\"point_id\":\"1001\",\"revision\":3,\"code\":\"BM-EDIT\",\"description\":\"=1+1, \\\"survey note\\\"\",\"note\":\"Independent review\",\"deleted\":true,\"reason\":\"Deletion test\",\"before\":{\"code\":\"BM-EDIT\",\"description\":\"=1+1, \\\"survey note\\\"\",\"note\":\"Independent review\",\"deleted\":false},\"version\":1,\"payload_format\":2}"
+    },
+    {
+      "sequence": 7,
+      "crc32": 1650215613,
+      "json": "{\"id\":\"6661cf2c99a629ac4add7829a9281583\",\"op\":\"point.edit\",\"payload_crc\":1108704335,\"state\":\"completed\",\"message\":\"Saved on instrument.\",\"utc\":\"2026-09-10T12:00:00Z\",\"job\":\"cce3fbb24d0b9ce18874e50665838f6b\",\"point_id\":\"1001\",\"revision\":4,\"code\":\"BM-EDIT\",\"description\":\"=1+1, \\\"survey note\\\"\",\"note\":\"Independent review\",\"deleted\":false,\"reason\":\"Restore test\",\"before\":{\"code\":\"BM-EDIT\",\"description\":\"=1+1, \\\"survey note\\\"\",\"note\":\"Independent review\",\"deleted\":true},\"version\":1,\"payload_format\":2}"
+    }
+  ]
+}

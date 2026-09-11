@@ -340,3 +340,8 @@ Only create these files when their content is needed; avoid duplicating informat
 ### 2026-09-10 web interface checkpoint
 
 UI 0.4 implements roadmap feature 6 point review/offline plotting and the export/backup portion of feature 7. Both A (Rover) and B (Base) are flashed with verified application hashes; read-only browser/persistence/export bench checks passed. CSV import and features 8–12 remain outstanding. See [implementation state](docs/roadmap-6-12-progress.md) and [validation evidence](tests/2026-09-10-roadmap-6-12/README.md). No field accuracy claim follows from these bench checks.
+
+
+### 2026-09-11 instrument / Android scope review
+
+The [responsibility review](docs/esp32-android-feature-split.md) defers bulk project/file processing, continuous-topo session management, localization and full COGO to the phone/app. The web client already executes on the phone. UI 0.5 adds bounded reference targets and check/repeat occupations; basic point stakeout passed its final native/browser/build/flash and read-only hardware checkpoint. Manual line tags remain next. See [current implementation state](docs/roadmap-6-12-progress.md); these changes do not establish field accuracy.

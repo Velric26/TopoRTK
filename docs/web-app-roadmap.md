@@ -1,8 +1,12 @@
 # Surveying web/app priorities
 
-Updated 2026-09-10. This is the proposed development order for TopoRTK's offline GNSS surveying interface. Importance reflects correctness, protection of field records, everyday use and dependencies. It is our project ranking, not a vendor ranking. Items with hardware or coordinate-model dependencies must not be presented as working before validation.
+Updated 2026-09-11. This is the proposed development order for TopoRTK's offline GNSS surveying interface. Importance reflects correctness, protection of field records, everyday use and dependencies. It is our project ranking, not a vendor ranking. Items with hardware or coordinate-model dependencies must not be presented as working before validation.
 
 The existing Rover status page and password-protected phone Wi-Fi provide the starting point. The user reported that the initial Android connection worked. That does not yet establish all phone/tablet models, recovery scenarios or field performance. The user then requested **ranks 2–5 together** and selected **UTM**. Their initial implementation is now UI 0.3; see [scope, limitations and validation](survey-workflow.md). Zapopan starter values (WGS84 UTM 13N) are convenience defaults and still require explicit confirmation. Rank 6 is implemented and bench checked in UI 0.4; rank 7 is in progress. See [features 6–12 checkpoint](roadmap-6-12-progress.md).
+
+## Responsibility review
+
+The [ESP32/Android responsibility decision](esp32-android-feature-split.md) sets the current implementation scope. Keep bounded target records, check/repeat occupations, basic point stakeout and manual line tags on the instrument. Defer bulk imports/restore, continuous collection, localization, full COGO and rich project processing to the phone/app. Web JavaScript already runs on the phone, so an APK is not required for computation alone.
 
 ## Ranked backlog
 

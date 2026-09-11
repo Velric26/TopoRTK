@@ -1,12 +1,13 @@
 """Validate browser downloads with Python's independent CSV and CRC readers."""
 import csv
+import os
 import json
 from pathlib import Path
 import zlib
 import importlib.util
 import tempfile
 
-folder = Path(__file__).resolve().parents[3] / 'tests/2026-09-10-roadmap-6-12'
+folder = Path(__file__).resolve().parents[3] / os.environ.get('TOPORTK_TEST_RECORD', 'tests/2026-09-10-roadmap-6-12')
 backup = json.loads((folder / 'fixture-backup.json').read_text(encoding='utf-8'))
 assert backup['format'] == 'TopoRTK job journal' and backup['version'] == 1
 events = []
@@ -30,8 +31,14 @@ assert float(row['height']) == point['height']
 assert row['units'] == point['configuration']['units'] == 'm'
 assert point['configuration']['zone'] == 14
 original = next(e['point'] for e in events if e['op'] == 'point.saved')
+def equivalent(a, b):
+    if isinstance(a, dict):
+        return a.keys() == b.keys() and all(equivalent(a[k], b[k]) for k in a)
+    if isinstance(a, (float, int)) and not isinstance(a, bool):
+        return abs(a - b) <= 1e-8
+    return a == b
 for key in ('easting', 'northing', 'height', 'configuration', 'samples', 'fix'):
-    assert original[key] == point[key]
+    assert equivalent(original[key], point[key])
 assert point['edit_revision'] == 4 and point['deleted'] is False
 print('PASS: independent CSV quoting/formula protection, full observation round-trip, journal CRC and audit history')
 spec = importlib.util.spec_from_file_location('backup_verifier', Path(__file__).resolve().parents[1] / 'tools/verify_survey_backup.py')
@@ -51,3 +58,16 @@ for change in ('crc', 'order', 'revision', 'missing_creation'):
         except ValueError: pass
         else: raise AssertionError('Accepted invalid backup: ' + change)
 print('PASS: backup verifier rejects corruption, reordering, revision mismatch and missing creation')
+
+report = folder / 'fixture-checks.csv'
+if report.exists():
+    with report.open(encoding='utf-8', newline='') as stream:
+        rows = list(csv.DictReader(stream))
+    checks = [r for r in rows if r['comparison_purpose']]
+    assert len(checks) == 3
+    assert {r['comparison_purpose'] for r in checks} == {'check', 'repeat', 'stake'}
+    for row in checks:
+        comp = json.loads(row['observation_json'])['comparison']
+        assert float(row['delta_h']) == comp['delta_h']
+        assert row['within_tolerance'] == 'true'
+    print('PASS: readable check/repeat report matches saved comparison records')
