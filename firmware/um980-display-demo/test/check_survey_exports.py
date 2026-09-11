@@ -71,3 +71,22 @@ if report.exists():
         assert float(row['delta_h']) == comp['delta_h']
         assert row['within_tolerance'] == 'true'
     print('PASS: readable check/repeat report matches saved comparison records')
+
+line_report = folder / 'fixture-lines.csv'
+if line_report.exists():
+    with line_report.open(encoding='utf-8', newline='') as stream:
+        vertices = [r for r in csv.DictReader(stream) if r['line_id']]
+    assert len(vertices) == 4
+    chain = [r for r in vertices if r['line_id'] == 'LINE1']
+    assert [r['line_action'] for r in chain] == ['start', 'continue', 'end']
+    assert [r['line_previous'] for r in chain] == ['', 'LV1', 'LV2']
+    assert all(r['line_state'] == 'broken' and r['line_code'] == 'EDGE' for r in vertices)
+    assert all(r['deleted'] == 'false' for r in vertices)
+    for row in vertices:
+        saved = json.loads(row['observation_json'])
+        assert row['line_id'] == saved['line_id'] and row['line_action'] == saved['line_action']
+    line_backup = json.loads((folder / 'fixture-lines-backup.json').read_text(encoding='utf-8'))
+    events = [json.loads(r['json']) for r in line_backup['records']]
+    assert len([e for e in events if e['op'] == 'collect.stop' and e.get('line', {}).get('id') == 'GAP']) == 1
+    verifier.verify(folder / 'fixture-lines-backup.json')
+    print('PASS: line CSV topology, retained original vertices, persistent breaks and gap audit backup')

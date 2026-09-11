@@ -2,7 +2,7 @@
 
 Updated 2026-09-11. This is the proposed development order for TopoRTK's offline GNSS surveying interface. Importance reflects correctness, protection of field records, everyday use and dependencies. It is our project ranking, not a vendor ranking. Items with hardware or coordinate-model dependencies must not be presented as working before validation.
 
-The existing Rover status page and password-protected phone Wi-Fi provide the starting point. The user reported that the initial Android connection worked. That does not yet establish all phone/tablet models, recovery scenarios or field performance. The user then requested **ranks 2–5 together** and selected **UTM**. Their initial implementation is now UI 0.3; see [scope, limitations and validation](survey-workflow.md). Zapopan starter values (WGS84 UTM 13N) are convenience defaults and still require explicit confirmation. Rank 6 is implemented and bench checked in UI 0.4; rank 7 is in progress. See [features 6–12 checkpoint](roadmap-6-12-progress.md).
+The existing Rover status page and password-protected phone Wi-Fi provide the starting point. The user reported that the initial Android connection worked. That does not yet establish all phone/tablet models, recovery scenarios or field performance. The user then requested **ranks 2–5 together** and selected **UTM**. Their initial implementation is now UI 0.3; see [scope, limitations and validation](survey-workflow.md). Zapopan starter values (WGS84 UTM 13N) are convenience defaults and still require explicit confirmation. UI 0.6 completes the agreed instrument subsets: rank 6 review/plot, rank 7 export/backup and small targets, rank 8 checks/repeats, rank 9 basic stakeout, and rank 10 manual line tags. The deferred phone/app scope through rank 12 remains outstanding. See [features 6–12 checkpoint](roadmap-6-12-progress.md).
 
 ## Responsibility review
 
@@ -51,7 +51,7 @@ Acceptance for that checkpoint:
 7. Keep Base traffic, GNSS parsing and live status responsive during all operations.
 8. Reopen every committed manifest after an interrupted write; recover or clearly quarantine incomplete data with an actionable message.
 
-Rank 6 point review and the offline plot now pass native/browser tests and a read-only two-instrument bench checkpoint. The next item is **rank 7: import/export/backup**, followed by independent check points. The complete target remains **create job → configure → observe point → inspect → export → independently check**. Complete the current hardware/field acceptance before treating measurements as validated survey results.
+The agreed instrument scope through rank 10 now passes native/browser tests and read-only two-instrument bench checks in UI 0.6. Next are field qualification and the deferred phone/app backlog: bulk file workflows, rich linework/continuous collection, localization (11) and COGO (12). The complete target remains **create job → configure → observe point → inspect → export → independently check**. Complete the current hardware/field acceptance before treating measurements as validated survey results.
 
 ## Basis in established survey software
 

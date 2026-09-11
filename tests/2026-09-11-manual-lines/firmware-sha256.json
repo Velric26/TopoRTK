@@ -1,0 +1,16 @@
+{
+  "A": {
+    "ui_version": "0.6.0",
+    "image": "firmware/um980-display-demo/.pio/build/unit_a/firmware.bin",
+    "bytes": 1107072,
+    "sha256": "4e8e6ef47cab6c07ef530527fe5cc2d1ca89f3201fdb3130dbef18bcd2ec4c9d",
+    "flash_offset": "0x10000"
+  },
+  "B": {
+    "ui_version": "0.6.0",
+    "image": "firmware/um980-display-demo/.pio/build/unit_b/firmware.bin",
+    "bytes": 1107072,
+    "sha256": "b2255f4b2cf0c31f60a82da9c38f76bbb61907d922d463b352eb067eaafbed8a",
+    "flash_offset": "0x10000"
+  }
+}

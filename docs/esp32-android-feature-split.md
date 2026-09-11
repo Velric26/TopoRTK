@@ -31,3 +31,8 @@ Browser scripts and optional Web Workers can process files/geometry on the phone
 Each checkpoint needs native/browser tests, A/B builds, application flash verification and an honest hardware test record before the next behavior is added. Synthetic observations stay in test fixtures. Real field accuracy, control independence and measured-point operations need field qualification.
 
 This is an intentional scope split: finishing the list above does not mean bulk import, continuous topo, localization or COGO are implemented. Track them as deferred phone/app work, not completed ranks. Pause implementation at 90% used in the five-hour allowance, document exact progress, commit and push; weekly usage is not this stop condition.
+
+
+## Implementation outcome, UI 0.6
+
+All four instrument steps above are implemented and bench checked: targets, checks/repeats, basic point stakeout, and manual line tags. Both units have hash-verified UI 0.6 application flashes with existing roles/jobs retained. [Manual-line validation](../tests/2026-09-11-manual-lines/README.md) closes the current instrument scope. The deferred column remains the phone/app backlog through feature 12; no APK, bulk import/restore, continuous topo, localization or COGO workflow was implemented. Actual field occupations, physical failure recovery and large-job performance still require qualification.

@@ -4,7 +4,7 @@ User request: continue through feature 12. **Pause implementation at 90% used in
 
 Branch: `codex/survey-roadmap-through-12`; baseline `ccda366` includes the user-approved Zapopan starter setup. Those convenience values remain intact and require measurement/reference confirmation.
 
-## Pause checkpoint
+## Historical 2026-09-10 pause checkpoint
 
 Implementation paused on 2026-09-10 when the **300-minute window reached 90% used (10% remaining)**. The weekly window was not used for this decision. No new feature work after this threshold; only final verification, documentation, commit and push. Resume with feature 7 CSV import, then ranks 8–12.
 
@@ -16,7 +16,7 @@ Implementation paused on 2026-09-10 when the **300-minute window reached 90% use
 | 7 — import/export/backup | Export/backup implemented; host/browser and A/B hardware checkpoint passed | CSV export with full original observation JSON and a checksummed complete job journal. CSV import/mapping/duplicate policy and an operator restore workflow remain. |
 | 8 — checks and repeat occupations | Instrument core implemented and bench checked | Frozen control/repeat reference, phase, explicit tolerances, residuals/pass-fail, separate observations and CSV report. Advanced analysis deferred to phone/app. |
 | 9 — point stakeout | Basic instrument/web core implemented and bench checked | Fresh N/E/height guidance and preserved design/as-staked result. Large designs/surfaces deferred. |
-| 10 — codes/linework/continuous topo | Manual line tags next; automation deferred | Existing code/description remain. Manual continuity tags are still pending; library/continuous-session work is phone/app scope. |
+| 10 — codes/linework/continuous topo | Manual line core implemented and bench checked; automation deferred | Bounded start/continue/end tags, continuity and permanent break handling, paged line status and CSV/backup provenance. Library/continuous-session work remains phone/app scope. |
 | 11 — localization/grid-ground | Deferred to phone/app | Approved control, residuals/exclusions/holdout and model lifecycle. No firmware transform added. |
 | 12 — COGO/offsets | Deferred to phone/app | Browser-first computation can precede Android; no firmware geometry engine added. |
 
@@ -37,7 +37,7 @@ CSV includes all points (including deleted records), per-row units/reference/rev
 
 `view=backup` pages up to three matching job records and scans at most 32 journal slots per request. It returns the exact JSON strings plus original sequence and CRC32. Stable `at` cursors cover all pages. Backups retain metadata edit reasons/before values and original observations. An offline verifier is available at `firmware/um980-display-demo/tools/verify_survey_backup.py`; it does not restore or modify instrument data.
 
-Validation details and limits: [checkpoint record](../tests/2026-09-10-roadmap-6-12/README.md). Both instruments currently run this UI 0.4 export checkpoint. Unit A's two existing jobs remain intact; no field point or synthetic point was created on hardware.
+Validation details and limits: [checkpoint record](../tests/2026-09-10-roadmap-6-12/README.md). Both instruments ran UI 0.4 at that historical export checkpoint. Unit A's two existing jobs remain intact; no field point or synthetic point was created on hardware.
 
 ## Previous resume order (superseded by the 2026-09-11 scope review)
 
@@ -69,3 +69,12 @@ The residual tests exposed rounding in the original ArduinoJson number formatter
 The five-hour meter was 89% used before final flashing and 92% at the next reading. Implementation paused when that reading crossed the requested 90% stop point. Only verification/documentation/commit/push followed. Manual line tags were not started. Both instruments now run the final UI 0.5 target/check/stakeout checkpoint, with the same pre-existing jobs and roles.
 
 Resume with feature 10's bounded manual line ID + start/continue/end tags and continuity validation. Keep observation coordinates immutable; define how deletion and setup revision changes break lines. Do not enable continuous capture against the current 1024-record/512-receipt journal. Features explicitly deferred by the responsibility decision are not pending ESP32 implementation and must not be marked completed.
+
+
+## UI 0.6: agreed instrument scope complete
+
+The next resumed turn completed feature 10's manual line subset. Both instruments now run UI 0.6.0: native/browser/export tests, A/B builds, hash-verified application flashes and read-only hardware checks passed. Existing roles, jobs and journal counts were preserved. See the [manual-line contract, evidence and limitations](../tests/2026-09-11-manual-lines/README.md).
+
+Lines are limited to 64 per instrument. Each vertex is a new quality-gated topo observation with immutable line ID/action/previous vertex/original code. Continuations require the same setup revision, feature code and base reference. Interrupted or failed accepted occupations, vertex deletion/code editing and setup changes break continuity; restoring metadata cannot reconnect a broken line. End does not imply polygon closure. No continuous-capture or connected-line drawing was introduced.
+
+This completes the four ESP32 implementation steps selected by the responsibility review. Ranks 7 and 10 remain partial, and 11/12 remain deferred phone/app features. The next work is physical field qualification and a separately scoped phone/app implementation of the deferred features. The five-hour allowance had more than 10% remaining when implementation completed; the weekly allowance was not used as a stop condition.

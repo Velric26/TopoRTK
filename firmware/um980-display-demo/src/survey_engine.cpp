@@ -62,11 +62,25 @@ Job *Engine::find_job(const std::string &id) { for(auto &j:jobs_) if(j.id==id)re
 Job *Engine::active_job(){return find_job(active_);}
 Engine::PointIndex *Engine::find_point(const std::string &job,const std::string &id){for(auto &p:points_)if(p.job==job&&p.id==id)return &p;return nullptr;}
 Engine::Target *Engine::find_target(const std::string &job,const std::string &id){for(auto &t:targets_)if(t.job==job&&t.id==id)return &t;return nullptr;}
+Engine::Line *Engine::find_line(const std::string &job,const std::string &id){for(auto &line:lines_)if(line.job==job&&line.id==id)return &line;return nullptr;}
+bool Engine::replay_line(JsonObjectConst p,const std::string &job,unsigned revision){
+  if(!p.containsKey("line_id"))return true;
+  if(!text(p["line_id"],32)||!text(p["line_previous"],32,true)||p["configuration_revision"].as<unsigned>()!=revision)return false;
+  const std::string id=p["line_id"]|"",action=p["line_action"]|"";auto *line=find_line(job,id);
+  if(action=="start"){
+    if(line||lines_.size()>=64||!is(p["line_previous"],""))return false;
+    Line entry;entry.job=job;entry.id=id;entry.code=p["code"]|"";entry.revision=revision;entry.units=p["configuration"]["units"]|"";
+    entry.reference={p["base_reference_x_m"],p["base_reference_y_m"],p["base_reference_z_m"]};entry.station=p["configuration"]["station"];
+    lines_.push_back(entry);line=&lines_.back();
+  }else if((action!="continue"&&action!="end")||!line||line->state!="open"||line->revision!=revision||line->last_point!=(p["line_previous"]|"")||line->code!=(p["code"]|""))return false;
+  line->last_point=p["id"]|"";++line->vertices;if(action=="end"){line->state="closed";line->reason="Ended by operator.";}return true;
+}
 bool Engine::point_data(const PointIndex &p,JsonDocument &d){
   std::string raw;bool exists=false;
   if(!store_.read(p.sequence,raw,exists)||!exists||deserializeJson(d,raw)){storage_ok_=false;storage_error_="Point record unreadable; recover storage.";return false;}
   JsonObject point=d["point"];if(point.isNull())return false;
   JsonObject original=point.createNestedObject("original_metadata");original["code"]=point["code"];original["description"]=point["description"];
+  if(auto *line=find_line(p.job,p.line_id)){point["line_state"]=line->state;point["line_reason"]=line->reason;}
   point["code"]=p.code;point["description"]=p.description;point["note"]=p.note;point["deleted"]=p.deleted;point["edit_revision"]=p.revision;point["record"]=p.sequence;return !d.overflowed();
 }
 Engine::Receipt *Engine::receipt(const std::string &id){for(auto &r:receipts_)if(r.id==id)return &r; return nullptr;}
@@ -81,6 +95,7 @@ bool Engine::replay(JsonObjectConst e) {
   else if(op=="job.configure") {
     Job *j=find_job(job);if(!j || validate_config(e["config"]))return false;
     j->config=json(e["config"]);j->revision=e["revision"].as<unsigned>();
+    for(auto &line:lines_)if(line.job==job&&line.state=="open"){line.state="broken";line.reason="Job setup changed. Start a new line ID.";}
   } else if(op=="target.create") {
     auto *j=find_job(job);auto t=e["target"].as<JsonObjectConst>();
     if(!j||targets_.size()>=64||!text(t["id"],32)||find_target(job,t["id"]|"")||t["configuration_revision"].as<unsigned>()!=j->revision)return false;
@@ -88,19 +103,24 @@ bool Engine::replay(JsonObjectConst e) {
   } else if(op=="point.saved") {
     Job *j=find_job(job);if(!j || !e["point"].is<JsonObjectConst>())return false;
     if(find_point(job,e["point"]["id"]|"")||!text(e["point"]["id"],32))return false;
-    PointIndex p;p.job=job;p.id=e["point"]["id"].as<std::string>();p.code=e["point"]["code"]|"";p.description=e["point"]["description"]|"";p.sequence=sequence_;points_.push_back(p);
+    if(!replay_line(e["point"],job,j->revision))return false;
+    PointIndex p;p.job=job;p.id=e["point"]["id"].as<std::string>();p.code=e["point"]["code"]|"";p.description=e["point"]["description"]|"";p.line_id=e["point"]["line_id"]|"";p.sequence=sequence_;points_.push_back(p);
     ++j->points;j->last_point=json(e["point"]);
   } else if(op=="point.edit") {
     auto *p=find_point(job,e["point_id"]|"");if(!p||e["revision"].as<unsigned>()!=p->revision+1)return false;
+    if((!p->deleted&&e["deleted"]==true)||p->code!=(e["code"]|""))if(auto *line=find_line(job,p->line_id)){line->state="broken";line->reason="A vertex was deleted or its code edited. Start a new line ID.";}
     p->code=e["code"]|"";p->description=e["description"]|"";p->note=e["note"]|"";p->deleted=e["deleted"]|false;++p->revision;
+  } else if(op=="collect.stop") {
+    if(auto *line=find_line(job,e["line"]["id"]|"")){line->state="broken";line->reason="Occupation failed or was cancelled. Start a new line ID.";}
   } else if(op!="collect.start" && op!="collect.stop" && op!="collect.cancel" && op!="base.apply" && op!="base.result") return false;
   Receipt *r=receipt(id);if(!r) {if(receipts_.size()>=512)return false;receipts_.push_back({});r=&receipts_.back();r->id=id;}
   r->payload_crc=e["payload_crc"].as<uint32_t>();r->payload_format=e["payload_format"]|1U;r->state=e["state"].as<std::string>();r->message=e["message"]|"";
+  if(op=="collect.start"){auto *line=find_line(job,e["line"]["id"]|"");r->line_index=line?int(line-lines_.data()):-1;}
   result(id,r->state.c_str(),r->message);
   return true;
 }
 void Engine::recover() {
-  collecting_=false;pending_base_id_.clear();jobs_.clear();points_.clear();targets_.clear();receipts_.clear();active_.clear();sequence_=0;result("","idle","");
+  collecting_=false;pending_base_id_.clear();jobs_.clear();points_.clear();targets_.clear();lines_.clear();receipts_.clear();active_.clear();sequence_=0;result("","idle","");
   storage_ok_=store_.initialize();storage_error_=storage_ok_?"":"SD storage unavailable. Check card and restart.";
   if(!storage_ok_)return;
   for(unsigned i=1;i<=1024;++i){
@@ -112,6 +132,7 @@ void Engine::recover() {
     if(deserializeJson(d,raw)||!replay(d.as<JsonObjectConst>())) {storage_ok_=false;storage_error_="Invalid journal record; writes disabled.";break;}
   }
   for(auto &r:receipts_) if(r.state=="collecting"||r.state=="applying") {
+    if(r.line_index>=0&&size_t(r.line_index)<lines_.size()){auto &line=lines_[r.line_index];line.state="broken";line.reason="Restart interrupted an occupation. Start a new line ID.";}
     r.state="interrupted";r.message="Instrument restarted. Check setup and start a new operation.";
     if(last_id_==r.id)result(r.id,r.state.c_str(),r.message);
   }
@@ -202,6 +223,23 @@ void Engine::command(const char *input,const Fix &f) {
     if(find_point(jobid,d["point_id"]|"")){reject("Point ID already exists, including deleted records. Use a new point ID.");return;}
     DynamicJsonDocument c(8192);deserializeJson(c,j->config);
     if(const char *error=quality(f,c.as<JsonObjectConst>())){reject(error);return;}
+    std::string line_data;
+    if(d.containsKey("line")){
+      auto request=d["line"].as<JsonObjectConst>();const std::string action=request["action"]|"",line_id=request["id"]|"";
+      if(d.containsKey("comparison")||!is(c["crs"],"wgs84_utm")||!text(request["id"],32)||(action!="start"&&action!="continue"&&action!="end")){
+        reject("Manual lines require a topo occupation, UTM setup, line ID and start/continue/end action.");return;}
+      auto *line=find_line(jobid,line_id);
+      if(action=="start"){
+        if(line||lines_.size()>=64){reject("Line ID is reserved or the 64-line limit is reached. Use a new ID.");return;}
+      }else{
+        if(!line||line->state!="open"||line->revision!=j->revision||line->last_point!=(request["previous_point"]|"")||line->code!=(d["code"]|"")){
+          reject("Reload an open line in this setup, keep its code and confirm the current last vertex.");return;}
+        const auto &ref=line->reference;
+        const double change=std::sqrt(std::pow(ref.x-f.reference.x,2)+std::pow(ref.y-f.reference.y,2)+std::pow(ref.z-f.reference.z,2));
+        if(line->station!=f.station||change>.002){reject("Base reference changed since this line started. Use a new line ID.");return;}
+      }
+      JsonObject saved=e.createNestedObject("line");saved["id"]=line_id;saved["action"]=action;saved["previous_point"]=line?line->last_point:"";line_data=json(saved);
+    }
     std::string comparison;
     if(d.containsKey("comparison")){
       auto request=d["comparison"].as<JsonObjectConst>();const double factor=is(c["units"],"ft")?1/.3048:1;
@@ -226,6 +264,7 @@ void Engine::command(const char *input,const Fix &f) {
     if(!commit(e)){reject(storage_error_.c_str());return;}
     collecting_=true;occupation_id_=id;occupation_payload_=payload;occupation_job_=jobid;
     occupation_comparison_=comparison;
+    occupation_line_=line_data;
     point_id_=d["point_id"].as<std::string>();point_code_=d["code"].as<std::string>();point_description_=d["description"].as<std::string>();
     start_ms_=f.now;last_sample_ms_=0;last_epoch_=0;samples_=0;sum_={};worst_h_=worst_v_=0;worst_correction_=0;min_satellites_=65535;
     station_=f.station;base_reference_=f.reference;first_utc_=f.utc;tick(f);return;
@@ -249,6 +288,7 @@ void Engine::command(const char *input,const Fix &f) {
 void Engine::finish_failure(const std::string &message,const Fix &f) {
   collecting_=false;DynamicJsonDocument e(4096);e["id"]=occupation_id_;e["payload_crc"]=crc32(occupation_payload_);
   e["op"]="collect.stop";e["job"]=occupation_job_;e["state"]="rejected";e["message"]=message;e["utc"]=f.utc;
+  if(!occupation_line_.empty()){DynamicJsonDocument line(1024);deserializeJson(line,occupation_line_);e["line"]=line.as<JsonVariantConst>();}
   if(!commit(e))result(occupation_id_,"rejected",message+" Storage confirmation failed; no saved point was acknowledged.");
 }
 void Engine::tick(const Fix &f) {
@@ -285,6 +325,9 @@ void Engine::tick(const Fix &f) {
   point["correction_age_max_ms"]=worst_correction_;point["satellites_min"]=min_satellites_;point["fix"]="RTK FIXED";point["utc_start"]=first_utc_;point["utc_end"]=f.utc;
   point["configuration_revision"]=j->revision;point["configuration"]=config;point["base_reference_x_m"]=base_reference_.x;point["base_reference_y_m"]=base_reference_.y;point["base_reference_z_m"]=base_reference_.z;
   point["base_control_verified"]=is(config["base_mode"],"known");
+  if(!occupation_line_.empty()){
+    DynamicJsonDocument line(1024);deserializeJson(line,occupation_line_);point["line_id"]=line["id"];point["line_action"]=line["action"];point["line_previous"]=line["previous_point"];point["line_code"]=point_code_;
+  }
   if(!occupation_comparison_.empty()){
     DynamicJsonDocument comparison(8192);deserializeJson(comparison,occupation_comparison_);auto ref=comparison["reference"];
     const double de=east*factor-ref["easting"].as<double>(),dn=north*factor-ref["northing"].as<double>(),dh=point["height"].as<double>()-ref["height"].as<double>();
@@ -303,7 +346,13 @@ std::string Engine::read(const char *request,const Fix &) {
   const std::string job=q["job"]|"";auto *j=find_job(job);
   if(!j)return "{\"error\":\"job_not_found\"}";
   out["at"]=sequence_;out["job"]=job;out["revision"]=j->revision;
-  if(is(q["view"],"targets")){
+  if(is(q["view"],"lines")){
+    if(!integer(q["offset"],0,64))return "{\"error\":\"invalid_offset\"}";
+    unsigned total=0,added=0,offset=q["offset"];JsonArray rows=out.createNestedArray("lines");
+    for(const auto &line:lines_){if(line.job!=job)continue;if(total++<offset||added>=25)continue;JsonObject row=rows.createNestedObject();
+      row["id"]=line.id;row["code"]=line.code;row["last_point"]=line.last_point;row["state"]=line.state;row["reason"]=line.reason;row["vertices"]=line.vertices;row["configuration_revision"]=line.revision;row["units"]=line.units;++added;}
+    out["total"]=total;if(offset+added<total)out["next"]=offset+added;
+  }else if(is(q["view"],"targets")){
     if(!integer(q["offset"],0,64))return "{\"error\":\"invalid_offset\"}";
     unsigned total=0,added=0,offset=q["offset"];JsonArray rows=out.createNestedArray("targets");
     for(const auto &t:targets_){if(t.job!=job)continue;if(total++<offset||added>=25)continue;DynamicJsonDocument target(4096);if(deserializeJson(target,t.data))return "{\"error\":\"target_read_failed\"}";rows.add(target.as<JsonVariantConst>());++added;}
@@ -337,7 +386,7 @@ std::string Engine::read(const char *request,const Fix &) {
       if(total++<offset||added>=limit)continue;
       DynamicJsonDocument d(max_record*3);if(!point_data(p,d))return "{\"error\":\"point_read_failed\"}";
       JsonObject point=d["point"],row=rows.createNestedObject();
-      for(const char *key:{"id","code","description","deleted","edit_revision","record","easting","northing","height","latitude","longitude","utc_end","configuration_revision","base_control_verified","kind","line_id","line_action"})if(point.containsKey(key))row[key]=point[key];
+      for(const char *key:{"id","code","description","deleted","edit_revision","record","easting","northing","height","latitude","longitude","utc_end","configuration_revision","base_control_verified","kind","line_id","line_action","line_previous","line_code","line_state"})if(point.containsKey(key))row[key]=point[key];
       row["units"]=point["configuration"]["units"];row["crs"]=point["configuration"]["crs"];row["vertical"]=point["configuration"]["vertical"];++added;
     }
     out["total"]=total;if(offset+added<total)out["next"]=offset+added;
@@ -350,6 +399,7 @@ std::string Engine::snapshot(const Fix &f) {
   d["free_heap"]=f.free_heap;d["min_heap"]=f.min_heap;d["free_psram"]=f.free_psram;
   d["records_used"]=sequence_;d["record_limit"]=1024;d["active_job"]=active_;
   d["targets_used"]=targets_.size();d["target_limit"]=64;
+  d["lines_used"]=lines_.size();d["line_limit"]=64;
   JsonArray jobs=d.createNestedArray("jobs");for(const auto &j:jobs_){JsonObject row=jobs.createNestedObject();row["id"]=j.id;row["name"]=j.name;row["revision"]=j.revision;row["points"]=j.points;}
   Job *j=active_job();if(j){DynamicJsonDocument config(8192),point(max_record*2);if(!j->config.empty()&&!deserializeJson(config,j->config))d["config"]=config.as<JsonVariantConst>();
     if(!j->last_point.empty()&&!deserializeJson(point,j->last_point))d["last_point"]=point.as<JsonVariantConst>();
