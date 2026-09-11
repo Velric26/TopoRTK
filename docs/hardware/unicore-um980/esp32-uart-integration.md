@@ -4,6 +4,8 @@
 
 ## Source Facts
 
+Current fault exception: use the known-good UM980 as Base and the suspect carrier as a COM2-only Rover for prototype work, pending replacement and fresh acceptance checks. This is a recommendation, not an applied role change. See the [temporary implementation note](temporary-com1-fault-plan.md), including the untested RXD1 possibility and SiK bridge limitations.
+
 - BDRTK-980 supply: DC 4.0-5.5 V, 5.0 V typical.
 - BDRTK-980 stated current: 160 mA at 5.0 V.
 - BDRTK 5-pin connector: `PPS_OUT`, `5V_IN`, `GND`, `TTL_TXD1`, `TTL_RXD1`.

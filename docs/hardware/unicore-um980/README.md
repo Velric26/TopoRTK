@@ -4,6 +4,7 @@
 
 ## Quick Links
 
+- [Temporary COM1 fault plan: healthy Base, suspect Rover on COM2](temporary-com1-fault-plan.md)
 - [Local UM980 user manual R1.10](references/um980-user-manual-r1.10.pdf)
 - [Local UM980 product brief](references/um980-product-brief.pdf)
 - [Local BDRTK-980 carrier manual](references/bdrtk-980-board-manual.pdf)

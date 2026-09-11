@@ -48,6 +48,8 @@ Detailed screen layout, state logic, navigation, and brightness behavior belong 
 
 ## 4. Current Hardware
 
+**Temporary receiver exception (2026-09-11):** one UM980 carrier has a COM1 transmit fault. A replacement is planned. Recommended interim assignment: known-good receiver as Base, suspect receiver as Rover using COM2 and the existing ESP32 Wi-Fi bridge. No role change has been applied by this note. Direct SiK use of the suspect RXD1 remains untested, and an ESP32-to-SiK serial bridge remains unimplemented. See the [temporary implementation and replacement plan](docs/hardware/unicore-um980/temporary-com1-fault-plan.md).
+
 | Qty. | Component | Role | Current status |
 |---:|---|---|---|
 | 2 | Unicore UM980 RTK GNSS modules | RTK engine; one per instrument | Both passed USB and bidirectional TTL2; Unit A generated live base RTCM and Unit B reached `RTK FIXED` over Wi-Fi |
