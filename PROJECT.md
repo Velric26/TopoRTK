@@ -335,3 +335,8 @@ Only create these files when their content is needed; avoid duplicating informat
 | Date | Change |
 |---|---|
 | 2026-09-04 | Consolidated the original TopoRTK charter with `SurveyRTK.md`; retained current hardware, offline/UTM workflow, architecture, validation plan, and Mexico-specific constraints while removing duplicate purchasing analysis. |
+
+
+### 2026-09-10 web interface checkpoint
+
+UI 0.4 implements roadmap feature 6 point review/offline plotting and the export/backup portion of feature 7. Both A (Rover) and B (Base) are flashed with verified application hashes; read-only browser/persistence/export bench checks passed. CSV import and features 8–12 remain outstanding. See [implementation state](docs/roadmap-6-12-progress.md) and [validation evidence](tests/2026-09-10-roadmap-6-12/README.md). No field accuracy claim follows from these bench checks.

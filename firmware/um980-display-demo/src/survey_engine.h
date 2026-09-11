@@ -6,6 +6,7 @@
 
 namespace survey {
 constexpr size_t max_request=4096,max_snapshot=16384,max_record=8192;
+constexpr size_t max_read=65536;
 struct Fix {
   char unit='?';uint32_t boot_id=0,reset_reason=0,free_heap=0,min_heap=0,free_psram=0;
   uint32_t now=0,received=0,correction_age=0,reference_age=0;
@@ -45,11 +46,16 @@ class Engine {
   void command(const char *json,const Fix &fix);
   void tick(const Fix &fix);
   std::string snapshot(const Fix &fix);
+  std::string read(const char *request,const Fix &fix);
  private:
   struct Receipt { std::string id,state,message; uint32_t payload_crc=0; };
   Store &store_; Receiver &receiver_;
   std::vector<Job> jobs_;
   std::vector<Receipt> receipts_;
+  struct PointIndex {std::string job,id,code,description,note;unsigned sequence=0,revision=1;bool deleted=false;};
+  std::vector<PointIndex> points_;
+  PointIndex *find_point(const std::string &job,const std::string &id);
+  bool point_data(const PointIndex &point,JsonDocument &document);
   unsigned sequence_=0;
   bool storage_ok_=false;
   std::string active_,last_id_,last_state_="idle",last_message_="",storage_error_;

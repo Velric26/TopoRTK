@@ -1,0 +1,99 @@
+{
+  "A": {
+    "version": 1,
+    "role": "ROVER",
+    "storage_ready": true,
+    "storage_error": "",
+    "unit": "A",
+    "boot_id": 1691165660,
+    "uptime_ms": 50832,
+    "reset_reason": 0,
+    "free_heap": 220676,
+    "min_heap": 213040,
+    "free_psram": 8260891,
+    "records_used": 2,
+    "record_limit": 1024,
+    "active_job": "0282221a00efdc93a91e955cb115b98a",
+    "jobs": [
+      {
+        "id": "1aff9636beb949abbe934ee0d250aef3",
+        "name": "Bench test - persistence",
+        "revision": 0,
+        "points": 0
+      },
+      {
+        "id": "0282221a00efdc93a91e955cb115b98a",
+        "name": "Vallarta01",
+        "revision": 0,
+        "points": 0
+      }
+    ],
+    "block_reason": "Configure this job before collection.",
+    "operation": {
+      "id": "0282221a00efdc93a91e955cb115b98a",
+      "state": "completed",
+      "message": "Saved on instrument."
+    },
+    "collection": {
+      "active": false,
+      "samples": 0,
+      "elapsed_ms": 0,
+      "point_id": ""
+    },
+    "gnss": {
+      "fixed": false,
+      "position_valid": false,
+      "profile_verified": true,
+      "station": -1,
+      "base_reference_available": false,
+      "base_revision": 0,
+      "base_mode": "temporary",
+      "correction_age_ms": 4294967295,
+      "h_uncertainty_m": 0,
+      "v_uncertainty_m": 0
+    },
+    "validation": "Read-only browser and storage persistence checkpoint; no field observation collected"
+  },
+  "B": {
+    "version": 1,
+    "role": "BASE",
+    "storage_ready": true,
+    "storage_error": "",
+    "unit": "B",
+    "boot_id": 939872398,
+    "uptime_ms": 21199,
+    "reset_reason": 0,
+    "free_heap": 224452,
+    "min_heap": 217060,
+    "free_psram": 8262655,
+    "records_used": 0,
+    "record_limit": 1024,
+    "active_job": "",
+    "jobs": [],
+    "block_reason": "Create or open a job.",
+    "operation": {
+      "id": "",
+      "state": "idle",
+      "message": ""
+    },
+    "collection": {
+      "active": false,
+      "samples": 0,
+      "elapsed_ms": 0,
+      "point_id": ""
+    },
+    "gnss": {
+      "fixed": false,
+      "position_valid": false,
+      "profile_verified": true,
+      "station": -1,
+      "base_reference_available": false,
+      "base_revision": 0,
+      "base_mode": "temporary",
+      "correction_age_ms": 4294967295,
+      "h_uncertainty_m": 0,
+      "v_uncertainty_m": 0
+    },
+    "validation": "Read-only browser and storage persistence checkpoint; no field observation collected"
+  }
+}

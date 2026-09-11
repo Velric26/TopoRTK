@@ -1,6 +1,7 @@
 #include "web_http.h"
 #include "web_ui.h"
 #include "survey_ui.h"
+#include "survey_tools_ui.h"
 #include "survey_service.h"
 #include <Arduino.h>
 #include <esp_http_server.h>
@@ -56,6 +57,7 @@ esp_err_t get_page(httpd_req_t *request) {
 }
 
 esp_err_t get_survey_page(httpd_req_t *r){headers(r);httpd_resp_set_type(r,"text/html; charset=utf-8");return httpd_resp_send(r,kSurveyPage,sizeof(kSurveyPage)-1);}
+esp_err_t get_survey_tools(httpd_req_t *r){headers(r);httpd_resp_set_type(r,"application/javascript; charset=utf-8");return httpd_resp_send(r,kSurveyTools,sizeof(kSurveyTools)-1);}
 bool auth(httpd_req_t *r){char value[48]={};return httpd_req_get_hdr_value_str(r,"Authorization",value,sizeof(value))==ESP_OK && std::strncmp(value,"Bearer ",7)==0 && survey_authorized(value+7);}
 bool same_origin(httpd_req_t *r){
   if(!httpd_req_get_hdr_value_len(r,"Origin"))return true;
@@ -72,6 +74,23 @@ esp_err_t get_survey(httpd_req_t *r){
   if(!survey_snapshot(data,survey::max_snapshot)){delete[] data;return error(r,"503 Service Unavailable","{\"error\":\"survey_not_ready\"}");}
   headers(r);httpd_resp_set_type(r,"application/json");httpd_resp_set_hdr(r,"X-Controller",auth(r)?"true":"false");
   const esp_err_t result=httpd_resp_send(r,data,HTTPD_RESP_USE_STRLEN);delete[] data;return result;
+}
+esp_err_t get_data(httpd_req_t *r){
+  char query[768]={},value[128]={};DynamicJsonDocument d(2048);
+  if(httpd_req_get_url_query_str(r,query,sizeof(query))!=ESP_OK)return error(r,"400 Bad Request","{\"error\":\"query_required\"}");
+  for(const char *key:{"view","job","point","search","offset","at","deleted"})if(httpd_query_key_value(query,key,value,sizeof(value))==ESP_OK){
+    if(!std::strcmp(key,"offset")||!std::strcmp(key,"at")){char *end=nullptr;const auto n=std::strtoul(value,&end,10);if(!value[0]||*end||n>1024)return error(r,"400 Bad Request","{\"error\":\"invalid_cursor\"}");d[key]=n;}
+    else if(!std::strcmp(key,"deleted"))d[key]=std::strcmp(value,"true")==0;
+    else {
+      char decoded[128]={};size_t out=0;
+      for(size_t i=0;value[i];++i){char c=value[i];if(c=='%'){auto hex=[](char h){return h>='0'&&h<='9'?h-'0':h>='a'&&h<='f'?h-'a'+10:h>='A'&&h<='F'?h-'A'+10:-1;};if(!value[i+1]||!value[i+2]||hex(value[i+1])<0||hex(value[i+2])<0)return error(r,"400 Bad Request","{\"error\":\"invalid_encoding\"}");c=char(hex(value[i+1])*16+hex(value[i+2]));i+=2;}else if(c=='+')c=' ';if(c<32||c>126)return error(r,"400 Bad Request","{\"error\":\"invalid_text\"}");decoded[out++]=c;}
+      d[key]=decoded;
+    }
+  }
+  if(!d.containsKey("offset"))d["offset"]=0;std::string raw;serializeJson(d,raw);
+  auto *data=new(std::nothrow) char[survey::max_read];if(!data)return error(r,"503 Service Unavailable","{\"error\":\"memory_unavailable\"}");
+  if(!survey_read(raw.c_str(),data,survey::max_read)){delete[] data;return error(r,"503 Service Unavailable","{\"error\":\"read_busy_retry\"}");}
+  headers(r);httpd_resp_set_type(r,"application/json");const auto result=httpd_resp_send(r,data,HTTPD_RESP_USE_STRLEN);delete[] data;return result;
 }
 esp_err_t claim_control(httpd_req_t *r){
   if(!same_origin(r))return error(r,"403 Forbidden","{\"error\":\"origin_rejected\"}");
@@ -120,7 +139,7 @@ void publish_web_status(const char *json, size_t length, uint32_t now, bool rove
   last_start_attempt = now;
   httpd_config_t config = HTTPD_DEFAULT_CONFIG();
   config.stack_size = 8192;
-  config.max_uri_handlers = 8;
+  config.max_uri_handlers = 10;
   config.max_open_sockets = 3;
   config.lru_purge_enable = true;
   config.recv_wait_timeout = 2;
@@ -131,7 +150,9 @@ void publish_web_status(const char *json, size_t length, uint32_t now, bool rove
       {"/ui/v1/", HTTP_GET, get_page, nullptr},
       {"/api/v1/status", HTTP_GET, get_status, nullptr},
       {"/survey",HTTP_GET,get_survey_page,nullptr},
+      {"/survey-tools.js",HTTP_GET,get_survey_tools,nullptr},
       {"/api/v1/survey",HTTP_GET,get_survey,nullptr},
+      {"/api/v1/data",HTTP_GET,get_data,nullptr},
       {"/api/v1/control",HTTP_POST,claim_control,nullptr},
       {"/api/v1/control/release",HTTP_POST,release_control,nullptr},
       {"/api/v1/command",HTTP_POST,post_command,nullptr}};

@@ -12,6 +12,9 @@
 namespace {
 portMUX_TYPE guard=portMUX_INITIALIZER_UNLOCKED;
 SemaphoreHandle_t sd_mutex=nullptr;
+SemaphoreHandle_t read_mutex=nullptr,read_done=nullptr;
+char read_query[1024]={};char *read_result=nullptr;
+unsigned read_ticket=0;bool read_pending=false;
 QueueHandle_t commands=nullptr,base_commands=nullptr;
 survey::Fix current;
 char cached[survey::max_snapshot]={};
@@ -38,6 +41,10 @@ void worker(void *) {
     xSemaphoreTake(sd_mutex,portMAX_DELAY);
     if(xQueueReceive(commands,request,0)==pdTRUE)engine.command(request->json,fix);
     engine.tick(fix);
+    char query[1024]={};unsigned ticket=0;
+    portENTER_CRITICAL(&guard);if(read_pending){std::strcpy(query,read_query);ticket=read_ticket;read_pending=false;}portEXIT_CRITICAL(&guard);
+    if(ticket){const std::string response=engine.read(query,fix);bool deliver=false;
+      portENTER_CRITICAL(&guard);if(ticket==read_ticket){std::memcpy(read_result,response.c_str(),response.size()+1);deliver=true;}portEXIT_CRITICAL(&guard);if(deliver)xSemaphoreGive(read_done);}
     xSemaphoreGive(sd_mutex);
     const std::string state=engine.snapshot(fix);
     portENTER_CRITICAL(&guard);std::memcpy(cached,state.c_str(),state.size()+1);cached_ms=millis();portEXIT_CRITICAL(&guard);
@@ -50,8 +57,9 @@ void survey_begin(bool storage_ready) {
   // Keep larger JSON documents, journal strings and vectors in board PSRAM.
   if(psramFound())heap_caps_malloc_extmem_enable(1024);
   card_ready=storage_ready;
+  read_result=new(std::nothrow) char[survey::max_read];read_mutex=xSemaphoreCreateMutex();read_done=xSemaphoreCreateBinary();
   sd_mutex=xSemaphoreCreateMutex();commands=xQueueCreate(2,sizeof(Request));base_commands=xQueueCreate(1,sizeof(survey::BaseRequest));
-  if(!sd_mutex||!commands||!base_commands){Serial.println("SURVEY: task allocation failed");return;}
+  if(!sd_mutex||!commands||!base_commands||!read_result||!read_mutex||!read_done){Serial.println("SURVEY: task allocation failed");return;}
   survey_revoke_control();
   initialized=xTaskCreate(worker,"survey",16384,nullptr,1,nullptr)==pdPASS;
   Serial.println(initialized?"SURVEY: jobs service started":"SURVEY: task creation failed");
@@ -62,6 +70,14 @@ bool survey_queue(const char *command){if(!initialized||!command||std::strlen(co
 bool survey_snapshot(char *out,size_t cap){portENTER_CRITICAL(&guard);const size_t n=std::strlen(cached);const bool ok=n&&n<cap&&millis()-cached_ms<2000;
   if(ok)std::memcpy(out,cached,n+1);portEXIT_CRITICAL(&guard);return ok;}
 bool survey_take_base(survey::BaseRequest &r){return base_commands && xQueueReceive(base_commands,&r,0)==pdTRUE;}
+bool survey_read(const char *query,char *out,size_t capacity){
+  if(!initialized||!query||std::strlen(query)>=sizeof(read_query)||xSemaphoreTake(read_mutex,pdMS_TO_TICKS(100))!=pdTRUE)return false;
+  while(xSemaphoreTake(read_done,0)==pdTRUE){}
+  portENTER_CRITICAL(&guard);++read_ticket;if(!read_ticket)++read_ticket;read_result[0]=0;std::strcpy(read_query,query);read_pending=true;portEXIT_CRITICAL(&guard);
+  const bool done=xSemaphoreTake(read_done,pdMS_TO_TICKS(2000))==pdTRUE;
+  portENTER_CRITICAL(&guard);const size_t size=std::strlen(read_result);const bool ok=done&&size&&size<capacity;if(ok)std::memcpy(out,read_result,size+1);++read_ticket;read_pending=false;portEXIT_CRITICAL(&guard);
+  xSemaphoreGive(read_mutex);return ok;
+}
 bool survey_sd_lock(){return !sd_mutex || xSemaphoreTake(sd_mutex,0)==pdTRUE;}
 void survey_sd_unlock(){if(sd_mutex)xSemaphoreGive(sd_mutex);}
 const char *survey_control_pin(){return control.pin();}
