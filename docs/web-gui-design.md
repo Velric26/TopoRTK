@@ -14,3 +14,8 @@ The September 11 redesign uses a light field workspace with navy actions, clear 
 Controls have visible keyboard focus and generous touch sizes. No animation is needed for meaning; the small button transitions respect reduced motion. Layout checks cover 320, 390, 768 and 1280 px, plus 200% text at 390 px. The active navigation label stays readable on hover.
 
 Both units were flashed with hash verification and passed read-only browser checks. See [validation and screenshots](../tests/2026-09-11-gui-redesign/README.md). Actual phone/tablet keyboard behavior, sunlight readability and field occupations remain user/field acceptance work. This redesign does not change the [deferred Android responsibilities](esp32-android-feature-split.md).
+
+
+## UI 0.8 control update
+
+The Rover now offers PIN-free **Take control** with latest-request ownership. The Base still displays its PIN field. The Rover touchscreen replaces the unused WEB CONTROL PIN line with a Take control instruction. The remaining GUI layout is unchanged. See [takeover validation](../tests/2026-09-11-rover-takeover/README.md).

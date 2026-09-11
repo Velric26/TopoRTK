@@ -2001,7 +2001,8 @@ void draw_phone_connection(uint32_t now) {
     draw_fitted_text(12,113,296,is_base()?"OPEN BASE WEB FOR RECEIVER SETUP":state,1,is_base()||rover_ap_ready() ? colors::kAccent : colors::kWarning);
     draw_fitted_text(12,142,296,"PASSWORD (HIDDEN AFTER 30 SECONDS)",1,colors::kMuted);
     draw_fitted_text(12,164,296,reveal && !is_base() ? rover_ap_password() : "****.****",2,RGB565_WHITE);
-    char control[64];std::snprintf(control,sizeof(control),"WEB CONTROL PIN: %s",reveal?survey_control_pin():"******");
+    char control[64];if(is_base())std::snprintf(control,sizeof(control),"WEB CONTROL PIN: %s",reveal?survey_control_pin():"******");
+    else std::snprintf(control,sizeof(control),"WEB: TAP TAKE CONTROL (NO PIN)");
     draw_fitted_text(12,192,296,rover_ap_error()[0]?rover_ap_error():control,1,colors::kWarning);
   }
   draw_button(7,layout::kShowKey,reveal ? "HIDE KEY" : "SHOW KEY","",reveal);

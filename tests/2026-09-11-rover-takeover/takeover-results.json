@@ -1,0 +1,17 @@
+{
+  "result": "PASS",
+  "checks": [
+    "Rover has no PIN entry",
+    "latest browser wins",
+    "previous bearer rejected with 401",
+    "previous release cannot revoke current owner",
+    "same client rotates bearer",
+    "foreign Origin rejected",
+    "malformed client rejected",
+    "Base still requires PIN",
+    "roles/jobs/journal/boot unchanged",
+    "no valid survey commands submitted",
+    "control released after test",
+    "no JS errors"
+  ]
+}

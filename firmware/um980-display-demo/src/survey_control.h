@@ -8,6 +8,12 @@ class Control {
  public:
   void reset(const char *pin){std::strncpy(pin_,pin,6);pin_[6]=0;owner_[0]=token_[0]=0;lease_=attempt_time_=0;attempts_=0;}
   const char *pin()const{return pin_;}
+  // Rover: every accepted takeover replaces the bearer, even for the same client.
+  int takeover(const char *client,const char *candidate,uint32_t now,char *token,size_t capacity){
+    if(!valid_id(client)||!valid_id(candidate)||!token||capacity<33)return 400;
+    std::strcpy(owner_,client);std::strcpy(token_,candidate);lease_=now;
+    std::strcpy(token,token_);return 200;
+  }
   int claim(const char *pin,const char *client,const char *candidate,uint32_t now,char *token,size_t capacity){
     if(!pin||std::strlen(pin)!=6||!valid_id(client)||!valid_id(candidate)||capacity<33)return 400;
     if(now-attempt_time_>=60000){attempts_=0;attempt_time_=now;}

@@ -351,3 +351,8 @@ The [responsibility review](docs/esp32-android-feature-split.md) defers bulk pro
 ### 2026-09-11 web GUI redesign
 
 UI 0.7 simplifies Jobs/Setup/Collect/Points with phone navigation, four expandable setup groups, a compact collection form and separate point tools. Live status shares the new light field palette. Full browser workflow/export checks, responsive and enlarged-text checks, A/B builds, hash-verified flashes and read-only hardware persistence checks passed. See [GUI design](docs/web-gui-design.md) and [evidence](tests/2026-09-11-gui-redesign/README.md). Real Android/field acceptance remains open.
+
+
+### 2026-09-11 Rover control takeover
+
+UI 0.8 removes the Rover web PIN: the latest accepted takeover becomes the only controller and invalidates the previous bearer. Base PIN protection remains. Both ESP32 application flashes are hash-verified; native/browser and real two-browser takeover checks passed with no survey records or receiver commands changed. The user confirmed that only the ESP32 boards are connected, so this is interface/storage validation, not GNSS/field qualification. See [validation](tests/2026-09-11-rover-takeover/README.md) and [control/Wi-Fi behavior](docs/survey-workflow.md).

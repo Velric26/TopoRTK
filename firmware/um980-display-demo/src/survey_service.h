@@ -8,7 +8,7 @@ bool survey_read(const char *query,char *output,size_t capacity);
 bool survey_take_base(survey::BaseRequest &request);
 bool survey_sd_lock();
 void survey_sd_unlock();
-// Local console/display pairing; no token or PIN enters status or SD logs.
+// Rover last-request takeover; Base display-PIN pairing. Credentials are not logged.
 const char *survey_control_pin();
 void survey_revoke_control();
 int survey_claim(const char *pin,const char *client,char *token,size_t capacity);

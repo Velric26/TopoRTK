@@ -1,0 +1,29 @@
+{
+  "A": {
+    "role": "ROVER",
+    "boot_id": 2387176002,
+    "jobs": [
+      {
+        "id": "1aff9636beb949abbe934ee0d250aef3",
+        "name": "Bench test - persistence",
+        "revision": 0,
+        "points": 0
+      },
+      {
+        "id": "0282221a00efdc93a91e955cb115b98a",
+        "name": "Vallarta01",
+        "revision": 0,
+        "points": 0
+      }
+    ],
+    "active_job": "0282221a00efdc93a91e955cb115b98a",
+    "records_used": 2
+  },
+  "B": {
+    "role": "BASE",
+    "boot_id": 4138689648,
+    "jobs": [],
+    "active_job": "",
+    "records_used": 0
+  }
+}
