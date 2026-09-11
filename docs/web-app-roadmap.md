@@ -64,3 +64,8 @@ Common stakeout workflows extend from points to lines, arcs, alignments and surf
 Emlid's published field-software feature set includes survey projects, coordinate systems, collection/stakeout, import/export and more advanced mapping/design tools. This supports a focused first release followed by task-specific expansion. [Emlid Flow features](https://emlid.com/emlid-flow/).
 
 The priorities, architecture choices, acceptance criteria and TopoRTK-specific limitations above are our recommendations, informed by those workflows and the current hardware. They are not a claim that the prototype already meets commercial equipment specifications.
+
+
+## UI 0.7 interface refresh
+
+The [web GUI redesign](web-gui-design.md) reorganizes existing workflows for phones and larger screens. It adds no new surveying feature or coordinate model. Both units run the verified UI 0.7 application; the previously documented phone/app deferrals and field acceptance requirements remain.

@@ -1,0 +1,14 @@
+{
+  "A": {
+    "ui_version": "0.7.0",
+    "bytes": 1114992,
+    "sha256": "189bcb3c2804b60dab27327747dfa171109fb189c995f8f4e0be3da80a8ce8e9",
+    "offset": "0x10000"
+  },
+  "B": {
+    "ui_version": "0.7.0",
+    "bytes": 1114992,
+    "sha256": "44e1986a7fdc57952dfaee86703d2980581527015053f07bfcdd4aa7404fc839",
+    "offset": "0x10000"
+  }
+}

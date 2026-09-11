@@ -5,7 +5,7 @@ static const char kWebStatusPage[] = R"TOPOHTML(<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="color-scheme" content="dark"><title>TopoRTK · Rover status</title>
+<meta name="color-scheme" content="light"><title>TopoRTK · Rover status</title>
 <link rel="icon" href="data:,">
 <style>
 :root{color-scheme:dark;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#0b0e12;color:#f5f7fa;font-size:16px;--muted:#abb6c5;--line:#343e4b;--accent:#79d9ff}
@@ -19,6 +19,9 @@ details{border-top:1px solid var(--line);border-bottom:1px solid var(--line)}sum
 @media(max-width:560px){.shell{padding:18px 16px}header{gap:12px;padding-bottom:18px}.header-actions{gap:8px}.unit{padding:.6rem}.readiness{padding:20px 18px;align-items:flex-start;flex-direction:column;gap:16px}.local-time{text-align:left}.local-time strong{display:inline;font-size:1.1rem;margin-right:8px}.metrics{gap:12px}.metric{padding:18px 14px;min-height:154px}.metric h2{font-size:.8rem;letter-spacing:.04em}.value{font-size:1.65rem}.diagnostics{grid-template-columns:1fr}}
 @media(max-width:440px){.metrics{grid-template-columns:1fr}.metric{min-height:130px}}
 @media(max-width:350px){.header-actions{flex-direction:column;align-items:flex-end}}
+
+/* Shared field-interface palette; green remains a verified-state indicator. */
+:root{color-scheme:light;background:#eef2f5;color:#172d3b;--muted:#526674;--line:#d2dde4;--accent:#166546}.shell{max-width:1120px;padding-top:30px}.brand{letter-spacing:-.04em;font-size:1.6rem}.brand span{color:#173c50}button{background:#fff;color:#173c50;border-color:#9cabb6}button:hover{background:#e3edf1}.connection strong{color:#173c50}.survey-link{display:block;text-align:center;border-radius:10px;background:#173c50;color:#fff;text-decoration:none;padding:14px 20px;font-weight:650}.readiness{background:#e0e8ee;border-color:#bacbd6;color:#173c50;border-radius:14px}.readiness[data-ready="true"]{background:#e0f3e6;color:#164d2d;border-color:#89bfa0}.eyebrow,.local-time small{color:#425e6d}.metric{background:#fff;box-shadow:0 3px 12px #15374705;border-radius:14px}.value[data-good="true"]{color:#166546}.warning{background:#fff7e6;border-color:#d4b778;color:#684708}.warning p{color:#684708}.warning[data-severity="error"]{background:#fff0ed;border-color:#c5968d;color:#822d24}.warning[data-severity="error"] p{color:#822d24}.diagnostics div{border-color:var(--line)}summary{color:#264b60}.dot[data-live="true"]{background:#166546}@media(max-width:560px){.metric h2{font-size:.875rem}.shell{padding:18px 16px}.readiness{flex-direction:row;align-items:center;gap:12px}.local-time{text-align:right}.local-time strong{display:block;margin:0}.local-time small{display:block}h1{font-size:1.8rem}.header-actions{flex-wrap:wrap;justify-content:flex-end}.metrics{grid-template-columns:1fr 1fr}.metric{min-height:150px}.value{font-size:1.45rem}}@media(max-width:380px){.metrics{grid-template-columns:1fr}.readiness{flex-direction:column;align-items:start}.local-time{text-align:left}}
 </style>
 </head>
 <body><div class="shell">
@@ -27,7 +30,7 @@ details{border-top:1px solid var(--line);border-bottom:1px solid var(--line)}sum
 <main>
 <div class="connection"><span><i id="live-dot" class="dot" data-live="false" aria-hidden="true"></i><strong id="connection" role="status">Connecting to Rover…</strong></span><span id="updated">Waiting for first update</span></div>
 <p class="sub" style="margin:0 0 16px">Instrument Wi-Fi works without Internet. Choose “Stay connected” if Android asks.</p>
-<p style="margin:0 0 20px"><a href="/survey" style="color:#a6ef65;font-weight:650">Open survey jobs →</a></p>
+<p style="margin:0 0 20px"><a href="/survey" class="survey-link">Open survey jobs →</a></p>
 <section id="readiness" class="readiness" data-ready="false" aria-labelledby="ready-title"><div><p class="eyebrow">Instrument readiness</p><h1 id="ready-title">CONNECTING</h1></div><div class="local-time"><strong id="local-time">TIME WAIT</strong><small>Local · UTC−6</small></div></section>
 <div class="metrics">
 <section class="metric"><h2>Correction link</h2><div class="value" id="link">—</div><p class="sub" id="link-sub">Waiting for instrument</p></section>
@@ -48,7 +51,7 @@ details{border-top:1px solid var(--line);border-bottom:1px solid var(--line)}sum
 <p>Open <strong id="phone-url">the address on the Rover screen</strong> in Chrome. This network provides instrument access only. Keep the connection when Android reports no Internet.</p>
 <p id="phone-network">The Rover screen shows the current network name and address.</p>
 </div></details>
-</main><footer><span>Local connection · Updates every second</span><span>Read-only · UI 0.2.0</span></footer>
+</main><footer><span>Local connection · Updates every second</span><span>Read-only · UI 0.7.0</span></footer>
 </div>
 <script>
 'use strict';

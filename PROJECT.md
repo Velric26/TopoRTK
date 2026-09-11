@@ -346,3 +346,8 @@ UI 0.4 implements roadmap feature 6 point review/offline plotting and the export
 ### 2026-09-11 instrument / Android scope review
 
 The [responsibility review](docs/esp32-android-feature-split.md) defers bulk project/file processing, continuous-topo session management, localization and full COGO to the phone/app. The web client already executes on the phone. UI 0.5 adds bounded reference targets and check/repeat occupations; basic point stakeout passed its final native/browser/build/flash and read-only hardware checkpoint. UI 0.6 subsequently adds manual line tags and completes the agreed ESP32 scope; A/B flashes and read-only hardware checks passed. Bulk imports, continuous topo, localization and full COGO remain deferred phone/app work. See [manual-line validation](tests/2026-09-11-manual-lines/README.md). See [current implementation state](docs/roadmap-6-12-progress.md); these changes do not establish field accuracy.
+
+
+### 2026-09-11 web GUI redesign
+
+UI 0.7 simplifies Jobs/Setup/Collect/Points with phone navigation, four expandable setup groups, a compact collection form and separate point tools. Live status shares the new light field palette. Full browser workflow/export checks, responsive and enlarged-text checks, A/B builds, hash-verified flashes and read-only hardware persistence checks passed. See [GUI design](docs/web-gui-design.md) and [evidence](tests/2026-09-11-gui-redesign/README.md). Real Android/field acceptance remains open.

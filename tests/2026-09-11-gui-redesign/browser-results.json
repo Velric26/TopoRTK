@@ -1,0 +1,17 @@
+{
+  "result": "PASS",
+  "browser": "152.0.4191.66",
+  "liveUrl": "http://192.168.100.20/ui/v1/",
+  "checks": [
+    "live page and advancing counters",
+    "three real browser reloads",
+    "320/390/768/1200 px no overflow",
+    "stale GNSS",
+    "disconnect clears ready and metrics",
+    "frozen snapshot",
+    "invalid JSON",
+    "automatic and manual recovery",
+    "no JavaScript errors",
+    "only local GET requests"
+  ]
+}
