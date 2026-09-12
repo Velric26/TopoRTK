@@ -1,0 +1,455 @@
+Processing unit_a (platform: espressif32@7.0.1; board: esp32-s3-devkitc-1; framework: arduino)
+--------------------------------------------------------------------------------
+Verbose mode can be enabled via `-v, --verbose` option
+CONFIGURATION: https://docs.platformio.org/page/boards/espressif32/esp32-s3-devkitc-1.html
+PLATFORM: Espressif 32 (7.0.1) > Espressif ESP32-S3-DevKitC-1-N8 (8 MB QD, No PSRAM)
+HARDWARE: ESP32S3 240MHz, 320KB RAM, 16MB Flash
+DEBUG: Current (esp-builtin) On-board (esp-builtin) External (cmsis-dap, esp-bridge, esp-prog, iot-bus-jtag, jlink, minimodule, olimex-arm-usb-ocd, olimex-arm-usb-ocd-h, olimex-arm-usb-tiny-h, olimex-jtag-tiny, tumpa)
+PACKAGES: 
+ - framework-arduinoespressif32 @ 3.20017.241212+sha.dcc1105b 
+ - tool-esptoolpy @ 2.41100.0 (4.11.0) 
+ - toolchain-riscv32-esp @ 8.4.0+2021r2-patch5 
+ - toolchain-xtensa-esp32s3 @ 8.4.0+2021r2-patch5
+LDF: Library Dependency Finder -> https://bit.ly/configure-pio-ldf
+LDF Modes: Finder ~ chain, Compatibility ~ soft
+Found 36 compatible libraries
+Scanning dependencies...
+Dependency Graph
+|-- GFX Library for Arduino @ 1.5.5
+|-- TCA9554 @ 0.1.2
+|-- ArduinoJson @ 6.21.5
+|-- Preferences @ 2.0.0
+|-- WiFi @ 2.0.0
+|-- FS @ 2.0.0
+|-- SD_MMC @ 2.0.0
+|-- Wire @ 2.0.0
+Building in release mode
+Compiling .pio\build\unit_a\src\link_diagnostic.cpp.o
+Compiling .pio\build\unit_a\src\main.cpp.o
+Compiling .pio\build\unit_a\src\rover_ap.cpp.o
+Compiling .pio\build\unit_a\src\survey_engine.cpp.o
+Compiling .pio\build\unit_a\src\survey_service.cpp.o
+Compiling .pio\build\unit_a\src\survey_store.cpp.o
+Compiling .pio\build\unit_a\src\web_http.cpp.o
+Building .pio\build\unit_a\bootloader.bin
+Generating partitions .pio\build\unit_a\partitions.bin
+Compiling .pio\build\unit_a\lib711\SPI\SPI.cpp.o
+Compiling .pio\build\unit_a\lib60e\Wire\Wire.cpp.o
+esptool.py v4.11.0
+Creating esp32s3 image...
+Merged 1 ELF section
+Successfully created esp32s3 image.
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\Arduino_DataBus.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\Arduino_G.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\Arduino_GFX.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\Arduino_GFX_Library.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\Arduino_TFT.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\Arduino_TFT_18bit.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\canvas\Arduino_Canvas.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\canvas\Arduino_Canvas_3bit.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\canvas\Arduino_Canvas_Indexed.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\canvas\Arduino_Canvas_Mono.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\databus\Arduino_AVRPAR16.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\databus\Arduino_AVRPAR8.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\databus\Arduino_DUEPAR16.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\databus\Arduino_ESP32DSIPanel.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\databus\Arduino_ESP32LCD16.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\databus\Arduino_ESP32LCD8.cpp.o
+Archiving .pio\build\unit_a\lib60e\libWire.a
+Indexing .pio\build\unit_a\lib60e\libWire.a
+Archiving .pio\build\unit_a\lib711\libSPI.a
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\databus\Arduino_ESP32PAR16.cpp.o
+Indexing .pio\build\unit_a\lib711\libSPI.a
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\databus\Arduino_ESP32PAR16Q.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\databus\Arduino_ESP32PAR16QQ.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\databus\Arduino_ESP32PAR8.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\databus\Arduino_ESP32PAR8Q.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\databus\Arduino_ESP32PAR8QQ.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\databus\Arduino_ESP32PAR8QQQ.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\databus\Arduino_ESP32QSPI.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\databus\Arduino_ESP32RGBPanel.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\databus\Arduino_ESP32S2PAR16.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\databus\Arduino_ESP32S2PAR16Q.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\databus\Arduino_ESP32S2PAR8.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\databus\Arduino_ESP32S2PAR8Q.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\databus\Arduino_ESP32SPI.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\databus\Arduino_ESP32SPIDMA.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\databus\Arduino_ESP8266SPI.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\databus\Arduino_HWSPI.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\databus\Arduino_NRFXSPI.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\databus\Arduino_RPiPicoPAR16.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\databus\Arduino_RPiPicoPAR8.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\databus\Arduino_RPiPicoSPI.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\databus\Arduino_RTLPAR8.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\databus\Arduino_STM32PAR8.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\databus\Arduino_SWPAR16.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\databus\Arduino_SWPAR8.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\databus\Arduino_SWSPI.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\databus\Arduino_UNOPAR8.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\databus\Arduino_Wire.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\databus\Arduino_XCA9554SWSPI.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\databus\Arduino_XL9535SWSPI.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\databus\Arduino_mbedSPI.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\display\Arduino_AXS15231B.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\display\Arduino_CO5300.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\display\Arduino_DSI_Display.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\display\Arduino_GC9106.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\display\Arduino_GC9107.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\display\Arduino_GC9A01.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\display\Arduino_HX8347C.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\display\Arduino_HX8347D.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\display\Arduino_HX8352C.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\display\Arduino_HX8357A.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\display\Arduino_HX8357B.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\display\Arduino_HX8369A.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\display\Arduino_ILI9225.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\display\Arduino_ILI9331.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\display\Arduino_ILI9341.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\display\Arduino_ILI9342.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\display\Arduino_ILI9481_18bit.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\display\Arduino_ILI9486.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\display\Arduino_ILI9486_18bit.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\display\Arduino_ILI9488.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\display\Arduino_ILI9488_18bit.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\display\Arduino_ILI9488_3bit.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\display\Arduino_ILI9806.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\display\Arduino_JBT6K71.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\display\Arduino_JD9613.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\display\Arduino_NT35310.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\display\Arduino_NT35510.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\display\Arduino_NT39125.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\display\Arduino_NV3023.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\display\Arduino_NV3041A.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\display\Arduino_OTM8009A.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\display\Arduino_R61529.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\display\Arduino_RGB_Display.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\display\Arduino_RM67162.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\display\Arduino_RM690B0.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\display\Arduino_SEPS525.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\display\Arduino_SH1106.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\display\Arduino_SSD1283A.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\display\Arduino_SSD1306.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\display\Arduino_SSD1331.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\display\Arduino_SSD1351.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\display\Arduino_ST7735.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\display\Arduino_ST7789.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\display\Arduino_ST77916.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\display\Arduino_ST7796.cpp.o
+Compiling .pio\build\unit_a\lib3a0\GFX Library for Arduino\display\Arduino_WEA2012.cpp.o
+Compiling .pio\build\unit_a\lib86a\TCA9554\TCA9554.cpp.o
+Compiling .pio\build\unit_a\libf5d\Preferences\Preferences.cpp.o
+Compiling .pio\build\unit_a\lib662\WiFi\WiFi.cpp.o
+Compiling .pio\build\unit_a\lib662\WiFi\WiFiAP.cpp.o
+Compiling .pio\build\unit_a\lib662\WiFi\WiFiClient.cpp.o
+Compiling .pio\build\unit_a\lib662\WiFi\WiFiGeneric.cpp.o
+Compiling .pio\build\unit_a\lib662\WiFi\WiFiMulti.cpp.o
+Compiling .pio\build\unit_a\lib662\WiFi\WiFiSTA.cpp.o
+Compiling .pio\build\unit_a\lib662\WiFi\WiFiScan.cpp.o
+Compiling .pio\build\unit_a\lib662\WiFi\WiFiServer.cpp.o
+Compiling .pio\build\unit_a\lib662\WiFi\WiFiUdp.cpp.o
+Compiling .pio\build\unit_a\lib3d5\FS\FS.cpp.o
+Compiling .pio\build\unit_a\lib3d5\FS\vfs_api.cpp.o
+Compiling .pio\build\unit_a\libb43\SD_MMC\SD_MMC.cpp.o
+Compiling .pio\build\unit_a\FrameworkArduino\Esp.cpp.o
+Compiling .pio\build\unit_a\FrameworkArduino\FirmwareMSC.cpp.o
+Compiling .pio\build\unit_a\FrameworkArduino\FunctionalInterrupt.cpp.o
+Compiling .pio\build\unit_a\FrameworkArduino\HWCDC.cpp.o
+Compiling .pio\build\unit_a\FrameworkArduino\HardwareSerial.cpp.o
+Archiving .pio\build\unit_a\lib3a0\libGFX Library for Arduino.a
+Archiving .pio\build\unit_a\lib86a\libTCA9554.a
+Compiling .pio\build\unit_a\FrameworkArduino\IPAddress.cpp.o
+Compiling .pio\build\unit_a\FrameworkArduino\IPv6Address.cpp.o
+Archiving .pio\build\unit_a\libf5d\libPreferences.a
+Compiling .pio\build\unit_a\FrameworkArduino\MD5Builder.cpp.o
+Compiling .pio\build\unit_a\FrameworkArduino\Print.cpp.o
+Compiling .pio\build\unit_a\FrameworkArduino\Stream.cpp.o
+Compiling .pio\build\unit_a\FrameworkArduino\StreamString.cpp.o
+Compiling .pio\build\unit_a\FrameworkArduino\Tone.cpp.o
+Compiling .pio\build\unit_a\FrameworkArduino\USB.cpp.o
+Compiling .pio\build\unit_a\FrameworkArduino\USBCDC.cpp.o
+Compiling .pio\build\unit_a\FrameworkArduino\USBMSC.cpp.o
+Compiling .pio\build\unit_a\FrameworkArduino\WMath.cpp.o
+Archiving .pio\build\unit_a\libb43\libSD_MMC.a
+Indexing .pio\build\unit_a\lib86a\libTCA9554.a
+Compiling .pio\build\unit_a\FrameworkArduino\WString.cpp.o
+Archiving .pio\build\unit_a\lib3d5\libFS.a
+Compiling .pio\build\unit_a\FrameworkArduino\base64.cpp.o
+Indexing .pio\build\unit_a\libf5d\libPreferences.a
+Archiving .pio\build\unit_a\lib662\libWiFi.a
+Compiling .pio\build\unit_a\FrameworkArduino\cbuf.cpp.o
+Indexing .pio\build\unit_a\libb43\libSD_MMC.a
+Compiling .pio\build\unit_a\FrameworkArduino\esp32-hal-adc.c.o
+Indexing .pio\build\unit_a\lib3d5\libFS.a
+Compiling .pio\build\unit_a\FrameworkArduino\esp32-hal-bt.c.o
+Indexing .pio\build\unit_a\lib662\libWiFi.a
+Indexing .pio\build\unit_a\lib3a0\libGFX Library for Arduino.a
+Compiling .pio\build\unit_a\FrameworkArduino\esp32-hal-cpu.c.o
+Compiling .pio\build\unit_a\FrameworkArduino\esp32-hal-dac.c.o
+Compiling .pio\build\unit_a\FrameworkArduino\esp32-hal-gpio.c.o
+Compiling .pio\build\unit_a\FrameworkArduino\esp32-hal-i2c-slave.c.o
+Compiling .pio\build\unit_a\FrameworkArduino\esp32-hal-i2c.c.o
+Compiling .pio\build\unit_a\FrameworkArduino\esp32-hal-ledc.c.o
+Compiling .pio\build\unit_a\FrameworkArduino\esp32-hal-matrix.c.o
+Compiling .pio\build\unit_a\FrameworkArduino\esp32-hal-misc.c.o
+Compiling .pio\build\unit_a\FrameworkArduino\esp32-hal-psram.c.o
+Compiling .pio\build\unit_a\FrameworkArduino\esp32-hal-rgb-led.c.o
+Compiling .pio\build\unit_a\FrameworkArduino\esp32-hal-rmt.c.o
+Compiling .pio\build\unit_a\FrameworkArduino\esp32-hal-sigmadelta.c.o
+Compiling .pio\build\unit_a\FrameworkArduino\esp32-hal-spi.c.o
+Compiling .pio\build\unit_a\FrameworkArduino\esp32-hal-time.c.o
+Compiling .pio\build\unit_a\FrameworkArduino\esp32-hal-timer.c.o
+Compiling .pio\build\unit_a\FrameworkArduino\esp32-hal-tinyusb.c.o
+Compiling .pio\build\unit_a\FrameworkArduino\esp32-hal-touch.c.o
+Compiling .pio\build\unit_a\FrameworkArduino\esp32-hal-uart.c.o
+Compiling .pio\build\unit_a\FrameworkArduino\firmware_msc_fat.c.o
+Compiling .pio\build\unit_a\FrameworkArduino\libb64\cdecode.c.o
+Compiling .pio\build\unit_a\FrameworkArduino\libb64\cencode.c.o
+Compiling .pio\build\unit_a\FrameworkArduino\main.cpp.o
+Compiling .pio\build\unit_a\FrameworkArduino\stdlib_noniso.c.o
+Compiling .pio\build\unit_a\FrameworkArduino\wiring_pulse.c.o
+Compiling .pio\build\unit_a\FrameworkArduino\wiring_shift.c.o
+Archiving .pio\build\unit_a\libFrameworkArduino.a
+Indexing .pio\build\unit_a\libFrameworkArduino.a
+Linking .pio\build\unit_a\firmware.elf
+Retrieving maximum program size .pio\build\unit_a\firmware.elf
+Checking size .pio\build\unit_a\firmware.elf
+Advanced Memory Usage is available via "PlatformIO Home > Project Inspect"
+RAM:   [===       ]  29.2% (used 95548 bytes from 327680 bytes)
+Flash: [==        ]  17.8% (used 1167869 bytes from 6553600 bytes)
+Building .pio\build\unit_a\firmware.bin
+esptool.py v4.11.0
+Creating esp32s3 image...
+Merged 2 ELF sections
+Successfully created esp32s3 image.
+========================= [SUCCESS] Took 41.72 seconds =========================
+
+Processing unit_b (platform: espressif32@7.0.1; board: esp32-s3-devkitc-1; framework: arduino)
+--------------------------------------------------------------------------------
+Verbose mode can be enabled via `-v, --verbose` option
+CONFIGURATION: https://docs.platformio.org/page/boards/espressif32/esp32-s3-devkitc-1.html
+PLATFORM: Espressif 32 (7.0.1) > Espressif ESP32-S3-DevKitC-1-N8 (8 MB QD, No PSRAM)
+HARDWARE: ESP32S3 240MHz, 320KB RAM, 16MB Flash
+DEBUG: Current (esp-builtin) On-board (esp-builtin) External (cmsis-dap, esp-bridge, esp-prog, iot-bus-jtag, jlink, minimodule, olimex-arm-usb-ocd, olimex-arm-usb-ocd-h, olimex-arm-usb-tiny-h, olimex-jtag-tiny, tumpa)
+PACKAGES: 
+ - framework-arduinoespressif32 @ 3.20017.241212+sha.dcc1105b 
+ - tool-esptoolpy @ 2.41100.0 (4.11.0) 
+ - toolchain-riscv32-esp @ 8.4.0+2021r2-patch5 
+ - toolchain-xtensa-esp32s3 @ 8.4.0+2021r2-patch5
+LDF: Library Dependency Finder -> https://bit.ly/configure-pio-ldf
+LDF Modes: Finder ~ chain, Compatibility ~ soft
+Found 36 compatible libraries
+Scanning dependencies...
+Dependency Graph
+|-- GFX Library for Arduino @ 1.5.5
+|-- TCA9554 @ 0.1.2
+|-- ArduinoJson @ 6.21.5
+|-- Preferences @ 2.0.0
+|-- WiFi @ 2.0.0
+|-- FS @ 2.0.0
+|-- SD_MMC @ 2.0.0
+|-- Wire @ 2.0.0
+Building in release mode
+Compiling .pio\build\unit_b\src\link_diagnostic.cpp.o
+Compiling .pio\build\unit_b\src\main.cpp.o
+Compiling .pio\build\unit_b\src\rover_ap.cpp.o
+Compiling .pio\build\unit_b\src\survey_engine.cpp.o
+Compiling .pio\build\unit_b\src\survey_service.cpp.o
+Compiling .pio\build\unit_b\src\survey_store.cpp.o
+Compiling .pio\build\unit_b\src\web_http.cpp.o
+Building .pio\build\unit_b\bootloader.bin
+Generating partitions .pio\build\unit_b\partitions.bin
+Compiling .pio\build\unit_b\lib711\SPI\SPI.cpp.o
+Compiling .pio\build\unit_b\lib60e\Wire\Wire.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\Arduino_DataBus.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\Arduino_G.cpp.o
+esptool.py v4.11.0
+Creating esp32s3 image...
+Merged 1 ELF section
+Successfully created esp32s3 image.
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\Arduino_GFX.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\Arduino_GFX_Library.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\Arduino_TFT.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\Arduino_TFT_18bit.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\canvas\Arduino_Canvas.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\canvas\Arduino_Canvas_3bit.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\canvas\Arduino_Canvas_Indexed.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\canvas\Arduino_Canvas_Mono.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\databus\Arduino_AVRPAR16.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\databus\Arduino_AVRPAR8.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\databus\Arduino_DUEPAR16.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\databus\Arduino_ESP32DSIPanel.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\databus\Arduino_ESP32LCD16.cpp.o
+Archiving .pio\build\unit_b\lib711\libSPI.a
+Archiving .pio\build\unit_b\lib60e\libWire.a
+Indexing .pio\build\unit_b\lib711\libSPI.a
+Indexing .pio\build\unit_b\lib60e\libWire.a
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\databus\Arduino_ESP32LCD8.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\databus\Arduino_ESP32PAR16.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\databus\Arduino_ESP32PAR16Q.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\databus\Arduino_ESP32PAR16QQ.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\databus\Arduino_ESP32PAR8.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\databus\Arduino_ESP32PAR8Q.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\databus\Arduino_ESP32PAR8QQ.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\databus\Arduino_ESP32PAR8QQQ.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\databus\Arduino_ESP32QSPI.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\databus\Arduino_ESP32RGBPanel.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\databus\Arduino_ESP32S2PAR16.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\databus\Arduino_ESP32S2PAR16Q.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\databus\Arduino_ESP32S2PAR8.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\databus\Arduino_ESP32S2PAR8Q.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\databus\Arduino_ESP32SPI.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\databus\Arduino_ESP32SPIDMA.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\databus\Arduino_ESP8266SPI.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\databus\Arduino_HWSPI.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\databus\Arduino_NRFXSPI.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\databus\Arduino_RPiPicoPAR16.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\databus\Arduino_RPiPicoPAR8.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\databus\Arduino_RPiPicoSPI.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\databus\Arduino_RTLPAR8.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\databus\Arduino_STM32PAR8.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\databus\Arduino_SWPAR16.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\databus\Arduino_SWPAR8.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\databus\Arduino_SWSPI.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\databus\Arduino_UNOPAR8.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\databus\Arduino_Wire.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\databus\Arduino_XCA9554SWSPI.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\databus\Arduino_XL9535SWSPI.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\databus\Arduino_mbedSPI.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\display\Arduino_AXS15231B.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\display\Arduino_CO5300.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\display\Arduino_DSI_Display.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\display\Arduino_GC9106.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\display\Arduino_GC9107.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\display\Arduino_GC9A01.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\display\Arduino_HX8347C.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\display\Arduino_HX8347D.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\display\Arduino_HX8352C.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\display\Arduino_HX8357A.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\display\Arduino_HX8357B.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\display\Arduino_HX8369A.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\display\Arduino_ILI9225.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\display\Arduino_ILI9331.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\display\Arduino_ILI9341.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\display\Arduino_ILI9342.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\display\Arduino_ILI9481_18bit.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\display\Arduino_ILI9486.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\display\Arduino_ILI9486_18bit.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\display\Arduino_ILI9488.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\display\Arduino_ILI9488_18bit.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\display\Arduino_ILI9488_3bit.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\display\Arduino_ILI9806.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\display\Arduino_JBT6K71.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\display\Arduino_JD9613.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\display\Arduino_NT35310.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\display\Arduino_NT35510.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\display\Arduino_NT39125.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\display\Arduino_NV3023.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\display\Arduino_NV3041A.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\display\Arduino_OTM8009A.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\display\Arduino_R61529.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\display\Arduino_RGB_Display.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\display\Arduino_RM67162.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\display\Arduino_RM690B0.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\display\Arduino_SEPS525.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\display\Arduino_SH1106.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\display\Arduino_SSD1283A.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\display\Arduino_SSD1306.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\display\Arduino_SSD1331.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\display\Arduino_SSD1351.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\display\Arduino_ST7735.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\display\Arduino_ST7789.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\display\Arduino_ST77916.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\display\Arduino_ST7796.cpp.o
+Compiling .pio\build\unit_b\lib3aa\GFX Library for Arduino\display\Arduino_WEA2012.cpp.o
+Compiling .pio\build\unit_b\lib8e2\TCA9554\TCA9554.cpp.o
+Compiling .pio\build\unit_b\libf5d\Preferences\Preferences.cpp.o
+Compiling .pio\build\unit_b\lib662\WiFi\WiFi.cpp.o
+Compiling .pio\build\unit_b\lib662\WiFi\WiFiAP.cpp.o
+Compiling .pio\build\unit_b\lib662\WiFi\WiFiClient.cpp.o
+Compiling .pio\build\unit_b\lib662\WiFi\WiFiGeneric.cpp.o
+Compiling .pio\build\unit_b\lib662\WiFi\WiFiMulti.cpp.o
+Compiling .pio\build\unit_b\lib662\WiFi\WiFiSTA.cpp.o
+Compiling .pio\build\unit_b\lib662\WiFi\WiFiScan.cpp.o
+Compiling .pio\build\unit_b\lib662\WiFi\WiFiServer.cpp.o
+Compiling .pio\build\unit_b\lib662\WiFi\WiFiUdp.cpp.o
+Compiling .pio\build\unit_b\lib3d5\FS\FS.cpp.o
+Compiling .pio\build\unit_b\lib3d5\FS\vfs_api.cpp.o
+Compiling .pio\build\unit_b\libb43\SD_MMC\SD_MMC.cpp.o
+Compiling .pio\build\unit_b\FrameworkArduino\Esp.cpp.o
+Compiling .pio\build\unit_b\FrameworkArduino\FirmwareMSC.cpp.o
+Compiling .pio\build\unit_b\FrameworkArduino\FunctionalInterrupt.cpp.o
+Compiling .pio\build\unit_b\FrameworkArduino\HWCDC.cpp.o
+Compiling .pio\build\unit_b\FrameworkArduino\HardwareSerial.cpp.o
+Archiving .pio\build\unit_b\lib3aa\libGFX Library for Arduino.a
+Archiving .pio\build\unit_b\lib8e2\libTCA9554.a
+Compiling .pio\build\unit_b\FrameworkArduino\IPAddress.cpp.o
+Indexing .pio\build\unit_b\lib8e2\libTCA9554.a
+Compiling .pio\build\unit_b\FrameworkArduino\IPv6Address.cpp.o
+Compiling .pio\build\unit_b\FrameworkArduino\MD5Builder.cpp.o
+Archiving .pio\build\unit_b\libf5d\libPreferences.a
+Compiling .pio\build\unit_b\FrameworkArduino\Print.cpp.o
+Compiling .pio\build\unit_b\FrameworkArduino\Stream.cpp.o
+Compiling .pio\build\unit_b\FrameworkArduino\StreamString.cpp.o
+Compiling .pio\build\unit_b\FrameworkArduino\Tone.cpp.o
+Compiling .pio\build\unit_b\FrameworkArduino\USB.cpp.o
+Archiving .pio\build\unit_b\lib3d5\libFS.a
+Compiling .pio\build\unit_b\FrameworkArduino\USBCDC.cpp.o
+Compiling .pio\build\unit_b\FrameworkArduino\USBMSC.cpp.o
+Compiling .pio\build\unit_b\FrameworkArduino\WMath.cpp.o
+Archiving .pio\build\unit_b\lib662\libWiFi.a
+Compiling .pio\build\unit_b\FrameworkArduino\WString.cpp.o
+Indexing .pio\build\unit_b\libf5d\libPreferences.a
+Archiving .pio\build\unit_b\libb43\libSD_MMC.a
+Compiling .pio\build\unit_b\FrameworkArduino\base64.cpp.o
+Indexing .pio\build\unit_b\lib3d5\libFS.a
+Compiling .pio\build\unit_b\FrameworkArduino\cbuf.cpp.o
+Indexing .pio\build\unit_b\libb43\libSD_MMC.a
+Indexing .pio\build\unit_b\lib662\libWiFi.a
+Compiling .pio\build\unit_b\FrameworkArduino\esp32-hal-adc.c.o
+Compiling .pio\build\unit_b\FrameworkArduino\esp32-hal-bt.c.o
+Compiling .pio\build\unit_b\FrameworkArduino\esp32-hal-cpu.c.o
+Compiling .pio\build\unit_b\FrameworkArduino\esp32-hal-dac.c.o
+Indexing .pio\build\unit_b\lib3aa\libGFX Library for Arduino.a
+Compiling .pio\build\unit_b\FrameworkArduino\esp32-hal-gpio.c.o
+Compiling .pio\build\unit_b\FrameworkArduino\esp32-hal-i2c-slave.c.o
+Compiling .pio\build\unit_b\FrameworkArduino\esp32-hal-i2c.c.o
+Compiling .pio\build\unit_b\FrameworkArduino\esp32-hal-ledc.c.o
+Compiling .pio\build\unit_b\FrameworkArduino\esp32-hal-matrix.c.o
+Compiling .pio\build\unit_b\FrameworkArduino\esp32-hal-misc.c.o
+Compiling .pio\build\unit_b\FrameworkArduino\esp32-hal-psram.c.o
+Compiling .pio\build\unit_b\FrameworkArduino\esp32-hal-rgb-led.c.o
+Compiling .pio\build\unit_b\FrameworkArduino\esp32-hal-rmt.c.o
+Compiling .pio\build\unit_b\FrameworkArduino\esp32-hal-sigmadelta.c.o
+Compiling .pio\build\unit_b\FrameworkArduino\esp32-hal-spi.c.o
+Compiling .pio\build\unit_b\FrameworkArduino\esp32-hal-time.c.o
+Compiling .pio\build\unit_b\FrameworkArduino\esp32-hal-timer.c.o
+Compiling .pio\build\unit_b\FrameworkArduino\esp32-hal-tinyusb.c.o
+Compiling .pio\build\unit_b\FrameworkArduino\esp32-hal-touch.c.o
+Compiling .pio\build\unit_b\FrameworkArduino\esp32-hal-uart.c.o
+Compiling .pio\build\unit_b\FrameworkArduino\firmware_msc_fat.c.o
+Compiling .pio\build\unit_b\FrameworkArduino\libb64\cdecode.c.o
+Compiling .pio\build\unit_b\FrameworkArduino\libb64\cencode.c.o
+Compiling .pio\build\unit_b\FrameworkArduino\main.cpp.o
+Compiling .pio\build\unit_b\FrameworkArduino\stdlib_noniso.c.o
+Compiling .pio\build\unit_b\FrameworkArduino\wiring_pulse.c.o
+Compiling .pio\build\unit_b\FrameworkArduino\wiring_shift.c.o
+Archiving .pio\build\unit_b\libFrameworkArduino.a
+Indexing .pio\build\unit_b\libFrameworkArduino.a
+Linking .pio\build\unit_b\firmware.elf
+Retrieving maximum program size .pio\build\unit_b\firmware.elf
+Checking size .pio\build\unit_b\firmware.elf
+Advanced Memory Usage is available via "PlatformIO Home > Project Inspect"
+RAM:   [===       ]  29.2% (used 95548 bytes from 327680 bytes)
+Flash: [==        ]  17.8% (used 1167873 bytes from 6553600 bytes)
+Building .pio\build\unit_b\firmware.bin
+esptool.py v4.11.0
+Creating esp32s3 image...
+Merged 2 ELF sections
+Successfully created esp32s3 image.
+========================= [SUCCESS] Took 41.12 seconds =========================
+
+Environment    Status    Duration
+-------------  --------  ------------
+unit_a         SUCCESS   00:00:41.723
+unit_b         SUCCESS   00:00:41.122
+========================= 2 succeeded in 00:01:22.846 =========================

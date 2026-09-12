@@ -19,6 +19,7 @@ const char kDiagnosticPage[] PROGMEM=R"HTML(<!doctype html>
 </div><p class="muted">Arm both within two minutes. The test starts when they find each other. Use a fresh code for each test.</p>
 <label class="check"><input type="checkbox" id="confirm"> Antennas and wiring are ready; no survey occupation is active.</label>
 <button id="arm" disabled>Arm this instrument</button><button id="cancel" class="secondary" disabled>Cancel test</button><button id="probe" class="secondary" disabled>Check radio wiring</button>
+<p>RTCM fault test: uses the test code and duration above, always SiK Base → Rover. Sends one 600-byte synthetic message every two seconds, with repeatable dropped, corrupt, duplicate and reversed fragments. Both UM980s stay disconnected.</p><button id="pairarm" disabled>Arm RTCM fault test</button>
 <p id="wiring" class="muted"></p></section>
 <section><h2 id="reportTitle">3. Results</h2><p id="result" aria-live="polite">Waiting for the instrument…</p><p id="reportDetails" class="muted"></p><progress id="progress" max="100" value="0" hidden></progress>
 <dl id="metrics" hidden><div><dt>Sent / expected</dt><dd id="sent"></dd></div><div><dt>Received / expected</dt><dd id="received"></dd></div><div><dt>Errors</dt><dd id="errors"></dd></div><div><dt>Duplicates</dt><dd id="duplicates"></dd></div><div><dt>Out of order</dt><dd id="reordered"></dd></div><div><dt>Longest receive gap</dt><dd id="gap"></dd></div></dl>
@@ -40,7 +41,7 @@ function report(){return state?.state==='idle'?state.last_report:state?.run?stat
 function controls(){
   $('control').disabled=!online||requesting||owner;$('release').disabled=!online||requesting||!owner;
   $('controlState').textContent=owner&&online?'You control this instrument':'View only · Take control to start or cancel';
-  for(const id of ['arm','probe','selftest'])$(id).disabled=!online||!owner||requesting||state?.busy;
+  for(const id of ['arm','pairarm','probe','selftest'])$(id).disabled=!online||!owner||requesting||state?.busy;
   $('cancel').disabled=!online||!owner||requesting||!['armed','running'].includes(state?.state);
   for(const id of ['run','transport','mode','seconds','rate','confirm'])$(id).disabled=!!state?.busy||requesting;
   $('download').disabled=!report();$('selfdownload').disabled=!state?.self_test;
@@ -68,6 +69,11 @@ $('arm').onclick=()=>action(async()=>{
   await api('/api/v1/diagnostic',{op:'arm',run:Number($('run').value),transport:$('transport').value,mode:Number($('mode').value),seconds:Number($('seconds').value),rate:Number($('rate').value),confirm:true});message('Arm request queued. Check for “Waiting for the other instrument” below.');
 });
 $('probe').onclick=()=>action(async()=>{if(!$('confirm').checked)throw Error('Confirm preparation first.');await api('/api/v1/diagnostic',{op:'probe',confirm:true});message('Wiring check queued. Watch the radio result below.')});
+$('pairarm').onclick=()=>action(async()=>{
+  if(!$('confirm').checked)throw Error('Confirm preparation first.');
+  const run=Number($('run').value);if(!/^[0-9]{6}$/.test($('run').value)||run<100000||run===state?.run)throw Error('Use a fresh test code from 100000 to 999999.');
+  remember('diagnosticRun',$('run').value);await api('/api/v1/diagnostic',{op:'pairtest',run,seconds:Number($('seconds').value),confirm:true});message('Arm request queued. Arm the same RTCM fault test on the other instrument.');
+});
 $('cancel').onclick=()=>action(async()=>{await api('/api/v1/diagnostic',{op:'cancel',run:state.run});message('Cancellation requested. Check for “Test stopped” below.')});
 $('selftest').onclick=()=>action(async()=>{await api('/api/v1/diagnostic',{op:'selftest',confirm:true});message('Local fault checks requested. See their separate report below.')});
 $('selfdownload').onclick=()=>{const d=state?.self_test;if(!d)return;const a=document.createElement('a'),u=URL.createObjectURL(new Blob([JSON.stringify(d,null,2)],{type:'application/json'}));a.href=u;a.download='TopoRTK-local-transport-'+d.run+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)};
@@ -94,6 +100,11 @@ function render(){
   $('reportDetails').textContent=d?'Test '+d.run+' · '+(d.role||state.role)+' · '+(d.transport==='sik'?'SiK radio':d.transport==='wifi'?'Wi-Fi':'interrupted')+(d.seconds?' · '+d.seconds+' s · '+d.rate+' bytes/s':''):'';
   $('metrics').hidden=!d||d.state==='interrupted';
   if(d){$('sent').textContent=(d.sent||0)+' / '+(d.expected_tx||0);$('received').textContent=(d.received||0)+' / '+(d.expected_rx||0);for(const id of ['errors','duplicates','reordered'])$(id).textContent=d[id]||0;$('gap').textContent=(d.max_gap_ms||0)+' ms'}
+  if(d?.kind==='paired_rtcm_faults'){
+    if(d.state==='done')$('result').textContent=d.pair_pass?'PASS · All eligible RTCM test messages recovered; no invalid sink output.':d.local_pass&&!d.peer_report_received?'Local delivery checks complete. Waiting for the peer report.':'Not passed · Eligible messages missing or validation failed. Download both reports.';
+    $('reportDetails').textContent='RTCM fault test '+d.run+' · '+d.role+' · '+d.seconds+' s · SiK Base → Rover. Counts are complete messages. CRC errors and duplicates are deliberately injected. Invalid sink output: '+d.integrity_violations+'.';
+    $('reordered').textContent='—';$('gap').textContent='—';
+  }
   $('reportStatus').textContent=!d?'':saved?'Restored from instrument storage.':state.busy?'Test runs on the instrument if this browser disconnects.':state.persisted?'Saved on the instrument.':'Report has not been confirmed saved; download it now.';
   controls();
 }
