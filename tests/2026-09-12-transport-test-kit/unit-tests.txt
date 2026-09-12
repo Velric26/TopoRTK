@@ -1,0 +1,12 @@
+test_fault_injection_cannot_false_pass (test_transport.EndpointTests.test_fault_injection_cannot_false_pass) ... ok
+test_two_udp_endpoints_and_durable_reports (test_transport.EndpointTests.test_two_udp_endpoints_and_durable_reports) ... ok
+test_bad_header_and_noise_remain_bounded (test_transport.FramingTests.test_bad_header_and_noise_remain_bounded) ... ok
+test_chunking_and_recovery_after_deleted_inserted_and_flipped_bytes (test_transport.FramingTests.test_chunking_and_recovery_after_deleted_inserted_and_flipped_bytes) ... ok
+test_configuration_mismatch_does_not_count_as_received (test_transport.FramingTests.test_configuration_mismatch_does_not_count_as_received) ... ok
+test_loss_duplicates_reorder_foreign_and_recomputed_crc_corruption (test_transport.FramingTests.test_loss_duplicates_reorder_foreign_and_recomputed_crc_corruption) ... ok
+test_udp_does_not_join_truncated_datagrams (test_transport.FramingTests.test_udp_does_not_join_truncated_datagrams) ... ok
+
+----------------------------------------------------------------------
+Ran 7 tests in 2.412s
+
+OK

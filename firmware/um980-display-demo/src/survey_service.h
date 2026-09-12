@@ -14,3 +14,5 @@ void survey_revoke_control();
 int survey_claim(const char *pin,const char *client,char *token,size_t capacity);
 bool survey_authorized(const char *token,bool renew=true);
 void survey_release(const char *token);
+bool survey_diagnostic_acquire();
+void survey_diagnostic_release();

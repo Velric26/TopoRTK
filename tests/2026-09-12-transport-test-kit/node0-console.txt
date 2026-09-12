@@ -1,0 +1,21 @@
+{
+  "output": "E:\\Documents\\ChatGPT\\TopoRTK\\tests\\2026-09-12-transport-test-kit\\node0",
+  "strict_integrity_pass": true,
+  "receive": {
+    "expected_frames": 20,
+    "valid_unique_frames": 20,
+    "missing_frames": 0,
+    "missing_sequence_sample": [],
+    "loss_percent": 0.0,
+    "duplicates": 0,
+    "reordered": 0,
+    "foreign_frames": 0,
+    "invalid_frames": 0,
+    "valid_payload_bytes": 5120,
+    "payload_goodput_bytes_per_second_over_capture": 1024.0,
+    "first_valid_seconds": 1.0,
+    "tail_without_valid_seconds": 1.9219999999913853,
+    "max_interarrival_seconds": 0.11000000001513399,
+    "p95_interarrival_seconds": 0.11000000001513399
+  }
+}

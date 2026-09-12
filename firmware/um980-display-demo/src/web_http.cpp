@@ -3,6 +3,8 @@
 #include "survey_ui.h"
 #include "survey_tools_ui.h"
 #include "survey_service.h"
+#include "link_diagnostic.h"
+#include "link_diagnostic_ui.h"
 #include <Arduino.h>
 #include <esp_http_server.h>
 #include <esp_system.h>
@@ -113,6 +115,14 @@ esp_err_t release_control(httpd_req_t *r){
   return error(r,"200 OK","{\"state\":\"released\"}");
 }
 
+esp_err_t get_diagnostic_page(httpd_req_t *r){headers(r);httpd_resp_set_type(r,"text/html; charset=utf-8");return httpd_resp_send(r,kDiagnosticPage,sizeof(kDiagnosticPage)-1);}
+esp_err_t get_diagnostic(httpd_req_t *r){char data[4096];if(!diagnostic_snapshot(data,sizeof(data)))return error(r,"503 Service Unavailable","{\"error\":\"diagnostic_unavailable\"}");return error(r,"200 OK",data);}
+esp_err_t post_diagnostic(httpd_req_t *r){
+  if(!same_origin(r))return error(r,"403 Forbidden","{\"error\":\"origin_rejected\"}");
+  if(!auth(r))return error(r,"401 Unauthorized","{\"error\":\"claim_control_first\"}");
+  std::string raw;if(!body(r,raw)||raw.size()>512||!diagnostic_request(raw.c_str()))return error(r,"409 Conflict","{\"error\":\"invalid_settings_or_diagnostic_queue_busy\"}");
+  return error(r,"202 Accepted","{\"state\":\"queued\"}");
+}
 esp_err_t rejected(httpd_req_t *request, httpd_err_code_t) {
   if (request->method != HTTP_GET) {
     httpd_resp_set_hdr(request, "Allow", "GET");
@@ -139,7 +149,7 @@ void publish_web_status(const char *json, size_t length, uint32_t now, bool rove
   last_start_attempt = now;
   httpd_config_t config = HTTPD_DEFAULT_CONFIG();
   config.stack_size = 8192;
-  config.max_uri_handlers = 10;
+  config.max_uri_handlers = 13;
   config.max_open_sockets = 3;
   config.lru_purge_enable = true;
   config.recv_wait_timeout = 2;
@@ -155,6 +165,9 @@ void publish_web_status(const char *json, size_t length, uint32_t now, bool rove
       {"/api/v1/data",HTTP_GET,get_data,nullptr},
       {"/api/v1/control",HTTP_POST,claim_control,nullptr},
       {"/api/v1/control/release",HTTP_POST,release_control,nullptr},
+      {"/diagnostics",HTTP_GET,get_diagnostic_page,nullptr},
+      {"/api/v1/diagnostic",HTTP_GET,get_diagnostic,nullptr},
+      {"/api/v1/diagnostic",HTTP_POST,post_diagnostic,nullptr},
       {"/api/v1/command",HTTP_POST,post_command,nullptr}};
   bool registered = true;
   for (const auto &route : routes) registered &= httpd_register_uri_handler(server, &route) == ESP_OK;

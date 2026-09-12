@@ -1,0 +1,6 @@
+{
+  "run_id": "local-cli-20260912",
+  "strict_pair_integrity_pass": true,
+  "errors": [],
+  "qualification": "Transport test only; not RTK/field accuracy acceptance"
+}

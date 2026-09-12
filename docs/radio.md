@@ -4,6 +4,8 @@
 
 ## Hardware
 
+The consolidated [electronics architecture](electronics-architecture.md) records signal/power paths, all selected UART pins, current versus proposed connections, antenna handling and ESP32 power-control scope. Use the [reusable transport/field test](transport-field-test.md) for future range and integrity work.
+
 Record exact Holybro SiK radio revisions, firmware, included antennas, connectors, and supply requirements.
 
 The selected Holybro Long Range 1 W 915 MHz radio uses a 6-position JST-GH connector with 3.3 V TTL serial and an XT30 power input. Holybro specifies 7-28 V DC input; the 1 W variant should be powered from the unit's 3S battery branch, not from the ESP32 5 V rail. Keep the supplied radio antenna attached before transmitting.
@@ -70,3 +72,11 @@ Link dated tests covering distance, terrain, RF power, Wi-Fi/display/storage act
 ## Mexico Regulatory Check
 
 Record the applicable IFT requirements, equipment homologation, lawful frequencies, power, antenna gain, and operating constraints before field transmission.
+
+## Standalone diagnostic checkpoint (2026-09-12)
+
+Both ESP32s now have tablet-controlled SiK/Wi-Fi synthetic diagnostics and a persistent latest report. UM980s were disconnected. The Wi-Fi pair passed 117/117 packets each direction; neither local SiK UART identity probe replied, and the SiK handshake attempt was cancelled without passing. Power/LEDs/grounds are user-confirmed; crossed wiring and connector numbering remain under investigation. Radio spacing is about 10 cm, so no range qualification is claimed. See [test evidence](../tests/2026-09-12-transport-test-kit/README.md) and [no-PC field workflow](transport-field-test.md).
+
+The final report-display persistence fix was flashed and restart-verified on Unit A. Unit B disappeared from USB/Wi-Fi during the final upload and needs that update on reconnection.
+
+**Resolved later in the same session:** after the user swapped TX/RX, both radios returned their SiK identity. Unit B reconnected and its final firmware upload passed hash verification. The ESP32 SiK pair then passed a 30-second simultaneous 1000 framed bytes/second test: 117/117 packets in each direction with zero errors, duplicates or reordering and both persistent peer reports. This qualifies only the approximately 10 cm bench setup. Tablet range tests and production RTCM integration remain pending. Implementation paused at 8% remaining of the five-hour allowance; changes and evidence were prepared for repository backup.

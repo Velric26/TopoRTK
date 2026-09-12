@@ -21,6 +21,8 @@ char cached[survey::max_snapshot]={};
 survey::Control control;
 bool initialized=false;
 bool card_ready=false;
+SemaphoreHandle_t engine_gate=nullptr;
+bool diagnostic_locked=false,operation_active=true;
 uint32_t cached_ms=0;
 class CheckedStore:public survey::JournalStore {
  public: CheckedStore():JournalStore("/sdcard/TOPO-RTK/SURVEY"){}
@@ -37,6 +39,7 @@ void worker(void *) {
   xSemaphoreTake(sd_mutex,portMAX_DELAY);engine.recover();xSemaphoreGive(sd_mutex);
   auto *request=new Request;
   for(;;){
+    xSemaphoreTake(engine_gate,portMAX_DELAY);
     survey::Fix fix;portENTER_CRITICAL(&guard);fix=current;portEXIT_CRITICAL(&guard);fix.now=millis();
     xSemaphoreTake(sd_mutex,portMAX_DELAY);
     if(xQueueReceive(commands,request,0)==pdTRUE)engine.command(request->json,fix);
@@ -47,8 +50,9 @@ void worker(void *) {
       portENTER_CRITICAL(&guard);if(ticket==read_ticket){std::memcpy(read_result,response.c_str(),response.size()+1);deliver=true;}portEXIT_CRITICAL(&guard);if(deliver)xSemaphoreGive(read_done);}
     xSemaphoreGive(sd_mutex);
     const std::string state=engine.snapshot(fix);
+    operation_active=engine.operation_active();
     portENTER_CRITICAL(&guard);std::memcpy(cached,state.c_str(),state.size()+1);cached_ms=millis();portEXIT_CRITICAL(&guard);
-    vTaskDelay(pdMS_TO_TICKS(50));
+    xSemaphoreGive(engine_gate);vTaskDelay(pdMS_TO_TICKS(50));
   }
 }
 }
@@ -58,15 +62,16 @@ void survey_begin(bool storage_ready) {
   if(psramFound())heap_caps_malloc_extmem_enable(1024);
   card_ready=storage_ready;
   read_result=new(std::nothrow) char[survey::max_read];read_mutex=xSemaphoreCreateMutex();read_done=xSemaphoreCreateBinary();
-  sd_mutex=xSemaphoreCreateMutex();commands=xQueueCreate(2,sizeof(Request));base_commands=xQueueCreate(1,sizeof(survey::BaseRequest));
-  if(!sd_mutex||!commands||!base_commands||!read_result||!read_mutex||!read_done){Serial.println("SURVEY: task allocation failed");return;}
+  sd_mutex=xSemaphoreCreateMutex();engine_gate=xSemaphoreCreateMutex();commands=xQueueCreate(2,sizeof(Request));base_commands=xQueueCreate(1,sizeof(survey::BaseRequest));
+  if(!sd_mutex||!engine_gate||!commands||!base_commands||!read_result||!read_mutex||!read_done){Serial.println("SURVEY: task allocation failed");return;}
   survey_revoke_control();
   initialized=xTaskCreate(worker,"survey",16384,nullptr,1,nullptr)==pdPASS;
   Serial.println(initialized?"SURVEY: jobs service started":"SURVEY: task creation failed");
 }
 void survey_update(const survey::Fix &fix){portENTER_CRITICAL(&guard);current=fix;portEXIT_CRITICAL(&guard);}
 bool survey_queue(const char *command){if(!initialized||!command||std::strlen(command)>survey::max_request)return false;
-  auto *r=new Request;std::strcpy(r->json,command);const bool ok=xQueueSend(commands,r,0)==pdTRUE;delete r;return ok;}
+  if(xSemaphoreTake(engine_gate,pdMS_TO_TICKS(100))!=pdTRUE)return false;
+  auto *r=new Request;std::strcpy(r->json,command);const bool ok=!diagnostic_locked&&xQueueSend(commands,r,0)==pdTRUE;delete r;xSemaphoreGive(engine_gate);return ok;}
 bool survey_snapshot(char *out,size_t cap){portENTER_CRITICAL(&guard);const size_t n=std::strlen(cached);const bool ok=n&&n<cap&&millis()-cached_ms<2000;
   if(ok)std::memcpy(out,cached,n+1);portEXIT_CRITICAL(&guard);return ok;}
 bool survey_take_base(survey::BaseRequest &r){return base_commands && xQueueReceive(base_commands,&r,0)==pdTRUE;}
@@ -90,3 +95,9 @@ int survey_claim(const char *pin,const char *client,char *token,size_t capacity)
 bool survey_authorized(const char *token,bool renew){const uint32_t now=millis();portENTER_CRITICAL(&guard);
   const bool ok=control.authorized(token,now,renew);portEXIT_CRITICAL(&guard);return ok;}
 void survey_release(const char *token){portENTER_CRITICAL(&guard);control.release(token,millis());portEXIT_CRITICAL(&guard);}
+bool survey_diagnostic_acquire(){
+  if(!initialized||xSemaphoreTake(engine_gate,0)!=pdTRUE)return false;
+  bool ok=!diagnostic_locked&&!operation_active&&!uxQueueMessagesWaiting(commands)&&!uxQueueMessagesWaiting(base_commands);
+  if(ok)diagnostic_locked=true;xSemaphoreGive(engine_gate);return ok;
+}
+void survey_diagnostic_release(){if(engine_gate&&xSemaphoreTake(engine_gate,portMAX_DELAY)==pdTRUE){diagnostic_locked=false;xSemaphoreGive(engine_gate);}}

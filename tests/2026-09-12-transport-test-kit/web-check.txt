@@ -1,0 +1,2 @@
+PASS: live Unit A diagnostics page contains controls; JavaScript syntax; repeated reads retain last report; unauthenticated mutation rejected with 401.
+Visual tablet operation remains pending.

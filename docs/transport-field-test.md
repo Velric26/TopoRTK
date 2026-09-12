@@ -1,0 +1,37 @@
+# Standalone instrument link test
+
+Updated 2026-09-12. Field hardware: two ESP32 instruments, their SiK radios and antennas, normal power supplies, and a tablet browser. **No PC is needed in the field.** The UM980 receivers are not needed for synthetic link testing. See [electronics architecture](electronics-architecture.md) for wiring and power.
+
+## Tablet workflow
+
+1. Keep both radio antennas connected before applying power. Confirm crossed UART wiring and common ground. Current SiK UART is 57600 baud; this page does not change radio settings.
+2. Open **Link test** from each instrument's status or Survey page (`/diagnostics`). Access each instrument's own page while both are reachable. Take control; the Base retains its existing control PIN, while Rover uses latest-request takeover.
+3. Optionally press **Check radio wiring** on each page after confirming preparation. This briefly sends local SiK `+++`, `ATI`, and `ATO`, without saving or changing settings. A SiK identity reply confirms bidirectional local UART communication. No reply does not by itself prove swapped wires: check power, ground, baud, connector orientation and crossed TX/RX.
+4. Enter the same fresh six-digit **test code** on both instruments. This is a session identifier, not a password. Match link, direction, duration and rate. Start with 30 seconds, 1000 framed bytes/second and both directions on the bench. One instrument must be Base and the other Rover.
+5. Confirm preparation and arm each instrument. Both wait up to two minutes for matching peer settings, then start after a short countdown. Tests last 30, 60, 120 or 300 seconds, followed by five seconds to drain packets. Choose 300 seconds when moving apart during a range test. For a test wholly at a fixed location, arm both instruments there within the two-minute window.
+6. The tablet may disconnect: generation, checking and completion run on the ESP32s. Survey writes and role/configuration changes are blocked while a diagnostic or local UART probe is active. An active occupation, queued survey operation or receiver profile operation prevents arming. A queued response is not proof of arming; check the displayed state.
+7. Reconnect and download the JSON report. Each instrument retains its latest completed/interrupted result in NVS across restart. Only one result per instrument is retained, so download before another run. A restart during a test is recorded as interrupted, never passed.
+
+Control leases expire after 120 seconds without authenticated activity. Take control again if cancellation is rejected. The bounded test still ends without tablet intervention. Local USB console commands exist only for development/bench verification; they are not required for the field workflow.
+
+## Results and acceptance
+
+A pair passes only after both instruments complete all expected sends/receives, with zero corrupt data, duplicates or reordered packets, and exchange matching peer summaries. Missing peer results mean **not passed**, even if the local direction delivered every packet. Result exchange repeats for 60 seconds after completion; if the link is still unavailable, download each instrument's report separately after returning. There is no later automatic merging or indefinite radio retry.
+
+The report includes run code, role, transport, duration, framed data rate, expected and actual counts, errors, duplicates, reordering, longest gap between valid received packets, local/pair pass and peer counters. The gap is an interarrival measure, not synchronized one-way latency, RTT, correction age, or initial/tail outage duration. Parser errors include discarded serial bytes and invalid frames; they are not an RF bit-error rate. Record distance, antenna orientation/height, supply, terrain, obstacles and saved radio configuration alongside the downloaded report; the test does not measure those automatically.
+
+Repeat Base-to-Rover, Rover-to-Base and both directions at each useful distance. Start with 1000 framed bytes/second, then qualify the actual expected RTCM load and bursts; available presets are 200, 1000 and 3000 per transmitting instrument. Control frames add overhead. Failed synthetic delivery blocks link qualification but does not establish that a radio is damaged. After synthetic acceptance, real RTCM continuity, correction freshness, RTK recovery and independent check points must still be tested.
+
+## Implementation and scope
+
+- SiK uses hardware UART2: ESP32 GPIO17 TX to radio RX; GPIO18 RX from radio TX, 57600 8N1. RX/TX buffers are bounded. Synthetic frames are never forwarded to UM980.
+- Wi-Fi uses UDP 22346 and the peer discovered by the existing instrument Wi-Fi exchange. It tests the instrument-to-instrument network, not tablet range. Production RTCM remains on UDP 22345. For router mode, both stations and the router form the tested path; Direct Link tests the direct instrument network.
+- Each fixed 256-byte packet carries version, session, role, settings, sequence/counters, deterministic payload and CRC32. A 4096-bit bitmap tracks unique data packets; maximum configured send count is 3515. Hello/result frames repeat, while test data are not retransmitted, so losses remain visible.
+- The standalone SiK diagnostic is implemented; a production SiK RTCM/status bridge and radio power-setting UI are still pending. Current UART probing only identifies the local radio.
+- BLE remains future work. ESP32-S3 supports BLE, not Classic SPP. A BLE GATT adapter needs explicit fragmentation, backpressure and session handling before it can join this test engine. [Espressif support matrix](https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/api-guides/bt-architecture/overview.html).
+
+## Development verification
+
+The pure C++ engine test is [diagnostic_core_test.cpp](../tests/2026-09-12-transport-test-kit/diagnostic_core_test.cpp). It covers a clean pair, packet loss/corruption, CRC reference vector, timer wrap, cancellation, peer timeout and invalid/reused configuration. Build with a C++17 compiler and include `firmware/um980-display-demo/src`.
+
+Build/upload records and hardware snapshots are in [the dated test record](../tests/2026-09-12-transport-test-kit/README.md). PC USB was used to flash and trigger bench checks; the instruments themselves generate/check packets and save their reports. Field acceptance requires the tablet workflow and the intended field supplies and spacing.

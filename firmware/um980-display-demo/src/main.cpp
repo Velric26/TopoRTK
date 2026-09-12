@@ -18,6 +18,7 @@
 #include "web_http.h"
 #include "rover_ap.h"
 #include "survey_service.h"
+#include "link_diagnostic.h"
 #include "wifi_credentials.h"
 
 #ifndef TOPORTK_DISPLAY_ROTATION
@@ -243,7 +244,7 @@ bool unit_profile_applied = false;
 bool version_ok = false;
 char rx_line[512] = {};
 size_t rx_length = 0;
-char usb_line[64] = {};
+char usb_line[256] = {};
 size_t usb_length = 0;
 char receiver_role[8] = "UNKNOWN";
 char last_displayed_fix_label[20] = {};
@@ -614,6 +615,7 @@ void start_wifi() {
 }
 
 bool select_config(const DeviceConfig &requested) {
+  if(diagnostic_busy())return false;
   if (profile_running) return false;
   if (!save_config(requested)) return false;
   const bool role_changed = requested.role != device_config.role;
@@ -713,6 +715,8 @@ void receive_wifi_packets() {
       wifi_last_peer_ms = millis();
       ++wifi_rx_packets;
     } else if (!is_base() && packet.type == network::kTestPacket) {
+      wifi_peer = wifi_udp.remoteIP();
+      wifi_peer_known = true;
       wifi_peer_rssi_dbm = WiFi.RSSI();
       wifi_last_peer_ms = millis();
       ++wifi_rx_packets;
@@ -1254,6 +1258,7 @@ bool fresh_rover_corrections(uint32_t now) {
 }
 
 bool system_ready(uint32_t now) {
+  if(diagnostic_busy())return false;
   const bool uart_active = byte_count > 0 && now - last_rx_ms < 3000;
   return uart_active && version_ok && unit_profile_applied &&
          correction_link_connected(now) && gps_required_fix() &&
@@ -2454,6 +2459,8 @@ void print_console_help() {
 }
 
 void handle_usb_command(const char *command) {
+  if(std::strcmp(command,"diag?")==0){char data[4096];if(diagnostic_snapshot(data,sizeof(data)))Serial.println(data);return;}
+  if(std::strncmp(command,"diag ",5)==0){Serial.println(diagnostic_request(command+5)?"DIAG QUEUED":"DIAG REJECTED");return;}
   Serial.print("CONSOLE> ");
   Serial.println(command);
 
@@ -2625,6 +2632,7 @@ void setup() {
   start_wifi();
   setup_sd_logging();
   survey_begin(sd_ready && sd_test_passed);
+  diagnostic_begin();
   Serial.println("BOOT COMPLETE");
 }
 
@@ -2647,7 +2655,7 @@ void service_survey() {
   }
   const uint32_t now=millis();survey::Fix f;f.now=now;f.rover=!is_base();
   f.unit=board::kUnitLabel;f.boot_id=web_boot_id();f.reset_reason=esp_reset_reason();f.free_heap=ESP.getFreeHeap();f.min_heap=ESP.getMinFreeHeap();f.free_psram=ESP.getFreePsram();
-  f.profile_ok=unit_profile_applied&&!profile_failed;f.base_apply_pending=profile_running;f.base_apply_failed=base_settings_failed||profile_failed;f.base_revision=base_settings.revision;
+  f.profile_ok=unit_profile_applied&&!profile_failed&&!diagnostic_busy();f.base_apply_pending=profile_running;f.base_apply_failed=base_settings_failed||profile_failed;f.base_revision=base_settings.revision;
   f.base_attempt_revision=base_attempt_revision;f.base_fixed=base_settings.fixed;f.base_setting={base_settings.latitude,base_settings.longitude,base_settings.height};
   f.position=latest_horizontal_accuracy.position;f.position_valid=latest_horizontal_accuracy.position_valid;
   f.received=latest_horizontal_accuracy.received_ms;f.epoch=latest_horizontal_accuracy.epoch;
@@ -2668,6 +2676,7 @@ void loop() {
   service_gnss_startup();
   service_profile();
   service_wifi();
+  diagnostic_service(millis(),!is_base(),wifi_peer_known?wifi_peer:IPAddress(),profile_running);
   service_survey();
   service_swipe_navigation();
   service_brightness();

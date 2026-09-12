@@ -128,6 +128,8 @@ These are starting points, not validated final settings.
 
 ### Communications
 
+Current wiring and radio-control scope are consolidated in [electronics architecture](docs/electronics-architecture.md). The [reusable transport field test](docs/transport-field-test.md) runs synthetic SiK/Wi-Fi tests on the two ESP32s, with tablet arming, paired counters and a persistent downloadable report. The production SiK RTCM bridge and BLE adapter remain future work.
+
 | Link | Initial purpose |
 |---|---|
 | UM980 UART | Configuration, NMEA/proprietary status, RTCM, and raw observations |
@@ -361,3 +363,7 @@ UI 0.7 simplifies Jobs/Setup/Collect/Points with phone navigation, four expandab
 ### 2026-09-11 Rover control takeover
 
 UI 0.8 removes the Rover web PIN: the latest accepted takeover becomes the only controller and invalidates the previous bearer. Base PIN protection remains. Both ESP32 application flashes are hash-verified; native/browser and real two-browser takeover checks passed with no survey records or receiver commands changed. The user confirmed that only the ESP32 boards are connected, so this is interface/storage validation, not GNSS/field qualification. See [validation](tests/2026-09-11-rover-takeover/README.md) and [control/Wi-Fi behavior](docs/survey-workflow.md).
+
+### 2026-09-12 standalone link diagnostic checkpoint
+
+Tablet-controlled ESP32 Wi-Fi/SiK diagnostics, latest-report persistence and electronics/field-test documentation are implemented. Both units flashed with hash verification. Wi-Fi and, after correcting reversed TX/RX, SiK each passed 117/117 synthetic packets in both directions at 1000 framed bytes/second for 30 seconds. UM980s were disconnected. SiK antennas were about 10 cm apart: no range or survey qualification is claimed. Continue with tablet-operated field tests and production SiK RTCM integration; BLE remains deferred. Implementation paused at 92% used of the five-hour allowance per the owner's limit. See tests/2026-09-12-transport-test-kit/README.md for evidence and remaining work.

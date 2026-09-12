@@ -47,6 +47,7 @@ class Engine {
   void tick(const Fix &fix);
   std::string snapshot(const Fix &fix);
   std::string read(const char *request,const Fix &fix);
+  bool operation_active()const{return collecting_||!pending_base_id_.empty();}
  private:
   struct Receipt { std::string id,state,message; uint32_t payload_crc=0;unsigned payload_format=1;int line_index=-1; };
   Store &store_; Receiver &receiver_;

@@ -4,6 +4,8 @@
 
 ## Devices
 
+See the [consolidated electronics architecture](../electronics-architecture.md) for Base/Rover signal paths, UART pin assignments, power branches and implementation status.
+
 | Device | Role | Documentation | Validation |
 |---|---|---|---|
 | Waveshare ESP32-S3-Touch-LCD-3.5 | Controller, display, touch, logging, and communications | [Board documentation](waveshare-esp32-s3-touch-lcd-3.5/README.md) | Both displays and TTL2 links passed; Unit A touch passed; per-unit A/B firmware builds validated by 2026-09-06 |

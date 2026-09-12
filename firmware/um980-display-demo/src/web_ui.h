@@ -30,7 +30,7 @@ details{border-top:1px solid var(--line);border-bottom:1px solid var(--line)}sum
 <main>
 <div class="connection"><span><i id="live-dot" class="dot" data-live="false" aria-hidden="true"></i><strong id="connection" role="status">Connecting to Rover…</strong></span><span id="updated">Waiting for first update</span></div>
 <p class="sub" style="margin:0 0 16px">Instrument Wi-Fi works without Internet. Choose “Stay connected” if Android asks.</p>
-<p style="margin:0 0 20px"><a href="/survey" class="survey-link">Open survey jobs →</a></p>
+<p style="margin:0 0 20px"><a href="/survey" class="survey-link">Open survey jobs →</a> · <a href="/diagnostics">Link test</a></p>
 <section id="readiness" class="readiness" data-ready="false" aria-labelledby="ready-title"><div><p class="eyebrow">Instrument readiness</p><h1 id="ready-title">CONNECTING</h1></div><div class="local-time"><strong id="local-time">TIME WAIT</strong><small>Local · UTC−6</small></div></section>
 <div class="metrics">
 <section class="metric"><h2>Correction link</h2><div class="value" id="link">—</div><p class="sub" id="link-sub">Waiting for instrument</p></section>

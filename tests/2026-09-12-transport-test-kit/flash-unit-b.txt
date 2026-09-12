@@ -1,0 +1,134 @@
+Processing unit_b (platform: espressif32@7.0.1; board: esp32-s3-devkitc-1; framework: arduino)
+--------------------------------------------------------------------------------
+Verbose mode can be enabled via `-v, --verbose` option
+CONFIGURATION: https://docs.platformio.org/page/boards/espressif32/esp32-s3-devkitc-1.html
+PLATFORM: Espressif 32 (7.0.1) > Espressif ESP32-S3-DevKitC-1-N8 (8 MB QD, No PSRAM)
+HARDWARE: ESP32S3 240MHz, 320KB RAM, 16MB Flash
+DEBUG: Current (esp-builtin) On-board (esp-builtin) External (cmsis-dap, esp-bridge, esp-prog, iot-bus-jtag, jlink, minimodule, olimex-arm-usb-ocd, olimex-arm-usb-ocd-h, olimex-arm-usb-tiny-h, olimex-jtag-tiny, tumpa)
+PACKAGES: 
+ - framework-arduinoespressif32 @ 3.20017.241212+sha.dcc1105b 
+ - tool-esptoolpy @ 2.41100.0 (4.11.0) 
+ - tool-mkfatfs @ 2.0.1 
+ - tool-mklittlefs @ 1.203.210628 (2.3) 
+ - tool-mkspiffs @ 2.230.0 (2.30) 
+ - toolchain-riscv32-esp @ 8.4.0+2021r2-patch5 
+ - toolchain-xtensa-esp32s3 @ 8.4.0+2021r2-patch5
+LDF: Library Dependency Finder -> https://bit.ly/configure-pio-ldf
+LDF Modes: Finder ~ chain, Compatibility ~ soft
+Found 36 compatible libraries
+Scanning dependencies...
+Dependency Graph
+|-- GFX Library for Arduino @ 1.5.5
+|-- TCA9554 @ 0.1.2
+|-- ArduinoJson @ 6.21.5
+|-- Preferences @ 2.0.0
+|-- WiFi @ 2.0.0
+|-- FS @ 2.0.0
+|-- SD_MMC @ 2.0.0
+|-- Wire @ 2.0.0
+Building in release mode
+Compiling .pio\build\unit_b\src\web_http.cpp.o
+Linking .pio\build\unit_b\firmware.elf
+Retrieving maximum program size .pio\build\unit_b\firmware.elf
+Checking size .pio\build\unit_b\firmware.elf
+Advanced Memory Usage is available via "PlatformIO Home > Project Inspect"
+RAM:   [===       ]  26.0% (used 85044 bytes from 327680 bytes)
+Flash: [==        ]  17.5% (used 1143789 bytes from 6553600 bytes)
+Building .pio\build\unit_b\firmware.bin
+esptool.py v4.11.0
+Creating esp32s3 image...
+Merged 2 ELF sections
+Successfully created esp32s3 image.
+Configuring upload protocol...
+AVAILABLE: cmsis-dap, esp-bridge, esp-builtin, esp-prog, espota, esptool, iot-bus-jtag, jlink, minimodule, olimex-arm-usb-ocd, olimex-arm-usb-ocd-h, olimex-arm-usb-tiny-h, olimex-jtag-tiny, tumpa
+CURRENT: upload_protocol = esptool
+Looking for upload port...
+Using manually specified: COM10
+Uploading .pio\build\unit_b\firmware.bin
+esptool.py v4.11.0
+Serial port COM10
+Connecting...
+Chip is ESP32-S3 (QFN56) (revision v0.2)
+Features: WiFi, BLE, Embedded PSRAM 8MB (AP_3v3)
+Crystal is 40MHz
+USB mode: USB-Serial/JTAG
+MAC: 44:1b:f6:85:16:70
+Uploading stub...
+Running stub...
+Stub running...
+Changing baud rate to 460800
+Changed.
+Configuring flash size...
+Flash will be erased from 0x00000000 to 0x00003fff...
+Flash will be erased from 0x00008000 to 0x00008fff...
+Flash will be erased from 0x0000e000 to 0x0000ffff...
+Flash will be erased from 0x00010000 to 0x00127fff...
+SHA digest in image updated
+Compressed 15104 bytes to 10429...
+Writing at 0x00000000... (100 %)
+Wrote 15104 bytes (10429 compressed) at 0x00000000 in 0.1 seconds (effective 838.1 kbit/s)...
+Hash of data verified.
+Compressed 3072 bytes to 146...
+Writing at 0x00008000... (100 %)
+Wrote 3072 bytes (146 compressed) at 0x00008000 in 0.0 seconds (effective 922.2 kbit/s)...
+Hash of data verified.
+Compressed 8192 bytes to 47...
+Writing at 0x0000e000... (100 %)
+Wrote 8192 bytes (47 compressed) at 0x0000e000 in 0.0 seconds (effective 1358.8 kbit/s)...
+Hash of data verified.
+Compressed 1144160 bytes to 708106...
+Writing at 0x00010000... (2 %)
+Writing at 0x0001a3dc... (4 %)
+Writing at 0x0002812d... (6 %)
+Writing at 0x0003486e... (9 %)
+Writing at 0x00040158... (11 %)
+Writing at 0x0004b64c... (13 %)
+Writing at 0x00055098... (15 %)
+Writing at 0x0005a45a... (18 %)
+Writing at 0x0005f998... (20 %)
+Writing at 0x00065824... (22 %)
+Writing at 0x0006b34e... (25 %)
+Writing at 0x00071089... (27 %)
+Writing at 0x00076ba6... (29 %)
+Writing at 0x0007c915... (31 %)
+Writing at 0x00081e5a... (34 %)
+Writing at 0x000877d9... (36 %)
+Writing at 0x0008c827... (38 %)
+Writing at 0x00091a2d... (40 %)
+Writing at 0x00096cf2... (43 %)
+Writing at 0x0009bc5a... (45 %)
+Writing at 0x000a0b00... (47 %)
+Writing at 0x000a5af3... (50 %)
+Writing at 0x000aa9c4... (52 %)
+Writing at 0x000afdff... (54 %)
+Writing at 0x000b4e18... (56 %)
+Writing at 0x000ba189... (59 %)
+Writing at 0x000bfa25... (61 %)
+Writing at 0x000c4e58... (63 %)
+Writing at 0x000c9ca0... (65 %)
+Writing at 0x000ced7a... (68 %)
+Writing at 0x000d3e7c... (70 %)
+Writing at 0x000d9227... (72 %)
+Writing at 0x000de6df... (75 %)
+Writing at 0x000e4485... (77 %)
+Writing at 0x000e9716... (79 %)
+Writing at 0x000ef425... (81 %)
+Writing at 0x000f4988... (84 %)
+Writing at 0x000fd878... (86 %)
+Writing at 0x001044b2... (88 %)
+Writing at 0x0010b746... (90 %)
+Writing at 0x00115084... (93 %)
+Writing at 0x0011a6b7... (95 %)
+Writing at 0x0012013a... (97 %)
+Writing at 0x00125dfd... (100 %)
+Wrote 1144160 bytes (708106 compressed) at 0x00010000 in 6.2 seconds (effective 1474.1 kbit/s)...
+Hash of data verified.
+
+Leaving...
+Hard resetting via RTS pin...
+========================= [SUCCESS] Took 19.84 seconds =========================
+
+Environment    Status    Duration
+-------------  --------  ------------
+unit_b         SUCCESS   00:00:19.844
+========================= 1 succeeded in 00:00:19.844 =========================
