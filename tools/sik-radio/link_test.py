@@ -70,6 +70,7 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--rate", type=int, default=3000, help="Aggregate offered bytes/second")
     parser.add_argument("--frames", type=int, default=200)
+    parser.add_argument("--baud", type=int, choices=[115200, 57600], default=115200)
     args = parser.parse_args()
     if args.output.exists() or len(set(args.ports)) != 2:
         parser.error("Require new output file and two distinct ports")
@@ -80,7 +81,7 @@ def main():
         backup = json.loads((args.identity_backup / (name + ".json")).read_text(encoding="utf-8"))
         if name not in inventory or inventory[name].hwid != backup["usb"]["hwid"]:
             raise RuntimeError(f"{name}: USB identity differs from backup")
-    result = {"utc": dt.datetime.now(dt.timezone.utc).isoformat(), "serial_baud": 115200,
+    result = {"utc": dt.datetime.now(dt.timezone.utc).isoformat(), "serial_baud": args.baud,
               "frame_bytes": 272, "frames_per_active_direction": args.frames,
               "status": "running", "phases": []}
     args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -89,7 +90,7 @@ def main():
     save()
     try:
         with ExitStack() as stack:
-            ports = [stack.enter_context(serial.Serial(name, 115200, timeout=0,
+            ports = [stack.enter_context(serial.Serial(name, args.baud, timeout=0,
                      write_timeout=2, rtscts=False, xonxoff=False, dsrdtr=False)) for name in args.ports]
             time.sleep(10)  # Allow the already configured radios to establish their link.
             for port in ports:

@@ -220,6 +220,7 @@ No accuracy claim is accepted solely because the receiver reports `FIXED`.
 ### Phase 2 — Radio RTK
 
 - [x] Back up both SiK USB configurations; save transparent framing and low bench power; verify complete settings after software restart (2026-09-11).
+- Current radio UART setting: **57600 baud** on both, saved/restart-verified. Repeats at approximately 60 cm failed at both 115200 and 57600; cause remains unresolved. GNSS COM2 baud is unchanged.
 - [ ] Resolve USB binary-transfer byte loss and pass both directions before integrating RTCM; see [bench evidence](tests/2026-09-11-sik-radio-configuration/README.md).
 - [ ] Insert the SiK pair at low power on the bench.
 - [ ] Compare transmitted and received correction streams.

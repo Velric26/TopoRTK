@@ -49,16 +49,18 @@ def snapshot(port):
     return {"responses": responses, "parameters": params}
 
 
-def apply_bench(port, data, backup, destination):
-    """Only lower bench power and turn off MAVLink; preserve all other parameters."""
+def apply_bench(port, data, backup, destination, target_baud=None):
+    """Apply the bench profile or change only serial baud, preserving other parameters."""
     if data["usb"] != backup["usb"] or data["parameters"] != backup["parameters"]:
         raise RuntimeError("Device identity or settings changed since backup; take a new snapshot")
     for key in ("ATI", "ATI2", "ATI3", "ATI4"):
         if data["responses"][key] != backup["responses"][key]:
             raise RuntimeError("Radio identity differs from backup")
     expected = {key: dict(value) for key, value in data["parameters"].items()}
-    baseline = {"SERIAL_SPEED": 115, "AIR_SPEED": 64, "ECC": 0, "RTSCTS": 0,
+    baseline = {"SERIAL_SPEED": {115200: 115, 57600: 57}[port.baudrate], "AIR_SPEED": 64, "ECC": 0, "RTSCTS": 0,
                 "MAX_WINDOW": 131}
+    if target_baud is not None:
+        baseline.update({"MAVLINK": 0, "TXPOWER": 1})
     if any(expected.get(key, {}).get("value") != value for key, value in baseline.items()):
         raise RuntimeError("Baseline differs from reviewed bench profile; review before changing")
     data["commands"] = []
@@ -68,7 +70,9 @@ def apply_bench(port, data, backup, destination):
         destination.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 
     journal()
-    for key, value in {"TXPOWER": 1, "MAVLINK": 0}.items():
+    changes = ({"SERIAL_SPEED": {115200: 115, 57600: 57}[target_baud]}
+               if target_baud is not None else {"TXPOWER": 1, "MAVLINK": 0})
+    for key, value in changes.items():
         item = expected[key]
         response = command(port, f"ATS{item['register']}={value}")
         data["commands"].append({"command": f"ATS{item['register']}={value}", "response": response})
@@ -85,6 +89,9 @@ def apply_bench(port, data, backup, destination):
         if value == "AT&W" and "OK" not in response.splitlines():
             raise RuntimeError("Saving settings was not acknowledged")
     time.sleep(2)
+    if target_baud is not None:
+        port.baudrate = target_baud
+        data["host_baud_after_restart"] = target_baud
     enter(port)
     after = snapshot(port)
     data["after_restart"] = after
@@ -97,11 +104,17 @@ def apply_bench(port, data, backup, destination):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("operation", choices=["snapshot", "apply-bench"])
+    parser.add_argument("operation", choices=["snapshot", "apply-bench", "set-baud"])
     parser.add_argument("--ports", nargs=2, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--backup", type=Path)
+    parser.add_argument("--baud", type=int, choices=[115200, 57600], default=115200)
+    parser.add_argument("--target-baud", type=int, choices=[115200, 57600])
     args = parser.parse_args()
+    if args.operation == "set-baud" and (args.target_baud is None or args.target_baud == args.baud):
+        parser.error("set-baud requires a different --target-baud")
+    if args.operation != "set-baud" and args.target_baud is not None:
+        parser.error("--target-baud requires set-baud")
     args.output.mkdir(parents=True, exist_ok=True)
     inventory = {p.device: {"description": p.description, "hwid": p.hwid,
                            "serial_number": p.serial_number} for p in list_ports.comports()}
@@ -111,9 +124,9 @@ def main():
     for name in args.ports:
         if (args.output / (name + ".json")).exists():
             raise RuntimeError("Output already exists; choose a new output directory")
-        if args.operation == "apply-bench":
+        if args.operation != "snapshot":
             if args.backup is None:
-                parser.error("apply-bench requires --backup")
+                parser.error("Setting changes require --backup")
             backups[name] = json.loads((args.backup / (name + ".json")).read_text(encoding="utf-8"))
             if backups[name]["usb"] != inventory.get(name):
                 raise RuntimeError(f"{name}: USB identity differs from backup")
@@ -127,16 +140,16 @@ def main():
             raise RuntimeError(f"Refusing to overwrite {destination}")
         if name not in inventory:
             raise RuntimeError(f"{name} is absent")
-        with serial.Serial(name, 115200, timeout=0.05, write_timeout=2,
+        with serial.Serial(name, args.baud, timeout=0.05, write_timeout=2,
                            rtscts=False, xonxoff=False, dsrdtr=False) as port:
             entered = False
             try:
                 enter(port)
                 entered = True
                 data = {"utc": dt.datetime.now(dt.timezone.utc).isoformat(), "port": name,
-                        "usb": inventory[name], "host_baud": 115200, **snapshot(port)}
-                if args.operation == "apply-bench":
-                    data = apply_bench(port, data, backups[name], destination)
+                        "usb": inventory[name], "host_baud": args.baud, **snapshot(port)}
+                if args.operation != "snapshot":
+                    data = apply_bench(port, data, backups[name], destination, args.target_baud)
                 else:
                     destination.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
                 print(json.dumps({"port": name, "record": str(destination),

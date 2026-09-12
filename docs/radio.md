@@ -30,7 +30,7 @@ Both report `RFD SiK 2.0 on HM-TRP`. USB identities: COM14 `DU0EUNGIA`, COM15 `D
 
 | Parameter | Before, both | Saved/read back, both | Decision |
 |---|---:|---:|---|
-| SERIAL_SPEED | 115 | 115 | Preserve owner's 115200 baud; host 8-N-1 |
+| SERIAL_SPEED | 115 | 57 | Now 57600 baud, 8-N-1, for the loss diagnostic; GNSS COM2 baud is unchanged |
 | AIR_SPEED | 64 | 64 | Initial 64 kbps air rate |
 | NETID | 25 | 25 | Keep the matching pair ID; no claim of local uniqueness or security |
 | TXPOWER | 11 | 1 | Lower bench power |
@@ -45,7 +45,7 @@ Both report `RFD SiK 2.0 on HM-TRP`. USB identities: COM14 `DU0EUNGIA`, COM15 `D
 | RTSCTS | 0 | 0 | No hardware flow control |
 | MAX_WINDOW | 131 | 131 | Preserve initial transmit window |
 
-Only TXPOWER and MAVLINK were changed. Both acknowledged `AT&W`; complete parameter readback after `ATZ` matched the intended values, including all unchanged settings. This tests a software restart, not physical power removal. Firmware and FORMAT were not changed. Saved settings, raw command responses and rollback instructions are in the dated record.
+Initially only TXPOWER and MAVLINK were changed. After repeat failures at approximately 60 cm separation, SERIAL_SPEED was changed from 115 to 57 on both radios and save/restart readback passed; the radio USB/UART speed is now **57600 baud**. All RF parameters were preserved. Both acknowledged `AT&W`; complete parameter readback after `ATZ` matched the intended values, including all unchanged settings. This tests a software restart, not physical power removal. Firmware and FORMAT were not changed. Saved settings, raw command responses and rollback instructions are in the dated record.
 
 Holybro specifies a +10 dB amplifier offset for the selected 1 W hardware: TXPOWER 1 corresponds to about 12.5 mW output, versus about 125 mW at the previous value 11. These are manufacturer figures, not measured RF power. [Holybro power table](https://docs.holybro.com/radio/sik-telemetry-radio-v3/rf-transmission-power-setting-for-1w-variants).
 
@@ -55,7 +55,7 @@ Once the SiK pair passes its correction-stream validation, it becomes the prefer
 
 ## RTCM Capacity
 
-USB binary acceptance is **not yet passed**: the first 3000 bytes/second transfer lost data. At 1000 bytes/second, the two separate single-direction tests passed, but simultaneous 500 bytes/second in each direction lost isolated bytes. Keep the saved low-power profile for diagnosis; do not treat these results as field readiness or as an established reliable throughput ceiling. The owner reported antenna spacing below one metre; a separated repeat is pending. See the [exact results and counters](../tests/2026-09-11-sik-radio-configuration/README.md).
+USB binary acceptance is **not yet passed**: the first 3000 bytes/second transfer lost data. At 1000 bytes/second, the two separate single-direction tests passed, but simultaneous 500 bytes/second in each direction lost isolated bytes. Keep the saved low-power profile for diagnosis; do not treat these results as field readiness or as an established reliable throughput ceiling. The owner reported antenna spacing below one metre; the owner could obtain only approximately 60 cm separation, where the 115200-baud repeat also failed; the 57600-baud comparison also failed. Both radios remain at 57600 baud for the next diagnostic session. See the [exact results and counters](../tests/2026-09-11-sik-radio-configuration/README.md).
 
 Record UART rate, air rate, measured RTCM throughput, correction age, packet loss, and recovery behavior.
 
