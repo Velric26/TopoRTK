@@ -1,0 +1,20 @@
+{
+  "workflow": "PASS",
+  "started": "Both actual browser pages, no USB",
+  "transport": "sik",
+  "seconds": 120,
+  "rate": 1000,
+  "mode": 2,
+  "offline_seconds": 20,
+  "pair_pass": false,
+  "checks": [
+    "both no-PIN takeover",
+    "browser arm",
+    "both browsers disconnected",
+    "controls locked offline",
+    "downloaded matching final reports",
+    "reports saved",
+    "no survey records, role or boot changes",
+    "no page errors"
+  ]
+}

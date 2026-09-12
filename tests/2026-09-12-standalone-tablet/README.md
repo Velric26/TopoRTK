@@ -27,3 +27,7 @@ Earlier `flash-takeover.txt` records a missing COM10 before upload; `final-flash
 Bench work is complete. Neither diagnostic is armed/running; browser controls were released. See `stopped-state.json`. No six-metre test has been started. Move the unit whose screen says Rover about six metres away, keeping Base stationary (either direction is electrically viable). The moved ESP32 must keep its own supported power supply; powering only its SiK radio is insufficient. Keep both SiK antennas connected. Confirm that the moved ESP32 screen remains on and its browser is reachable before arming a new matching two-minute test. A standalone USB power bank can power the ESP32 without a PC data connection.
 
 Distance/power qualification and an actual Android phone/tablet field check remain pending. Browser tests at tablet viewport sizes do not establish physical Android behavior or RTK/survey accuracy.
+
+## Six-metre follow-up completed
+
+Run 913205 used the same two-minute, 1000 framed B/s bidirectional settings. Both ends received 465/468 packets (three missing each); pair acceptance failed. Browser disconnect/reconnect, saved downloads and no survey/role/boot changes passed. Six metres did not eliminate loss. See [full comparison](sik-913205/README.md). No test remains armed/running. Investigation paused with five-hour allowance at 3% remaining; results committed and pushed.
