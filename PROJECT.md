@@ -375,3 +375,9 @@ Both Base and Rover now use latest-request takeover without a web PIN; the old B
 Final bench checkpoint: both units updated and takeover/browser workflows verified; the 30 cm, two-minute SiK run received 467/468 at Base and 465/468 at Rover and did not pass RF acceptance. Reports saved/downloaded; no tests remain armed or running. Work stopped for the owner to move an independently powered unit six metres away.
 
 Six-metre follow-up (run 913205): both ends received 465/468 packets during the same two-minute bidirectional SiK test, so increased separation did not eliminate loss. Saved browser downloads and independent instrument execution passed; RF delivery remains unqualified. No test remains armed/running. See tests/2026-09-12-standalone-tablet/sik-913205/README.md. Work paused at 3% remaining of the five-hour allowance after documenting this result.
+
+## Loss-tolerant transport plan
+
+The approved [transport development plan](docs/loss-tolerant-transport.md) separates fresh RTCM delivery, acknowledged duplicate-safe commands and periodic status. Start with a fixed-memory core and on-instrument fault self-tests, then paired synthetic SiK transport, then real UM980 COM2/RTK validation. Keep both UM980s disconnected through the synthetic stages.
+
+Stage 1 is now implemented and flashed to both ESP32s: all 22 local transport fault checks pass, saved reports survive restart, and earlier RF results remain separate. Use `/diagnostics` → **Run local fault checks**. The core uses fixed memory; its full ESP32 test workspace is 4744 bytes. Next is paired synthetic SiK integration; no real correction forwarding is connected and UM980s remain disconnected. Evidence: `tests/2026-09-12-correction-transport/README.md`.

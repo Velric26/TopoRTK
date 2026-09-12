@@ -51,7 +51,7 @@ details{border-top:1px solid var(--line);border-bottom:1px solid var(--line)}sum
 <p>Open <strong id="phone-url">the address on the Rover screen</strong> in Chrome. This network provides instrument access only. Keep the connection when Android reports no Internet.</p>
 <p id="phone-network">The Rover screen shows the current network name and address.</p>
 </div></details>
-</main><footer><span>Local connection · Updates every second</span><span>Read-only · UI 0.9.1</span></footer>
+</main><footer><span>Local connection · Updates every second</span><span>Read-only · UI 0.10.0</span></footer>
 </div>
 <script>
 'use strict';

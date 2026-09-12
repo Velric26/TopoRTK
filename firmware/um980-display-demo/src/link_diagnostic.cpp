@@ -1,5 +1,7 @@
 #include "link_diagnostic.h"
 #include "link_diagnostic_core.h"
+#include "correction_transport_selftest.h"
+#include <esp_system.h>
 #include "survey_service.h"
 #include <ArduinoJson.h>
 #include <HardwareSerial.h>
@@ -16,8 +18,9 @@ uint8_t transport=0; // 0 Wi-Fi; 1 SiK
 uint8_t rx[sizeof(linktest::Packet)]={};size_t rx_size=0;
 QueueHandle_t queue=nullptr;portMUX_TYPE guard=portMUX_INITIALIZER_UNLOCKED;
 char cached[4096]="{\"state\":\"idle\"}",last_report[3072]="null";
+char self_report[1536]="null",self_error[80]={};
 bool cached_busy=false;uint32_t published=0;
-struct Request{bool cancel=false,probe=false;linktest::Config config;uint8_t transport=0;};
+struct Request{bool cancel=false,probe=false,selftest=false;linktest::Config config;uint8_t transport=0;};
 const char *state_name(){switch(engine.state){case linktest::Armed:return "armed";case linktest::Running:return "running";case linktest::Done:return "done";case linktest::Failed:return "failed";default:return "idle";}}
 void result_json(JsonObject d){
   d["run"]=engine.config.run;d["state"]=state_name();d["reason"]=engine.reason;
@@ -38,15 +41,35 @@ void save_result(){
   }
   persisted_peer=engine.peer_result;
 }
+void run_transport_selftest(){
+  static correction::TestWorkspace workspace;
+  self_error[0]=0;Preferences p;
+  if(!p.begin("linkdiag",false)){std::strcpy(self_error,"Cannot open report storage; self-test not started.");return;}
+  const uint32_t run=esp_random()|1u;
+  DynamicJsonDocument result(2048);result["kind"]="local_transport_fault_suite";result["suite_version"]=correction::suite_version;
+  result["run"]=run;result["state"]="interrupted";result["passed"]=false;
+  serializeJson(result,self_report,sizeof(self_report));
+  if(!p.putString("selftest",self_report)||p.getString("selftest")!=self_report){p.end();std::strcpy(self_error,"Cannot save restart marker; self-test not started.");return;}
+  const uint32_t started=micros();const auto report=correction::run_selftest(workspace);
+  result["duration_us"]=micros()-started;result["state"]=report.passed()?"passed":"failed";result["passed"]=report.passed();
+  result["checks"]=report.checks;result["failed_mask"]=report.failed_mask;result["workspace_bytes"]=sizeof(workspace);
+  result["sender_bytes"]=sizeof(correction::Sender);result["stream_bytes"]=sizeof(correction::Stream);
+  result["qualification"]="Local algorithm test only; no radio or GNSS traffic";result["saved"]=true;
+  serializeJson(result,self_report,sizeof(self_report));
+  if(!p.putString("selftest",self_report)||p.getString("selftest")!=self_report){result["saved"]=false;serializeJson(result,self_report,sizeof(self_report));std::strcpy(self_error,"Self-test finished, but its report was not confirmed saved.");}
+  p.end();
+}
 void publish(uint32_t now){
-  DynamicJsonDocument d(4096);result_json(d.to<JsonObject>());d["busy"]=engine.busy();d["persisted"]=persisted;
+  DynamicJsonDocument d(6144);result_json(d.to<JsonObject>());d["busy"]=engine.busy();d["persisted"]=persisted;
   d["radio_probe"]=probe_phase?"checking":probe_size?(std::strstr(probe_text,"SiK ")?"UART responds as SiK":"No SiK identity response; check power, baud and crossed TX/RX"):"not checked";
   d["radio_probe_response"]=probe_text;
   if(probe_phase){d["state"]="probing";d["busy"]=true;}
   d["uptime_ms"]=now;d["remaining_seconds"]=engine.state==linktest::Running&&int32_t(now-engine.start_at)>=0?std::max(0,int(engine.config.seconds)-(int(now-engine.start_at)/1000)):0;
   DynamicJsonDocument previous(3072);if(!deserializeJson(previous,static_cast<const char*>(last_report)))d["last_report"]=previous.as<JsonVariant>();
+  DynamicJsonDocument self(2048);if(!deserializeJson(self,static_cast<const char*>(self_report)))d["self_test"]=self.as<JsonVariant>();
+  d["self_test_error"]=self_error;
   static char out[4096];size_t n=serializeJson(d,out,sizeof(out));
-  if(n<sizeof(out)-1){portENTER_CRITICAL(&guard);std::memcpy(cached,out,n+1);cached_busy=engine.busy()||probe_phase;portEXIT_CRITICAL(&guard);}published=now;
+  if(!d.overflowed()&&n<sizeof(out)-1){portENTER_CRITICAL(&guard);std::memcpy(cached,out,n+1);cached_busy=engine.busy()||probe_phase;portEXIT_CRITICAL(&guard);}published=now;
 }
 }
 void diagnostic_begin(){
@@ -55,13 +78,15 @@ void diagnostic_begin(){
     if(p.getBool("active",false)){std::snprintf(last_report,sizeof(last_report),"{\"state\":\"interrupted\",\"run\":%lu,\"pair_pass\":false,\"reason\":\"instrument_restarted_during_test\"}",static_cast<unsigned long>(p.getUInt("run",0)));p.putString("report",last_report);p.putBool("active",false);}
     else {String saved=p.getString("report","null");if(saved.length()<sizeof(last_report))std::strcpy(last_report,saved.c_str());}p.end();
   }
+  Preferences saved;
+  if(saved.begin("linkdiag",true)){String value=saved.getString("selftest","null");if(value.length()<sizeof(self_report))std::strcpy(self_report,value.c_str());saved.end();}
   publish(millis());
 }
 bool diagnostic_busy(){portENTER_CRITICAL(&guard);bool value=cached_busy;portEXIT_CRITICAL(&guard);return value;}
 bool diagnostic_snapshot(char *out,size_t capacity){portENTER_CRITICAL(&guard);size_t n=std::strlen(cached);bool ok=n<capacity;if(ok)std::memcpy(out,cached,n+1);portEXIT_CRITICAL(&guard);return ok;}
 bool diagnostic_request(const char *json){
   StaticJsonDocument<512>d;if(!queue||deserializeJson(d,json))return false;Request r;
-  const char *op=d["op"]|"";if(!std::strcmp(op,"probe")){r.probe=true;return d["confirm"]==true&&xQueueSend(queue,&r,0)==pdTRUE;}r.cancel=std::strcmp(op,"cancel")==0;
+  const char *op=d["op"]|"";if(!std::strcmp(op,"selftest")){r.selftest=true;return d["confirm"]==true&&xQueueSend(queue,&r,0)==pdTRUE;}if(!std::strcmp(op,"probe")){r.probe=true;return d["confirm"]==true&&xQueueSend(queue,&r,0)==pdTRUE;}r.cancel=std::strcmp(op,"cancel")==0;
   if(!r.cancel&&std::strcmp(op,"arm"))return false;
   if(!d["run"].is<uint32_t>())return false;r.config.run=d["run"];
   if(!r.cancel){if(!d["seconds"].is<uint16_t>()||!d["rate"].is<uint16_t>()||!d["mode"].is<uint8_t>())return false;
@@ -74,7 +99,11 @@ bool diagnostic_request(const char *json){
 void diagnostic_service(uint32_t now,bool rover,IPAddress peer,bool profile_busy){
   Request request;
   if(queue&&xQueueReceive(queue,&request,0)==pdTRUE){
-    if(request.probe){if(!engine.busy()&&!probe_phase&&!profile_busy&&survey_diagnostic_acquire()){locked=true;start_radio();while(radio.available())radio.read();probe_size=0;probe_text[0]=0;probe_start=now;probe_phase=1;}}
+    if(request.selftest){
+      if(engine.busy()||probe_phase||profile_busy||!survey_diagnostic_acquire())std::strcpy(self_error,"Finish the current test, survey or receiver operation first.");
+      else {run_transport_selftest();survey_diagnostic_release();}
+    }
+    else if(request.probe){if(!engine.busy()&&!probe_phase&&!profile_busy&&survey_diagnostic_acquire()){locked=true;start_radio();while(radio.available())radio.read();probe_size=0;probe_text[0]=0;probe_start=now;probe_phase=1;}}
     else if(request.cancel){if(engine.busy()&&request.config.run==engine.config.run)engine.abort(now,"cancelled");}
     else if(!engine.busy()&&!probe_phase&&request.config.run!=engine.config.run){
       if(profile_busy||!survey_diagnostic_acquire()){engine.reason="finish_survey_or_receiver_operation_first";}

@@ -3,7 +3,7 @@
 #include <cstdint>
 
 constexpr size_t kWebStatusCapacity = 2048;
-constexpr const char *kWebUiVersion = "0.9.1";
+constexpr const char *kWebUiVersion = "0.10.0";
 
 // Called from the main loop. The HTTP task only reads a copied snapshot.
 void publish_web_status(const char *json, size_t length, uint32_t now, bool rover);

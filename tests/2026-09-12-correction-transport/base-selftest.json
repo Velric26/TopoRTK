@@ -1,0 +1,15 @@
+{
+  "kind": "local_transport_fault_suite",
+  "suite_version": 1,
+  "run": 2611796231,
+  "state": "passed",
+  "passed": true,
+  "duration_us": 51045,
+  "checks": 22,
+  "failed_mask": 0,
+  "workspace_bytes": 4744,
+  "sender_bytes": 1060,
+  "stream_bytes": 1356,
+  "qualification": "Local algorithm test only; no radio or GNSS traffic",
+  "saved": true
+}

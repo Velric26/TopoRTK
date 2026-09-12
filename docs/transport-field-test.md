@@ -41,3 +41,9 @@ Build/upload records and hardware snapshots are in [the dated test record](../te
 Set both instruments to Direct Link on their touchscreens before leaving the router. Base then hosts the existing `TopoRTK-Link-Test` network; its test-network key is `TopoRTK-test-2026`, and its browser is at `http://192.168.4.1/diagnostics`. This is separate from the Rover's phone hotspot and its eight-digit key with a period. Use the Rover's displayed phone address for its page (normally `http://192.168.8.1/diagnostics`). Connect the tablet to each network in turn to arm its instrument, within the two-minute peer wait. With SiK selected, generation/checking continues over SiK even when the tablet or the inter-instrument Wi-Fi link is absent. Base and Rover roles must differ. Do not change role or network during a running diagnostic.
 
 The automated browser bench check uses the actual instrument pages at phone/tablet viewport sizes. It is not evidence of a physical Android tablet test or Direct Link field acceptance; those remain operator checks.
+
+## Loss-tolerant transport plan
+
+The approved [transport development plan](loss-tolerant-transport.md) separates fresh RTCM delivery, acknowledged duplicate-safe commands and periodic status. Start with a fixed-memory core and on-instrument fault self-tests, then paired synthetic SiK transport, then real UM980 COM2/RTK validation. Keep both UM980s disconnected through the synthetic stages.
+
+Stage 1 is now implemented and flashed to both ESP32s: all 22 local transport fault checks pass, saved reports survive restart, and earlier RF results remain separate. Use `/diagnostics` → **Run local fault checks**. The core uses fixed memory; its full ESP32 test workspace is 4744 bytes. Next is paired synthetic SiK integration; no real correction forwarding is connected and UM980s remain disconnected. Evidence: `tests/2026-09-12-correction-transport/README.md`.

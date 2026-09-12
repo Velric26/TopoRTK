@@ -25,6 +25,7 @@ const char kDiagnosticPage[] PROGMEM=R"HTML(<!doctype html>
 <p id="reportStatus" class="muted"></p><button id="download" disabled>Download report</button>
 <p class="muted">Only the latest report is kept on each instrument. Download it before the next test. Missing peer results mean the pair has not passed.</p>
 <p class="muted">Synthetic delivery test, not RTK accuracy. SiK: 57,600 baud. Bluetooth is not available yet.</p></section>
+<section><h2>4. Local transport fault checks</h2><p>Check loss handling, corruption rejection, reassembly and recovery on this ESP32. No data is sent to the radios or receiver. This does not qualify the radio link.</p><button id="selftest" disabled>Run local fault checks</button><button id="selfdownload" class="secondary" disabled>Download self-test report</button><p id="selfresult" aria-live="polite">No local test report loaded.</p></section>
 </main><script>
 'use strict';
 const $=id=>document.getElementById(id);
@@ -39,10 +40,10 @@ function report(){return state?.state==='idle'?state.last_report:state?.run?stat
 function controls(){
   $('control').disabled=!online||requesting||owner;$('release').disabled=!online||requesting||!owner;
   $('controlState').textContent=owner&&online?'You control this instrument':'View only · Take control to start or cancel';
-  for(const id of ['arm','probe'])$(id).disabled=!online||!owner||requesting||state?.busy;
+  for(const id of ['arm','probe','selftest'])$(id).disabled=!online||!owner||requesting||state?.busy;
   $('cancel').disabled=!online||!owner||requesting||!['armed','running'].includes(state?.state);
   for(const id of ['run','transport','mode','seconds','rate','confirm'])$(id).disabled=!!state?.busy||requesting;
-  $('download').disabled=!report();
+  $('download').disabled=!report();$('selfdownload').disabled=!state?.self_test;
 }
 async function api(url,data){
   const abort=new AbortController(),timer=setTimeout(()=>abort.abort(),3500);
@@ -68,6 +69,8 @@ $('arm').onclick=()=>action(async()=>{
 });
 $('probe').onclick=()=>action(async()=>{if(!$('confirm').checked)throw Error('Confirm preparation first.');await api('/api/v1/diagnostic',{op:'probe',confirm:true});message('Wiring check queued. Watch the radio result below.')});
 $('cancel').onclick=()=>action(async()=>{await api('/api/v1/diagnostic',{op:'cancel',run:state.run});message('Cancellation requested. Check for “Test stopped” below.')});
+$('selftest').onclick=()=>action(async()=>{await api('/api/v1/diagnostic',{op:'selftest',confirm:true});message('Local fault checks requested. See their separate report below.')});
+$('selfdownload').onclick=()=>{const d=state?.self_test;if(!d)return;const a=document.createElement('a'),u=URL.createObjectURL(new Blob([JSON.stringify(d,null,2)],{type:'application/json'}));a.href=u;a.download='TopoRTK-local-transport-'+d.run+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)};
 $('download').onclick=()=>{
   const d=report();if(!d)return;
   const a=document.createElement('a'),u=URL.createObjectURL(new Blob([JSON.stringify(d,null,2)],{type:'application/json'}));
@@ -77,6 +80,7 @@ const descriptions={waiting_for_other_instrument:'Waiting for the other instrume
 function render(){
   $('connection').textContent='Connected · '+(state.role==='BASE'?'Base':'Rover');
   $('wiring').textContent='Radio wiring: '+state.radio_probe;
+  const self=state.self_test;$('selfresult').textContent=state.self_test_error||(self?(self.passed?'PASS · '+self.checks+' local checks passed.':self.state==='interrupted'?'Interrupted · The instrument restarted before the self-test finished.':'Local self-test failed.')+(self.checks?' Memory '+self.workspace_bytes+' bytes; '+(self.duration_us/1000).toFixed(1)+' ms.':'')+' Radio qualification is separate.':'No local test has run.');
   const d=report(),saved=state.state==='idle'&&!!d;
   if(($('message').textContent.startsWith('Arm request queued')&&state.run===Number($('run').value)&&['armed','running','done','failed'].includes(state.state))||($('message').textContent.startsWith('Wiring check queued')&&state.state==='probing')||($('message').textContent.startsWith('Cancellation requested')&&state.state==='failed'))message('');
   $('reportTitle').textContent=saved?'3. Saved report':'3. Results';
