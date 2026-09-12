@@ -2006,8 +2006,7 @@ void draw_phone_connection(uint32_t now) {
     draw_fitted_text(12,113,296,is_base()?"OPEN BASE WEB FOR RECEIVER SETUP":state,1,is_base()||rover_ap_ready() ? colors::kAccent : colors::kWarning);
     draw_fitted_text(12,142,296,"PASSWORD (HIDDEN AFTER 30 SECONDS)",1,colors::kMuted);
     draw_fitted_text(12,164,296,reveal && !is_base() ? rover_ap_password() : "****.****",2,RGB565_WHITE);
-    char control[64];if(is_base())std::snprintf(control,sizeof(control),"WEB CONTROL PIN: %s",reveal?survey_control_pin():"******");
-    else std::snprintf(control,sizeof(control),"WEB: TAP TAKE CONTROL (NO PIN)");
+    const char *control="WEB: TAP TAKE CONTROL (NO PIN)";
     draw_fitted_text(12,192,296,rover_ap_error()[0]?rover_ap_error():control,1,colors::kWarning);
   }
   draw_button(7,layout::kShowKey,reveal ? "HIDE KEY" : "SHOW KEY","",reveal);
@@ -2022,7 +2021,7 @@ void draw_phone_connection(uint32_t now) {
     draw_fitted_text(12,330,296,"Choose 'Stay connected' if Android",1,colors::kMuted);
     draw_fitted_text(12,348,296,"reports no Internet. This is normal.",1,colors::kMuted);
     draw_fitted_text(12,382,296,confirm ? "Replace key? Phones will disconnect." : "Open /survey for jobs and controls.",1,confirm ? colors::kWarning : colors::kMuted);
-    draw_fitted_text(12,402,296,confirm ? "Tap CONFIRM within 10s; leave to cancel." : "Use WEB CONTROL PIN to pair browser.",1,colors::kMuted);
+    draw_fitted_text(12,402,296,confirm ? "Tap CONFIRM within 10s; leave to cancel." : "Latest takeover controls this unit.",1,colors::kMuted);
   }
 }
 

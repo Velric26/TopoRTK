@@ -40,7 +40,7 @@ The user reported successful initial connection. Model/version and extended reco
 
 ### Survey workflow checkpoint (UI 0.3)
 
-The user requested the next four ranked features together. `/survey` now provides Jobs → Setup → Collect with PIN-based single-controller access, instrument-side storage, explicit WGS84 UTM/height/antenna/base configuration and quality-gated occupations. The Base serves its own paired receiver setup page. See [survey workflow, limits and validation](survey-workflow.md). The next ranked development item is full point review and an offline plot; field acceptance of this new workflow remains separate.
+The user requested the next four ranked features together. `/survey` now provides Jobs → Setup → Collect with single-controller access (now latest-request takeover on both roles, without a PIN), instrument-side storage, explicit WGS84 UTM/height/antenna/base configuration and quality-gated occupations. The Base serves its own receiver setup page with the same takeover rule. See [survey workflow, limits and validation](survey-workflow.md). The next ranked development item is full point review and an offline plot; field acceptance of this new workflow remains separate.
 
 The tablet is an interaction surface, not the authoritative datastore. The Rover SD card retains jobs, point records, configuration changes, errors, and exports. A browser reconnect or close must not discard an already accepted rover-side record.
 

@@ -1,0 +1,17 @@
+{
+  "workflow": "PASS",
+  "base_started": "USB bench console; Base PIN unavailable",
+  "rover_started": "real browser at 768x1024",
+  "offline_seconds": 45,
+  "download": "TopoRTK-link-913201-rover.json",
+  "pair_pass": false,
+  "checks": [
+    "Rover no PIN",
+    "authenticated browser arm",
+    "browser offline controls locked",
+    "test continued during browser disconnect",
+    "download matches active test",
+    "no receiver/survey writes or Rover reboot",
+    "no page errors"
+  ]
+}

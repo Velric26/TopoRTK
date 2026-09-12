@@ -77,7 +77,7 @@ void tests(const std::string &root){
     assert(read("{\"view\":\"points\",\"job\":\""+r.job+"\",\"offset\":0,\"at\":1}")["error"]=="job_changed_reload");
     unsigned cursor=0,total=0;MemoryStore restored;do{auto page=read("{\"view\":\"backup\",\"job\":\""+r.job+"\",\"offset\":"+std::to_string(cursor)+"}");assert(page["format"]=="TopoRTK job journal"&&page["records"].size()<=3);for(auto row:page["records"].as<JsonArray>()){std::string raw=row["json"];assert(crc32(raw)==row["crc32"].as<uint32_t>());assert(raw==r.store.records[row["sequence"]]);restored.records[++total]=raw;}cursor=page["next"]|0U;}while(cursor);
     assert(total==r.store.records.size());Engine reopened(restored,r.receiver);reopened.recover();auto recovered=decode(reopened.snapshot(r.fix));assert(recovered["storage_ready"]==true&&recovered["jobs"][0]["points"]==30);auto restoredPoint=decode(reopened.read(("{\"view\":\"point\",\"job\":\""+r.job+"\",\"point\":\"1000\"}").c_str(),r.fix));assert(restoredPoint["point"]["edit_revision"]==3&&restoredPoint["point"]["deleted"]==false);}
-  {Control c;char a[33]={},b[33]={};c.reset("123456");
+  {Control c;char a[33]={},b[33]={};c.reset();
     assert(c.takeover("bad",id(2).c_str(),1,a,33)==400);
     assert(c.takeover(id(1).c_str(),id(2).c_str(),1,a,32)==400);
     assert(c.takeover(id(1).c_str(),id(2).c_str(),1,a,33)==200);
@@ -90,13 +90,10 @@ void tests(const std::string &root){
     assert(!c.authorized(b,7,true)&&c.authorized(a,7,false));
     assert(!c.authorized(a,120006,false));
     assert(c.takeover(id(1).c_str(),id(6).c_str(),120007,b,33)==200);
-    c.reset("654321");assert(!c.authorized(b,120008,false));
-    // PIN failure throttling belongs only to Base pairing.
-    for(int n=0;n<5;++n)assert(c.claim("000000",id(1).c_str(),id(2).c_str(),120010+n,a,33)==403);
+    c.reset();assert(!c.authorized(b,120008,false));
     assert(c.takeover(id(1).c_str(),id(7).c_str(),120020,b,33)==200);
     c.release(b,120021);assert(!c.authorized(b,120022,false));
   }
-  {Control c;char token[33];assert(c.claim("",id(1).c_str(),id(2).c_str(),1,token,33)==400);c.reset("123456");for(int i=0;i<5;++i)assert(c.claim("000000",id(1).c_str(),id(2).c_str(),100+i,token,33)==403);assert(c.claim("123456",id(1).c_str(),id(2).c_str(),200,token,33)==429);assert(c.claim("123456",id(1).c_str(),id(2).c_str(),60100,token,33)==200);assert(c.authorized(token,60100,false));assert(c.claim("123456",id(3).c_str(),id(4).c_str(),60200,token,33)==409);assert(!c.authorized(id(4).c_str(),60300,true));assert(c.authorized(id(2).c_str(),100000,true));assert(c.authorized(id(2).c_str(),219999,false));assert(!c.authorized(id(2).c_str(),220000,false));assert(c.claim("123456",id(3).c_str(),id(4).c_str(),220001,token,33)==200);c.release(token,220002);assert(!c.authorized(token,220003,false));c.reset("654321");assert(c.claim("123456",id(3).c_str(),id(4).c_str(),220004,token,33)==403);}
   {Rig r;r.setup();const auto c=r.command("collect.start");r.send(c);assert(r.state()["collection"]["samples"]==1);r.engine.tick(r.fix);assert(r.state()["collection"]["samples"]==1);r.advance();r.advance();auto s=r.state();assert(s["jobs"][0]["points"]==1);assert(std::abs(s["last_point"]["ground_ellipsoidal_h_m"].as<double>()-2202)<1e-6);assert(s["last_point"]["base_control_verified"]==true);assert(s["last_point"]["configuration_revision"]==1);const auto count=r.store.records.size();r.send(c);assert(r.store.records.size()==count);r.engine.recover();r.send(c);assert(r.state()["operation"]["state"]=="completed");assert(r.state()["jobs"][0]["points"]==1);r.send(r.command("collect.start"));assert(r.state()["operation"]["state"]=="rejected");}
   {Rig r;r.setup();auto c=r.command("collect.start");r.send(c);r.engine.recover();r.send(c);assert(r.state()["operation"]["state"]=="interrupted");assert(r.state()["jobs"][0]["points"]==0);}
   for(int failure=0;failure<10;++failure){Rig r;r.setup();r.send(r.command("collect.start"));switch(failure){case 0:r.fix.fixed=false;break;case 1:r.fix.hacc=.04;break;case 2:r.fix.vacc=.06;break;case 3:r.fix.correction_age=3001;break;case 4:r.fix.station=8;break;case 5:r.fix.reference.x+=.01;break;case 6:r.fix.profile_ok=false;break;case 7:r.fix.position_valid=false;break;case 8:r.fix.now+=1501;break;case 9:r.fix.epoch-=1000;break;}r.engine.tick(r.fix);assert(r.state()["collection"]["active"]==false);assert(r.state()["jobs"][0]["points"]==0);assert(r.state()["operation"]["state"]=="rejected");}

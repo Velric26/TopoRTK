@@ -23,8 +23,8 @@ void result_json(JsonObject d){
   d["run"]=engine.config.run;d["state"]=state_name();d["reason"]=engine.reason;
   d["role"]=engine.node?"ROVER":"BASE";d["transport"]=transport?"sik":"wifi";
   d["seconds"]=engine.config.seconds;d["rate"]=engine.config.rate;d["mode"]=engine.config.mode;
-  d["expected_tx"]=linktest::planned(engine.config,engine.node);d["sent"]=engine.sent;
-  d["expected_rx"]=linktest::planned(engine.config,1-engine.node);d["received"]=engine.received;
+  d["expected_tx"]=engine.config.run?linktest::planned(engine.config,engine.node):0;d["sent"]=engine.sent;
+  d["expected_rx"]=engine.config.run?linktest::planned(engine.config,1-engine.node):0;d["received"]=engine.received;
   d["errors"]=engine.errors;d["duplicates"]=engine.duplicates;d["reordered"]=engine.reordered;d["max_gap_ms"]=engine.max_gap_ms;
   d["local_pass"]=engine.local_pass();d["peer_report_received"]=engine.peer_result;d["pair_pass"]=engine.pair_pass();
   if(engine.peer_result){auto peer=d.createNestedObject("peer");peer["sent"]=engine.peer.sent;peer["received"]=engine.peer.received;peer["errors"]=engine.peer.errors;peer["duplicates"]=engine.peer.duplicates;peer["reordered"]=engine.peer.reordered;peer["max_gap_ms"]=engine.peer.max_gap_ms;}

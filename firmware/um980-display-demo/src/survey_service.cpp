@@ -85,12 +85,10 @@ bool survey_read(const char *query,char *out,size_t capacity){
 }
 bool survey_sd_lock(){return !sd_mutex || xSemaphoreTake(sd_mutex,0)==pdTRUE;}
 void survey_sd_unlock(){if(sd_mutex)xSemaphoreGive(sd_mutex);}
-const char *survey_control_pin(){return control.pin();}
-void survey_revoke_control(){char next[7];std::snprintf(next,sizeof(next),"%06lu",static_cast<unsigned long>(esp_random()%1000000));
-  portENTER_CRITICAL(&guard);control.reset(next);portEXIT_CRITICAL(&guard);}
-int survey_claim(const char *pin,const char *client,char *token,size_t capacity){
+void survey_revoke_control(){portENTER_CRITICAL(&guard);control.reset();portEXIT_CRITICAL(&guard);}
+int survey_claim(const char *client,char *token,size_t capacity){
   const uint32_t now=millis();char candidate[33];random_hex(candidate);
-  portENTER_CRITICAL(&guard);int status=current.rover?control.takeover(client,candidate,now,token,capacity):control.claim(pin,client,candidate,now,token,capacity);portEXIT_CRITICAL(&guard);return status;
+  portENTER_CRITICAL(&guard);int status=control.takeover(client,candidate,now,token,capacity);portEXIT_CRITICAL(&guard);return status;
 }
 bool survey_authorized(const char *token,bool renew){const uint32_t now=millis();portENTER_CRITICAL(&guard);
   const bool ok=control.authorized(token,now,renew);portEXIT_CRITICAL(&guard);return ok;}

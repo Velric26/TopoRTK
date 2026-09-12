@@ -1,0 +1,3 @@
+PASS: line continuity, immutable vertices, gaps, deletion/code/setup breaks, restart, reference changes, uncertain writes and limits
+PASS: durable jobs, restart/dedup, cancellation, write uncertainty/faults, quality gates, antenna/geoid/units, base verification, ECEF/UTM, RTCM and real-file journal integrity
+PASS: 96 independent PROJ UTM examples, north/south/zone edges; worst difference 0.760 mm

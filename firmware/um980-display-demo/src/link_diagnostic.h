@@ -1,6 +1,7 @@
 #pragma once
-#include <Arduino.h>
-#include <IPAddress.h>
+#include <cstddef>
+#include <cstdint>
+class IPAddress;
 void diagnostic_begin();
 void diagnostic_service(uint32_t now,bool rover,IPAddress peer,bool profile_busy);
 bool diagnostic_busy();

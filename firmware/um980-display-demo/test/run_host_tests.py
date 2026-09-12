@@ -16,12 +16,17 @@ hardware = r'(Arduino|Arduino_GFX_Library|FS|Preferences|SD_MMC|TCA9554|WiFi|WiF
 source = re.sub(r'^#include <' + hardware + r'>\n', '', source, flags=re.M)
 generated = root / '.pio/host_firmware.cpp'
 stubs = '''
+bool host_diagnostic_busy=false;
+void diagnostic_begin() {}
+void diagnostic_service(uint32_t,bool,IPAddress,bool) {}
+bool diagnostic_busy() {return host_diagnostic_busy;}
+bool diagnostic_request(const char *) {return false;}
+bool diagnostic_snapshot(char *,size_t) {return false;}
 void survey_begin(bool) {}
 void survey_update(const survey::Fix &) {}
 bool survey_take_base(survey::BaseRequest &) {return false;}
 bool survey_sd_lock() {return true;}
 void survey_sd_unlock() {}
-const char *survey_control_pin() {return "123456";}
 void survey_revoke_control() {}
 '''
 generated.write_text('#include "host_hardware.h"\n' + source + stubs + '\n#include "firmware_cases.h"\n', encoding='utf-8')

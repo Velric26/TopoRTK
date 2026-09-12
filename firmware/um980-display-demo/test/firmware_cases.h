@@ -210,6 +210,13 @@ int main() {
   WiFi.station_ip = IPAddress(192,168,4,2);
   const auto saved_config = encode_config(device_config);
   const auto receiver_commands = gnss.output;
+  host_diagnostic_busy=true;
+  DeviceConfig blocked_config=device_config;
+  blocked_config.role=DeviceRole::kBase;
+  assert(!select_config(blocked_config));
+  assert(!system_ready(host_now));
+  assert(encode_config(device_config)==saved_config && gnss.output==receiver_commands);
+  host_diagnostic_busy=false;
   change_page(ScreenPage::kWifiDetails); tap(150,402);
   assert(current_page == ScreenPage::kPhone && phone_key_shown_ms == 0);
   tap(75,236); assert(phone_key_shown_ms);

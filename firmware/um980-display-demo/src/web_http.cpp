@@ -97,8 +97,8 @@ esp_err_t get_data(httpd_req_t *r){
 esp_err_t claim_control(httpd_req_t *r){
   if(!same_origin(r))return error(r,"403 Forbidden","{\"error\":\"origin_rejected\"}");
   std::string raw;DynamicJsonDocument d(1024);if(!body(r,raw)||deserializeJson(d,raw))return error(r,"400 Bad Request","{\"error\":\"invalid_request\"}");
-  char token[33]={};const int status=survey_claim(d["pin"]|"",d["client"]|"",token,sizeof(token));
-  if(status!=200)return error(r,status==429?"429 Too Many Requests":status==409?"409 Conflict":status==400?"400 Bad Request":"403 Forbidden",status==409?"{\"error\":\"another_controller_is_active\"}":"{\"error\":\"pairing_failed_or_rate_limited\"}");
+  char token[33]={};const int status=survey_claim(d["client"]|"",token,sizeof(token));
+  if(status!=200)return error(r,"400 Bad Request","{\"error\":\"invalid_takeover_request\"}");
   char response[96];std::snprintf(response,sizeof(response),"{\"token\":\"%s\",\"lease_seconds\":120}",token);return error(r,"200 OK",response);
 }
 esp_err_t post_command(httpd_req_t *r){
@@ -116,7 +116,12 @@ esp_err_t release_control(httpd_req_t *r){
 }
 
 esp_err_t get_diagnostic_page(httpd_req_t *r){headers(r);httpd_resp_set_type(r,"text/html; charset=utf-8");return httpd_resp_send(r,kDiagnosticPage,sizeof(kDiagnosticPage)-1);}
-esp_err_t get_diagnostic(httpd_req_t *r){char data[4096];if(!diagnostic_snapshot(data,sizeof(data)))return error(r,"503 Service Unavailable","{\"error\":\"diagnostic_unavailable\"}");return error(r,"200 OK",data);}
+esp_err_t get_diagnostic(httpd_req_t *r){
+  char data[4096];
+  if(!diagnostic_snapshot(data,sizeof(data)))return error(r,"503 Service Unavailable","{\"error\":\"diagnostic_unavailable\"}");
+  httpd_resp_set_hdr(r,"X-Controller",auth(r)?"true":"false");
+  return error(r,"200 OK",data);
+}
 esp_err_t post_diagnostic(httpd_req_t *r){
   if(!same_origin(r))return error(r,"403 Forbidden","{\"error\":\"origin_rejected\"}");
   if(!auth(r))return error(r,"401 Unauthorized","{\"error\":\"claim_control_first\"}");

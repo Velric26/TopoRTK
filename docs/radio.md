@@ -80,3 +80,9 @@ Both ESP32s now have tablet-controlled SiK/Wi-Fi synthetic diagnostics and a per
 The final report-display persistence fix was flashed and restart-verified on Unit A. Unit B disappeared from USB/Wi-Fi during the final upload and needs that update on reconnection.
 
 **Resolved later in the same session:** after the user swapped TX/RX, both radios returned their SiK identity. Unit B reconnected and its final firmware upload passed hash verification. The ESP32 SiK pair then passed a 30-second simultaneous 1000 framed bytes/second test: 117/117 packets in each direction with zero errors, duplicates or reordering and both persistent peer reports. This qualifies only the approximately 10 cm bench setup. Tablet range tests and production RTCM integration remain pending. Implementation paused at 8% remaining of the five-hour allowance; changes and evidence were prepared for repository backup.
+
+## Sustained test follow-up (2026-09-12)
+
+The later two-minute run exposed intermittent SiK loss despite the earlier 30-second pass: Base received 466/468 packets, Rover 463/468. Corrected TX/RX wiring is working, but sustained RF delivery is not yet qualified. Browser disconnection, reconnection and final report download worked. The attempted five-metre move produced no test result because the moved ESP32 web page became unreachable before arming. Both units were subsequently reconnected at approximately 30 cm for final firmware verification. See [follow-up evidence and remaining range test](../tests/2026-09-12-standalone-tablet/README.md). Both instrument roles now use no-PIN latest-request takeover.
+
+Final 30 cm baseline (run 913204): 120 seconds at 1000 framed B/s each way, Base 467/468 received and Rover 465/468. Both persistent reports were downloaded after browser disconnection/reconnection. RF pair remains unqualified. Both final firmwares are flashed and no test is armed/running; next is the owner-requested six-metre comparison.

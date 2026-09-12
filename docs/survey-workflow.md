@@ -1,19 +1,19 @@
-# Survey workflow — initial scope with UI 0.8 control update
+# Survey workflow — initial scope with shared takeover control
 
 This implements the initial scope of roadmap ranks **2–5**, requested together by the user: durable jobs, coordinate/height setup, base/antenna setup and stationary point collection. New jobs receive a Zapopan starter profile, but remain unconfigured until the operator reviews the values, enters the actual antenna measurements and control information, and explicitly saves the setup.
 
 ## Use
 
-1. Open the Rover's address and choose **Open survey jobs**, or open `/survey` directly. On the bench, Unit A is `http://192.168.100.20/survey`; on its phone AP use `http://192.168.8.1/survey` (check the touchscreen for the current address).
-2. On the Rover, expand **View only · Take control** and press **Take control**. No web PIN is required. The latest accepted takeover becomes the sole controller, replacing the previous browser. Joining the Rover hotspot still requires its eight-digit Wi-Fi password with a middle period.
+1. Open the Rover's address and choose **Open survey jobs**, or open `/survey` directly. At the 2026-09-12 checkpoint, Rover is Unit B at `http://192.168.100.19/survey`; on its phone AP use `http://192.168.8.1/survey` (check the touchscreen for the current address).
+2. On either instrument, expand **View only · Take control** and press **Take control**. No web PIN is required. The latest accepted takeover becomes the sole controller, replacing the previous browser. Joining the Rover hotspot still requires its eight-digit Wi-Fi password with a middle period.
 3. Create or open a job. Jobs, the active selection, configuration revisions and committed points live on Rover SD. Browser storage retains only the current pairing/request state.
 4. Complete **Setup**: review the Zapopan starter values, confirm the WGS84 source and epoch, enter both antenna reference measurements, identify the RTCM base/station, choose known control or explicitly accept a temporary base, and review the occupation/quality limits. Save only after the complete configuration is correct.
 5. In **Collect**, enter a unique point ID, optional code and description. Hold the pole still and level. The occupation must remain RTK FIXED and within all limits. A success message appears only after the point record is written, flushed and read back.
 6. The last committed point is shown with coordinates, ground height, configuration revision and control status. Full point review/plot and export are the next roadmap items; they are not included in this release.
 
-Multiple devices may view the instrument. Only the current controller may write; control expires after 120 seconds without an authenticated request. Every Rover takeover creates a new bearer token, including repeated requests with the same client ID. Old tokens immediately lose write access and cannot release the new controller. Polling/renewal does not take control back. Commands already accepted by the instrument continue, and the new controller can cancel an active occupation. Releasing control, rebooting, changing role/network or replacing the phone Wi-Fi key revokes the session. Base pairing retains the six-digit display PIN, five-incorrect-attempts-per-minute throttle and active-owner protection. Credentials are absent from status/USB/SD logs.
+Multiple devices may view the instrument. Only the current controller may write; control expires after 120 seconds without an authenticated request. Every accepted Base or Rover takeover creates a new bearer token, including repeated requests with the same client ID. Old tokens immediately lose write access and cannot release the new controller. Polling/renewal does not take control back. Commands already accepted by the instrument continue, and the new controller can cancel an active occupation. Releasing control, rebooting, changing role/network or replacing the phone Wi-Fi key revokes the session. Both roles use the same takeover rule; there is no display PIN, PIN-attempt throttle or previous-owner veto. Credentials are absent from status/USB/SD logs.
 
-The Base has its own `/survey` page (also its root page), reached through its existing network. Unit B's bench address is `http://192.168.100.19/survey`; addresses are DHCP and may change. Pair using **the Base's** display PIN. Applying fixed coordinates or temporary survey-in requires confirmation on this page and interrupts corrections while the profile is verified. The Rover job checks the received base reference; it does not remotely command the Base.
+The Base has its own `/survey` page (also its root page), reached through its existing network. At the 2026-09-12 checkpoint, Base is Unit A at `http://192.168.100.20/survey`; addresses are DHCP and roles may change. Press **Take control** on the Base page; no PIN is required. Applying fixed coordinates or temporary survey-in requires confirmation on this page and interrupts corrections while the profile is verified. The Rover job checks the received base reference; it does not remotely command the Base.
 
 ## Coordinates and antenna references
 
@@ -89,7 +89,7 @@ Prototype bounds: **16 jobs, 512 distinct durable command IDs and 1,024 journal 
 |---|---|
 | `GET /api/v1/status` | Existing read-only Rover dashboard; Base returns 409 |
 | `GET /api/v1/survey` | Jobs/current setup, collection/result, quality block, base reference and boot/memory diagnostics; `X-Controller` indicates current ownership |
-| `POST /api/v1/control` | Rover: latest takeover using `{client}`. Base: PIN-protected claim using `{pin, client}`. Returns a bearer token |
+| `POST /api/v1/control` | Both roles: latest takeover using `{client}`. Returns a new bearer token and invalidates the previous one |
 | `POST /api/v1/control/release` | Release the authenticated lease |
 | `POST /api/v1/command` | Typed, authenticated command; 202 means queued, not completed |
 

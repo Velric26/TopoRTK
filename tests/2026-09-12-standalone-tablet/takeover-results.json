@@ -1,0 +1,24 @@
+{
+  "results": [
+    {
+      "role": "BASE",
+      "result": "PASS"
+    },
+    {
+      "role": "ROVER",
+      "result": "PASS"
+    }
+  ],
+  "checks": [
+    "no PIN on either role",
+    "latest browser wins",
+    "same client rotates bearer",
+    "stale bearer rejected",
+    "stale release cannot revoke current owner",
+    "diagnostic owner header matches survey owner",
+    "foreign Origin / malformed client rejected",
+    "no jobs/role/boot changes",
+    "control released",
+    "no JavaScript errors"
+  ]
+}

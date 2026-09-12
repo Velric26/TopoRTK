@@ -16,6 +16,12 @@ Controls have visible keyboard focus and generous touch sizes. No animation is n
 Both units were flashed with hash verification and passed read-only browser checks. See [validation and screenshots](../tests/2026-09-11-gui-redesign/README.md). Actual phone/tablet keyboard behavior, sunlight readability and field occupations remain user/field acceptance work. This redesign does not change the [deferred Android responsibilities](esp32-android-feature-split.md).
 
 
-## UI 0.8 control update
+## Historical UI 0.8 control update
 
 The Rover now offers PIN-free **Take control** with latest-request ownership. The Base still displays its PIN field. The Rover touchscreen replaces the unused WEB CONTROL PIN line with a Take control instruction. The remaining GUI layout is unchanged. See [takeover validation](../tests/2026-09-11-rover-takeover/README.md).
+
+## Current control and diagnostic update (2026-09-12)
+
+Base and Rover now share PIN-free latest-request takeover. Survey and diagnostic pages remove the Base PIN field, and both touchscreen roles instruct the user to tap Take control. Survey quality gates and accepted-operation behavior are unchanged.
+
+The Link test page shows connection freshness, controller ownership, matched settings, current progress, packet counters and a clearly labelled restored report. Controls lock when disconnected/stale; polling renews only the current lease. Session storage retains the browser's client/token across reload. Downloads select the current run before any older saved result. A queued-request message clears when the requested state arrives. The layout is checked at 320/390/768/1280 px and 200% text, including lost connection, stale snapshots, report downloads and both roles. See [standalone workflow](transport-field-test.md).
