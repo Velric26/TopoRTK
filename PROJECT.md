@@ -53,7 +53,7 @@ Detailed screen layout, state logic, navigation, and brightness behavior belong 
 | Qty. | Component | Role | Current status |
 |---:|---|---|---|
 | 2 | Unicore UM980 RTK GNSS modules | RTK engine; one per instrument | Both passed USB and bidirectional TTL2; Unit A generated live base RTCM and Unit B reached `RTK FIXED` over Wi-Fi |
-| 1 pair | Holybro SiK Telemetry Radio, long-range 1 W, 915 MHz, open source | Base-to-rover RTCM transport | Selected; configuration, range, and legal use must be validated |
+| 1 pair | Holybro SiK Telemetry Radio, long-range 1 W, 915 MHz, open source | Base-to-rover RTCM transport | USB configuration backed up and saved/restart-verified; ESP32/RTCM integration, range, and legal use pending; see [radio record](docs/radio.md) |
 | 2 | Waveshare ESP32-S3 3.5-inch capacitive touch display boards, 320 x 480, Wi-Fi and Bluetooth 5 | Control, local UI, logging, and phone/tablet connectivity | Both displays, TTL2 links, automatic A/B profiles, and Wi-Fi RTCM bridge validated; touch hardware works but is not required for startup |
 | 2 | K700 full-band L1/L2/L5 BeiDou/GPS/GLONASS/Galileo survey GNSS antennas | Primary base and rover antennas | Validation on hold: purchased cable has the wrong antenna-side center-contact gender; exact connector must be verified before replacement |
 | 2 | GNSS HA-609 helix antennas | Compact prototypes and comparison testing | First two-unit open-sky Wi-Fi RTK test reached `RTK FIXED`; controlled accuracy and K700 comparison pending |
@@ -69,9 +69,9 @@ BASE                                             ROVER
 K700 or HA-609                                  K700 or HA-609
 GNSS antenna                                    GNSS antenna
       |                                               |
-    UM980 -- RTCM --> Holybro SiK ))) 915 MHz ((( Holybro SiK --> UM980
-      |                                               |
- Waveshare ESP32-S3                             Waveshare ESP32-S3
+    UM980                                           UM980
+      | COM2                                          | COM2
+ Waveshare ESP32-S3 -- SiK ))) 915 MHz ((( SiK -- Waveshare ESP32-S3
  local display + log                            local display + log
                                                       |
                                              local Wi-Fi/Bluetooth
@@ -87,7 +87,7 @@ GNSS antenna                                    GNSS antenna
 - **Smartphone/tablet:** main project, collection, stakeout, review, and export interface.
 - **BNO085:** experimental orientation input only until a complete calibration and accuracy-validation process exists.
 
-The initial design should route rover RTCM directly from the radio to a UM980 UART where practical. This keeps correction transport working if the ESP32-S3 interface restarts.
+The selected SiK integration now uses a separate ESP32 UART (TX GPIO17 / RX GPIO18) at each end and keeps UM980 COM2 on GPIO43/44. The owner has no camera and does not plan one, releasing the shared camera GPIO17/18 for this purpose. This avoids the suspect COM1 and supports later status/control traffic; unlike the earlier direct-receiver proposal, ESP32 restart will interrupt corrections. The bridge firmware, stream separation and transport-aware readiness checks remain unimplemented. See [radio wiring and configuration](docs/radio.md).
 
 Base and rover should use the same enclosure and electronics layout where practical. Their role should be selectable in software so either instrument can serve as base or rover.
 
@@ -219,6 +219,8 @@ No accuracy claim is accepted solely because the receiver reports `FIXED`.
 
 ### Phase 2 — Radio RTK
 
+- [x] Back up both SiK USB configurations; save transparent framing and low bench power; verify complete settings after software restart (2026-09-11).
+- [ ] Resolve USB binary-transfer byte loss and pass both directions before integrating RTCM; see [bench evidence](tests/2026-09-11-sik-radio-configuration/README.md).
 - [ ] Insert the SiK pair at low power on the bench.
 - [ ] Compare transmitted and received correction streams.
 - [ ] Measure latency, correction age, dropouts, recovery, and usable range.
@@ -279,7 +281,7 @@ For every test, save the configuration, reference coordinates, antenna setup, en
 | Two UM980 receivers for interchangeable base/rover instruments | Both passed USB and bidirectional TTL2; Unit A generated live RTCM as a temporary base and Unit B reached `RTK FIXED`; controlled base coordinates and accuracy remain unvalidated |
 | K700 antennas as primary survey antennas | Selected; validation on hold until the correct cable is obtained after exact connector identification |
 | HA-609 antennas for compact tests | Standalone acquisition and first two-unit `RTK FIXED` session passed; controlled accuracy and K700 comparison still required |
-| Holybro SiK 1 W 915 MHz correction link | Selected; throughput, range, interference, and compliance pending |
+| Holybro SiK 1 W 915 MHz correction link | Settings saved/restart-verified and backed up; USB binary tests found byte loss, so link acceptance, RTCM integration, range and compliance remain pending |
 | Waveshare ESP32-S3 touch boards as controllers/displays | Display, UART, automatic role/profile recovery, BESTNAV horizontal-accuracy parsing, Wi-Fi RTCM path, and SD mount/read-back validated on both units; structured logging is ready for a two-sided field session |
 | Android tablet/phone interface | Rover-hosted responsive browser UI over local Wi-Fi selected as the first implementation; local-router mode and Direct-Link fallback passed a two-unit hardware transport test, with last-mode power-cycle restoration still pending; BLE is secondary and an APK/native app is deferred until a demonstrated requirement justifies it |
 | BNO085 orientation/tilt experiments | Deferred until the basic level-pole RTK system is validated |

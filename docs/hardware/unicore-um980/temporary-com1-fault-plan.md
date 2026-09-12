@@ -43,7 +43,7 @@ Before continuing outdoor prototype measurements, verify COM2 command/response a
 
 The direct-radio plan uses COM1 for corrections and COM2 for the ESP32. The essential one-way correction path is **Base TXD1 -> Base radio -> Rover radio -> Rover RXD1**. A failed Rover TXD1 therefore does not by itself rule out that direct receive path. However, the suspect board's RXD1 and shared carrier circuitry have not been qualified, so **this is a possible later test, not the current approved wiring**. Radio logic levels and any required reverse traffic must also be checked.
 
-An alternative is a separate ESP32 UART for each SiK radio, with firmware forwarding RTCM between that UART and UM980 COM2. The existing Wi-Fi bridge does not mean the SiK UART bridge is implemented or validated. Neither alternative is being implemented by this documentation update.
+The subsequently selected approach is a separate ESP32 UART for each SiK radio, with firmware forwarding RTCM between that UART and UM980 COM2. TX GPIO17 / RX GPIO18 are selected with the camera socket unused. The radios have since been USB-configured and backed up; see the [radio checkpoint](../../radio.md). The existing Wi-Fi bridge does not mean the SiK UART bridge is implemented or validated. COM1 remains disconnected in this approach.
 
 ## Replacement and closeout
 

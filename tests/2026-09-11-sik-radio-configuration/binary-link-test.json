@@ -1,0 +1,39 @@
+{
+  "utc": "2026-09-12T01:41:27.756286+00:00",
+  "serial_baud": 115200,
+  "frame_bytes": 272,
+  "frames_per_active_direction": 200,
+  "status": "fail",
+  "phases": [
+    {
+      "name": "first_to_second",
+      "offered_bytes_per_second": {
+        "COM14": 3000,
+        "COM15": 0
+      },
+      "elapsed_seconds": 28.14,
+      "pass": false,
+      "directions": [
+        {
+          "receiver": "COM14",
+          "sent_frames": 0,
+          "expected_bytes": 0,
+          "received_bytes": 0,
+          "expected_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "received_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "exact_match": true
+        },
+        {
+          "receiver": "COM15",
+          "sent_frames": 200,
+          "expected_bytes": 54400,
+          "received_bytes": 53479,
+          "expected_sha256": "edca20d36f98d8c5f92e873effc80bc7850a21030f4b5fd3b73893fd6037a8ea",
+          "received_sha256": "3ca7418e5d6c9e531fce26a01f6a2e5386ad07f0ecb30999a5680757b1ce3d79",
+          "exact_match": false
+        }
+      ]
+    }
+  ],
+  "error": "Binary transfer failed: first_to_second"
+}

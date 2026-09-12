@@ -97,6 +97,7 @@ This allocation comes from the archived schematic and the official Arduino examp
 - Reserve GPIO43/44 as the first external UART candidate. Verify the UM980 carrier's TTL voltage; never connect true RS-232 levels directly.
 - GPIO7/8 may host the BNO085 only after checking addresses, pull-ups, cable length, and noise on the existing I2C bus.
 - Without a camera, some camera GPIOs may be reassigned, but release each deliberately in firmware and check boot-strapping and board connections.
+- On 2026-09-11 the owner confirmed no camera is installed or planned. SiK UART TX GPIO17 (J8 pin 16) / RX GPIO18 (J8 pin 18) are selected for both units; firmware routing and electrical/RTCM validation remain pending. See the [radio plan](../../radio.md).
 - Do not finalize GNSS/radio pins from the header image alone. Check the local schematic and validate one interface at a time.
 
 ## Archived Component Datasheets

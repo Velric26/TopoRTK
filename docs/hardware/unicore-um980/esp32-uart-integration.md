@@ -125,7 +125,7 @@ See the [test record](../../../tests/2026-09-04-um980-esp32-display/README.md).
 
 ## Field Hardware Direction
 
-For the finished base and rover, do not route the full system load through either development board. Use one protected, regulated 5 V supply with separate branches to the Waveshare, BDRTK-980, and SiK radio. Size it with margin for the 1 W radio's transmit peaks and all peripherals; 5 V at 2 A is a practical minimum design target, with 3 A preferred until measured consumption establishes a lower requirement.
+For the finished base and rover, do not route the full system load through either development board. Use the [current power architecture](../../power.md): separate regulated 5 V branches to the Waveshare and BDRTK-980, and a separate protected 3S battery branch to the selected Holybro 1 W radio's 7-28 V XT30 input. The radio is not a load on the ESP32 5 V rail. The provisional 5 V buck is rated 3 A; validate actual load, startup margin and thermal behavior.
 
 Add branch protection, bulk capacitance near the radio and GNSS carrier, and a deliberate USB power-isolation strategy. USB should be a diagnostic/data connection, not an accidental second power source.
 

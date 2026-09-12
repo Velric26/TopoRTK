@@ -8,7 +8,7 @@
 |---|---|---|---|
 | Waveshare ESP32-S3-Touch-LCD-3.5 | Controller, display, touch, logging, and communications | [Board documentation](waveshare-esp32-s3-touch-lcd-3.5/README.md) | Both displays and TTL2 links passed; Unit A touch passed; per-unit A/B firmware builds validated by 2026-09-06 |
 | Unicore UM980 on BDRTK-980 | Base and rover RTK engine | [Module, carrier, and connected receiver](unicore-um980/README.md) | Both passed USB/TTL2 and automatic A/B configuration; Wi-Fi RTCM produced rover `RTK FIXED`; BESTNAV horizontal-accuracy parsing passed |
-| Holybro SiK 1 W 915 MHz pair | RTCM correction link | [Radio documentation](../radio.md) | Configuration, wiring, range, and compliance pending |
+| Holybro SiK 1 W 915 MHz pair | RTCM correction link | [Radio documentation](../radio.md) | USB settings backed up and restart-verified; binary link acceptance, ESP32 wiring, range, and compliance pending |
 | K700 GNSS antenna | Primary survey antenna | [K700 hardware note](k700-gnss-antenna/README.md) | On hold: antenna-side cable center-contact gender mismatch |
 | HA-609 GNSS antenna | Compact comparison antenna | Planned | Battery-powered standalone GPS fix passed 2026-09-05; controlled comparison pending |
 | BNO085 | Experimental orientation/tilt input | Planned | Pending |

@@ -1,0 +1,103 @@
+{
+  "utc": "2026-09-12T01:44:00.524445+00:00",
+  "serial_baud": 115200,
+  "frame_bytes": 272,
+  "frames_per_active_direction": 50,
+  "status": "fail",
+  "phases": [
+    {
+      "name": "first_to_second",
+      "offered_bytes_per_second": {
+        "COM14": 1000,
+        "COM15": 0
+      },
+      "elapsed_seconds": 15.5,
+      "pass": true,
+      "directions": [
+        {
+          "receiver": "COM14",
+          "sent_frames": 0,
+          "expected_bytes": 0,
+          "received_bytes": 0,
+          "expected_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "received_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "exact_match": true,
+          "failed_capture": null
+        },
+        {
+          "receiver": "COM15",
+          "sent_frames": 50,
+          "expected_bytes": 13600,
+          "received_bytes": 13600,
+          "expected_sha256": "3597465b039824f7554a0f85948389d44971418d71962742b1b3f8cbe5a74631",
+          "received_sha256": "3597465b039824f7554a0f85948389d44971418d71962742b1b3f8cbe5a74631",
+          "exact_match": true,
+          "failed_capture": null
+        }
+      ]
+    },
+    {
+      "name": "second_to_first",
+      "offered_bytes_per_second": {
+        "COM14": 0,
+        "COM15": 1000
+      },
+      "elapsed_seconds": 15.454,
+      "pass": true,
+      "directions": [
+        {
+          "receiver": "COM14",
+          "sent_frames": 50,
+          "expected_bytes": 13600,
+          "received_bytes": 13600,
+          "expected_sha256": "c24ef3abfbbc6f6d15da29525a9550ae1fe4e5c56ae56069c48646ddc328e59e",
+          "received_sha256": "c24ef3abfbbc6f6d15da29525a9550ae1fe4e5c56ae56069c48646ddc328e59e",
+          "exact_match": true,
+          "failed_capture": null
+        },
+        {
+          "receiver": "COM15",
+          "sent_frames": 0,
+          "expected_bytes": 0,
+          "received_bytes": 0,
+          "expected_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "received_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "exact_match": true,
+          "failed_capture": null
+        }
+      ]
+    },
+    {
+      "name": "simultaneous_bidirectional",
+      "offered_bytes_per_second": {
+        "COM14": 500.0,
+        "COM15": 500.0
+      },
+      "elapsed_seconds": 37.203,
+      "pass": false,
+      "directions": [
+        {
+          "receiver": "COM14",
+          "sent_frames": 50,
+          "expected_bytes": 13600,
+          "received_bytes": 13595,
+          "expected_sha256": "c24ef3abfbbc6f6d15da29525a9550ae1fe4e5c56ae56069c48646ddc328e59e",
+          "received_sha256": "23966455e6fe2069bba906f7bf12cb26075310a0fcf369d44c67caf8b1401310",
+          "exact_match": false,
+          "failed_capture": "binary-link-low-rate-simultaneous_bidirectional-COM14.bin"
+        },
+        {
+          "receiver": "COM15",
+          "sent_frames": 50,
+          "expected_bytes": 13600,
+          "received_bytes": 13599,
+          "expected_sha256": "3597465b039824f7554a0f85948389d44971418d71962742b1b3f8cbe5a74631",
+          "received_sha256": "f81c3b7e09d8c55314cef6409d7c109d32b23d5999d3ff279bce9cda878eabb9",
+          "exact_match": false,
+          "failed_capture": "binary-link-low-rate-simultaneous_bidirectional-COM15.bin"
+        }
+      ]
+    }
+  ],
+  "error": "One or more binary transfer phases failed"
+}

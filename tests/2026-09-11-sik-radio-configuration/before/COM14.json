@@ -1,0 +1,84 @@
+{
+  "utc": "2026-09-12T01:38:59.388979+00:00",
+  "port": "COM14",
+  "usb": {
+    "description": "USB Serial Port (COM14)",
+    "hwid": "USB VID:PID=0403:6015 SER=DU0EUNGIA",
+    "serial_number": "DU0EUNGIA"
+  },
+  "host_baud": 115200,
+  "responses": {
+    "ATI": "ATI\r\nRFD SiK 2.0 on HM-TRP",
+    "ATI2": "ATI2\r\n78",
+    "ATI3": "ATI3\r\n145",
+    "ATI4": "ATI4\r\n1",
+    "ATI5": "ATI5\r\nS0:FORMAT=26\r\nS1:SERIAL_SPEED=115\r\nS2:AIR_SPEED=64\r\nS3:NETID=25\r\nS4:TXPOWER=11\r\nS5:ECC=0\r\nS6:MAVLINK=1\r\nS7:OPPRESEND=0\r\nS8:MIN_FREQ=915000\r\nS9:MAX_FREQ=928000\r\nS10:NUM_CHANNELS=50\r\nS11:DUTY_CYCLE=100\r\nS12:LBT_RSSI=0\r\nS13:MANCHESTER=0\r\nS14:RTSCTS=0\r\nS15:MAX_WINDOW=131",
+    "ATI7": "ATI7\r\nL/R RSSI: 217/219  L/R noise: 30/27 pkts: 5070  txe=0 rxe=0 stx=0 srx=0 ecc=0/0 temp=-276 dco=0"
+  },
+  "parameters": {
+    "FORMAT": {
+      "register": 0,
+      "value": 26
+    },
+    "SERIAL_SPEED": {
+      "register": 1,
+      "value": 115
+    },
+    "AIR_SPEED": {
+      "register": 2,
+      "value": 64
+    },
+    "NETID": {
+      "register": 3,
+      "value": 25
+    },
+    "TXPOWER": {
+      "register": 4,
+      "value": 11
+    },
+    "ECC": {
+      "register": 5,
+      "value": 0
+    },
+    "MAVLINK": {
+      "register": 6,
+      "value": 1
+    },
+    "OPPRESEND": {
+      "register": 7,
+      "value": 0
+    },
+    "MIN_FREQ": {
+      "register": 8,
+      "value": 915000
+    },
+    "MAX_FREQ": {
+      "register": 9,
+      "value": 928000
+    },
+    "NUM_CHANNELS": {
+      "register": 10,
+      "value": 50
+    },
+    "DUTY_CYCLE": {
+      "register": 11,
+      "value": 100
+    },
+    "LBT_RSSI": {
+      "register": 12,
+      "value": 0
+    },
+    "MANCHESTER": {
+      "register": 13,
+      "value": 0
+    },
+    "RTSCTS": {
+      "register": 14,
+      "value": 0
+    },
+    "MAX_WINDOW": {
+      "register": 15,
+      "value": 131
+    }
+  }
+}

@@ -1,0 +1,54 @@
+[
+  {
+    "port": "COM14",
+    "differences": [
+      {
+        "operation": "delete",
+        "expected_offset": 2049,
+        "actual_offset": 2049,
+        "expected_hex": "8a",
+        "actual_hex": ""
+      },
+      {
+        "operation": "delete",
+        "expected_offset": 4024,
+        "actual_offset": 4023,
+        "expected_hex": "d8",
+        "actual_hex": ""
+      },
+      {
+        "operation": "delete",
+        "expected_offset": 8892,
+        "actual_offset": 8890,
+        "expected_hex": "ce",
+        "actual_hex": ""
+      },
+      {
+        "operation": "delete",
+        "expected_offset": 12757,
+        "actual_offset": 12754,
+        "expected_hex": "15",
+        "actual_hex": ""
+      },
+      {
+        "operation": "delete",
+        "expected_offset": 13434,
+        "actual_offset": 13430,
+        "expected_hex": "8d",
+        "actual_hex": ""
+      }
+    ]
+  },
+  {
+    "port": "COM15",
+    "differences": [
+      {
+        "operation": "delete",
+        "expected_offset": 188,
+        "actual_offset": 188,
+        "expected_hex": "ad",
+        "actual_hex": ""
+      }
+    ]
+  }
+]
