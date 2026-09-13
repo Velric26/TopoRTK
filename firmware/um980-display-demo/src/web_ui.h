@@ -42,6 +42,7 @@ details{border-top:1px solid var(--line);border-bottom:1px solid var(--line)}sum
 <details><summary>Connection &amp; GNSS details</summary><dl class="diagnostics">
 <div><dt>Network mode</dt><dd id="transport">—</dd></div><div><dt>Receiver profile</dt><dd id="profile">—</dd></div>
 <div><dt>GNSS age</dt><dd id="gga-age">—</dd></div><div><dt>Corrections age</dt><dd id="rtcm-age">—</dd></div>
+<div><dt>Correction readiness</dt><dd id="correction-state">—</dd></div>
 <div><dt>Peer age</dt><dd id="peer-age">—</dd></div><div><dt>Satellites</dt><dd id="satellites">—</dd></div>
 <div><dt>Received packets</dt><dd id="packets">—</dd></div><div><dt>Packet gaps / errors</dt><dd id="errors">—</dd></div>
 <div><dt>RTCM frames received</dt><dd id="rtcm-frames">—</dd></div><div><dt>GNSS UTC</dt><dd id="utc">TIME WAIT</dd></div>
@@ -67,6 +68,7 @@ function offline(reason) {
   set('local-time', 'TIME WAIT'); set('utc', 'TIME WAIT');
   for (const id of ['transport','profile','gga-age','rtcm-age','peer-age','satellites','packets','errors','rtcm-frames']) set(id, '—');
   set('phone-url','the address on the Rover screen'); set('phone-network','The Rover screen shows the current network name and address.');
+  set('correction-state','Unknown');
   el('warning').dataset.severity = 'error'; set('warning-title', 'Reconnect to the Rover'); set('warning-detail', reason);
 }
 function render(s) {
@@ -83,6 +85,7 @@ function render(s) {
   el('warning').dataset.severity = s.warning.severity; set('warning-title', s.warning.title); set('warning-detail', s.warning.detail);
   set('transport', s.link.transport); set('profile', s.device.profile); set('gga-age', age(s.gnss.gga_age_ms));
   set('rtcm-age', age(s.link.correction_age_ms)); set('peer-age', age(s.link.peer_age_ms));
+  const corrections={waiting_observations:'Waiting for observations',stale_observations:'Observation stream stale',receiver_unconfirmed:'Waiting for receiver confirmation',station_mismatch:'Base station mismatch',receiver_corrections_stale:'Receiver corrections stale',fresh:'Fresh and receiver-confirmed'};set('correction-state',corrections[s.link.correction_state]||'Unknown');
   set('satellites', s.gnss.satellites === null ? '—' : String(s.gnss.satellites));
   set('packets', String(s.link.received_packets)); set('errors', s.link.sequence_gaps + ' / ' + s.link.invalid_packets);
   set('rtcm-frames', String(s.link.rtcm_received_frames)); set('utc', s.time.utc || 'TIME WAIT');

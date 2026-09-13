@@ -18,6 +18,7 @@
 #include "web_http.h"
 #include "rover_ap.h"
 #include "survey_service.h"
+#include "correction_health.h"
 #include "link_diagnostic.h"
 #include "wifi_credentials.h"
 
@@ -260,6 +261,8 @@ uint32_t last_web_status_ms = 0;
 uint32_t last_gga_ms = 0;
 uint32_t next_gnss_handshake_ms = 0;
 uint32_t gnss_handshake_attempts = 0;
+uint8_t gnss_handshake_step=0;
+uint32_t gnss_next_command_ms=0;
 bool gnss_startup_complete = false;
 bool wifi_udp_started = false;
 bool wifi_peer_known = false;
@@ -289,6 +292,7 @@ uint32_t rtcm_wifi_rx_frames = 0;
 uint32_t rtcm_forwarded_bytes = 0;
 uint16_t rtcm_last_message = 0;
 uint32_t rtcm_last_rx_ms = 0;
+correction::Health correction_health;
 GgaData latest_gga;
 HorizontalAccuracyData latest_horizontal_accuracy;
 GnssTimeData latest_gnss_time;
@@ -450,7 +454,7 @@ uint32_t crc24q(const uint8_t *bytes, size_t length) {
 
 bool valid_rtcm_frame(const uint8_t *frame, size_t length) {
   if (frame == nullptr || length < 8 || length > kMaxRtcmFrameSize ||
-      frame[0] != 0xD3) {
+      frame[0] != 0xD3 || (frame[1]&0xfc)) {
     return false;
   }
   const size_t payload_length =
@@ -563,6 +567,7 @@ bool handle_wifi_rtcm_packet(uint8_t *packet, size_t packet_length) {
   rtcm_forwarded_bytes += written;
   rtcm_last_message = header.rtcm_message;
   rtcm_last_rx_ms = millis();
+  correction_health.observe(frame,header.rtcm_length,rtcm_last_rx_ms);
   wifi_last_peer_ms = millis();
   capture_reference(frame,header.rtcm_length);
   return true;
@@ -587,6 +592,7 @@ void start_wifi() {
   rtcm_wifi_sequence = rtcm_wifi_tx_frames = rtcm_wifi_rx_frames = 0;
   rtcm_forwarded_bytes = rtcm_uart_frames = rtcm_uart_bad = 0;
   rtcm_last_rx_ms = rtcm_last_message = 0;
+  correction_health.reset();
   last_wifi_send_ms = 0;
   WiFi.persistent(false);
   WiFi.setSleep(false);
@@ -636,6 +642,7 @@ bool select_config(const DeviceConfig &requested) {
     last_gga_ms = 0;
     rtcm_frame_length = rtcm_expected_length = rx_length = 0;
     rtcm_last_rx_ms = 0;
+    correction_health.reset();
     std::strcpy(receiver_role, "UNKNOWN");
     while (gnss.available()) gnss.read();
     if (version_ok) apply_unit_profile();
@@ -1252,9 +1259,18 @@ bool correction_link_connected(uint32_t now) {
   return peer_linked(now);
 }
 
+uint32_t verified_correction_age(uint32_t now){
+  const auto &f=latest_horizontal_accuracy;
+  return correction_health.effective_age(now,f.received&&f.position_valid,f.received_ms,f.differential_age_ms,f.solution_station);
+}
+const char *correction_health_state(uint32_t now){
+  const auto &f=latest_horizontal_accuracy;
+  return correction_health.state(now,f.received&&f.position_valid,f.received_ms,f.differential_age_ms,f.solution_station);
+}
+
 bool fresh_rover_corrections(uint32_t now) {
   return is_base() ? device_config.base_rtcm :
-         (rtcm_last_rx_ms > 0 && now - rtcm_last_rx_ms <= 3000);
+         verified_correction_age(now)<=3000;
 }
 
 bool system_ready(uint32_t now) {
@@ -1810,7 +1826,7 @@ size_t format_web_status(char *output, size_t capacity, uint32_t now) {
     std::snprintf(accuracy_m, sizeof(accuracy_m), "%.6f", latest_horizontal_accuracy.horizontal_1drms_m);
   if (latest_gga.received) std::snprintf(gga_age, sizeof(gga_age), "%lu", static_cast<unsigned long>(now-last_gga_ms));
   if (wifi_last_peer_ms) std::snprintf(peer_age, sizeof(peer_age), "%lu", static_cast<unsigned long>(now-wifi_last_peer_ms));
-  if (rtcm_last_rx_ms) std::snprintf(correction_age, sizeof(correction_age), "%lu", static_cast<unsigned long>(now-rtcm_last_rx_ms));
+  if (verified_correction_age(now)!=UINT32_MAX) std::snprintf(correction_age, sizeof(correction_age), "%lu", static_cast<unsigned long>(verified_correction_age(now)));
   if (linked) {
     std::snprintf(rssi, sizeof(rssi), "%d", current_link_rssi());
     std::snprintf(signal, sizeof(signal), "\"%s\"", link_quality_label(current_link_rssi()));
@@ -1830,7 +1846,7 @@ size_t format_web_status(char *output, size_t capacity, uint32_t now) {
     "\"gnss\":{\"online\":%s,\"fix\":\"%s\",\"gga_quality\":%s,\"gga_age_ms\":%s,\"satellites\":%s,"
     "\"horizontal_uncertainty_m\":%s,\"horizontal_uncertainty_label\":\"%s\"},"
     "\"link\":{\"connected\":%s,\"transport\":\"%s\",\"quality\":%s,\"rssi_dbm\":%s,\"peer_age_ms\":%s,"
-    "\"correction_age_ms\":%s,\"received_packets\":%lu,\"sequence_gaps\":%lu,\"invalid_packets\":%lu,\"rtcm_received_frames\":%lu},"
+    "\"correction_age_ms\":%s,\"correction_state\":\"%s\",\"received_packets\":%lu,\"sequence_gaps\":%lu,\"invalid_packets\":%lu,\"rtcm_received_frames\":%lu},"
     "\"time\":{\"local\":%s,\"utc\":%s,\"utc_offset\":\"-06:00\"},"
     "\"phone_wifi\":{\"available\":%s,\"ssid\":\"%s\",\"address\":\"%s\",\"clients\":%u},"
     "\"warning\":{\"title\":\"%s\",\"detail\":\"%s\",\"severity\":\"%s\"}}",
@@ -1838,7 +1854,7 @@ size_t format_web_status(char *output, size_t capacity, uint32_t now) {
     is_base() ? "BASE" : "ROVER", unit_profile_applied ? "VERIFIED" : profile_failed ? "FAILED" : "CONFIGURING",
     system_ready(now) ? "true" : "false", gps_required_fix() ? "true" : "false", linked ? "true" : "false",
     online ? "true" : "false", current_fix_label(now), quality, gga_age, satellites, accuracy_m, accuracy,
-    linked ? "true" : "false", wifi_transport_label(), signal, rssi, peer_age, correction_age,
+    linked ? "true" : "false", wifi_transport_label(), signal, rssi, peer_age, correction_age,correction_health_state(now),
     static_cast<unsigned long>(wifi_rx_packets), static_cast<unsigned long>(wifi_sequence_gaps),
     static_cast<unsigned long>(wifi_invalid_packets), static_cast<unsigned long>(rtcm_wifi_rx_frames), local, utc,
     rover_ap_ready() ? "true" : "false",rover_ap_ssid(),rover_ap_address(),rover_ap_clients(),
@@ -2337,12 +2353,13 @@ void apply_unit_profile();
 
 void service_gnss_startup() {
   const uint32_t now = millis();
-  if (profile_running) return;
+  if (profile_running){gnss_handshake_step=0;return;}
   const bool fresh_gga = last_gga_ms > 0 && now - last_gga_ms < 5000;
   // UNLOG/profile changes can finish before the next 1 Hz GGA arrives.
   if (unit_profile_applied && !fresh_gga && now - profile_complete_ms < 2000) return;
 
   if (version_ok && fresh_gga) {
+    gnss_handshake_step=0;
     if (!gnss_startup_complete) {
       gnss_startup_complete = true;
       Serial.printf("GNSS STARTUP: PASS after %lu attempt(s)\n",
@@ -2360,29 +2377,26 @@ void service_gnss_startup() {
     latest_gga = GgaData{};
     latest_horizontal_accuracy = HorizontalAccuracyData{};
     rtcm_last_rx_ms = 0;
+    correction_health.reset();
     std::strcpy(receiver_role, "UNKNOWN");
     rtcm_command_acks = 0;
   }
 
   gnss_startup_complete = false;
-  if (now < next_gnss_handshake_ms) return;
-
-  ++gnss_handshake_attempts;
-  Serial.printf("GNSS STARTUP: attempt %lu\n",
-                static_cast<unsigned long>(gnss_handshake_attempts));
-  send_command("VERSION");
-  delay(100);
-  send_command("GPGGA COM2 1");
-  delay(100);
-  send_command("GPRMC COM2 1");
-  delay(100);
-  send_command("BESTNAVA COM2 1");
-  delay(100);
-  send_command("MODE");
-  next_gnss_handshake_ms = millis() + 3000;
+  if(!gnss_handshake_step){
+    if(int32_t(now-next_gnss_handshake_ms)<0)return;
+    ++gnss_handshake_attempts;gnss_handshake_step=1;gnss_next_command_ms=now;
+    Serial.printf("GNSS STARTUP: attempt %lu\n",static_cast<unsigned long>(gnss_handshake_attempts));
+  }
+  if(int32_t(now-gnss_next_command_ms)<0)return;
+  static const char *const commands[]={"VERSION","GPGGA COM2 1","GPRMC COM2 1","BESTNAVA COM2 1","MODE"};
+  send_command(commands[gnss_handshake_step-1]);
+  if(++gnss_handshake_step>5){gnss_handshake_step=0;next_gnss_handshake_ms=now+3000;}
+  else gnss_next_command_ms=now+100;
 }
 
 void apply_unit_profile() {
+  correction_health.reset();gnss_handshake_step=0;
   survey_reference_ms=0;
   if(is_base() && base_settings_failed){unit_profile_applied=false;profile_failed=true;profile_running=false;return;}
   unit_profile_applied = false;
@@ -2660,8 +2674,7 @@ void service_survey() {
   f.received=latest_horizontal_accuracy.received_ms;f.epoch=latest_horizontal_accuracy.epoch;
   f.fixed=latest_horizontal_accuracy.rtk_fixed && latest_gga.received && latest_gga.quality==4 && now-last_gga_ms<1500;
   f.hacc=latest_horizontal_accuracy.horizontal_1drms_m;f.vacc=latest_horizontal_accuracy.vertical_sigma_m;
-  f.linked=peer_linked(now);f.correction_age=rtcm_last_rx_ms?now-rtcm_last_rx_ms:UINT32_MAX;
-  f.correction_age=std::max(f.correction_age,latest_horizontal_accuracy.differential_age_ms);
+  f.linked=peer_linked(now);f.correction_age=verified_correction_age(now);
   f.position_valid=f.position_valid && latest_horizontal_accuracy.solution_station==survey_station;
   f.reference_valid=survey_reference_ms!=0;f.reference=survey_reference;f.station=survey_station;
   f.reference_age=survey_reference_ms?now-survey_reference_ms:UINT32_MAX;f.satellites=latest_gga.satellites;

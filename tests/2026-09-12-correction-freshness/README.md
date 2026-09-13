@@ -1,0 +1,15 @@
+# Correction freshness foundation — 2026-09-12
+
+Firmware 0.10.3 begins stage 3 with a reusable fixed-memory observation-health monitor integrated into the **existing Wi-Fi RTCM receive path**, survey correction-age input and Rover web readiness display. This is not the live SiK correction bridge; that adapter, bounded output scheduling and actual UM980 recovery validation remain to be completed.
+
+`correction_health.h` separates general RTCM traffic from advancing MSM observation epochs. Reference/descriptor messages, invalid CRC/reserved framing bits, repeated or older epochs do not refresh observation arrival. Epoch tracking is per constellation and station, includes week wrap, and treats GLONASS day/time separately. No cross-constellation time conversion or absolute observation-age calculation is claimed. Station/profile/network/receiver reset handling clears observation health where appropriate. Observation headers are classified; full satellite-observation semantics are still the receiver's responsibility.
+
+Readiness uses the larger of observation arrival age and BESTNAV differential age advanced by local time since that receiver report. Missing/stale receiver reports (over 1500 ms), unknown age or mismatched station fail closed. The dashboard's 3000 ms limit remains; job collection retains its configured correction/accuracy/reference/RTK gates. Ordinary loss can recover automatically on advancing observations plus fresh receiver confirmation. This monitor does not prove a modem transit-time bound and does not prevent every stale frame from being forwarded: the production forwarding queue/source/session policy is still outstanding.
+
+The disconnected-receiver handshake previously contained four `delay(100)` calls. It now schedules one command per 100 ms across loop iterations, keeping the same five commands and retry interval. That removes a known 400 ms blocking section without claiming it caused the recorded radio losses.
+
+`host-results.txt` records production-code tests for metadata/repeated-epoch outages, recovery, station mismatch, stale/missing receiver reports, increasing receiver age, corrupt input, week/millis wrap and nonblocking handshake timing. Existing profile, NVS, touch and JSON readiness regression checks also passed. Tests use hardware doubles and synthetic header fixtures, not actual satellite data. Both ESP32 builds are recorded in `../2026-09-12-freshness-build.txt`.
+
+MSM station/epoch field interpretation was cross-checked against the primary [RTKLIB decoder](https://github.com/tomojitakasu/RTKLIB/blob/master/src/rtcm3.c), `decode_msm_head`: 12-bit message/station identifiers and 30-bit epoch, with GLONASS 3-bit day plus 27-bit milliseconds. The observer does not import RTKLIB or its observation solver.
+
+Hardware deployment status is recorded in the transport-plan checkpoint. Keep UM980s disconnected until the remaining forwarding work and connection checks are ready. Radio-loss root-cause investigation is [deferred](../../docs/packet-loss-investigation.md), not an acceptance blocker for this development.

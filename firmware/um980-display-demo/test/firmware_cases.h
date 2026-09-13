@@ -38,6 +38,23 @@ void release() { contact(Wire.x, Wire.y, 0, 80); }
 void tap(int x,int y) { contact(x,y); release(); }
 
 int main() {
+  // Same production observer: metadata/replayed epochs cannot hide an outage.
+  auto msm=[](unsigned type,uint32_t epoch){std::vector<uint8_t> b(32);b[0]=0xd3;b[2]=26;b[3]=type>>4;b[4]=(type&15)<<4;b[5]=7;
+    b[6]=epoch>>22;b[7]=epoch>>14;b[8]=epoch>>6;b[9]=epoch<<2;const auto crc=crc24q(b.data(),29);b[29]=crc>>16;b[30]=crc>>8;b[31]=crc;return b;};
+  correction::Health health;auto data=msm(1074,1000),ref=msm(1006,0);
+  assert(health.observe(data.data(),data.size(),0));assert(health.arrival_age(500)==500);
+  assert(!health.observe(ref.data(),ref.size(),2500));assert(!health.observe(data.data(),data.size(),2600));
+  assert(health.effective_age(3001,true,3001,0,7)==3001);
+  data=msm(1074,2000);assert(health.observe(data.data(),data.size(),3100));assert(health.effective_age(3100,true,3100,500,7)==500);
+  assert(health.effective_age(3600,true,3100,500,7)==1000);assert(health.effective_age(3100,true,3100,500,8)==UINT32_MAX);
+  assert(health.effective_age(4601,true,3100,0,7)==UINT32_MAX);assert(health.effective_age(3100,false,3100,0,7)==UINT32_MAX);
+  data.back()^=1;assert(!health.observe(data.data(),data.size(),4000));health.reset();assert(health.arrival_age(4000)==UINT32_MAX);
+  data=msm(1074,604799000);assert(health.observe(data.data(),data.size(),0xfffffff0u));data=msm(1074,0);assert(health.observe(data.data(),data.size(),10));assert(health.arrival_age(20)==10);
+  data=msm(1074,604799000);assert(!health.observe(data.data(),data.size(),30));
+  // Five startup commands are scheduled individually; no invocation advances time.
+  profile_running=false;version_ok=false;gnss_startup_complete=false;next_gnss_handshake_ms=host_now;gnss_handshake_step=0;
+  for(unsigned i=0;i<5;++i){const auto before=host_now;service_gnss_startup();assert(host_now==before);host_now+=100;}assert(!gnss_handshake_step);
+  std::puts("PASS: observation freshness, repeated epochs, metadata outage, receiver age/station, corruption, week/timer wrap, nonblocking handshake");
   auto bestnav=[](const std::string &body){const std::string payload="BESTNAVA,97,GPS,FINE,2435,432000000,0,0,18,16;"+body;
     char suffix[12];std::snprintf(suffix,sizeof(suffix),"*%08X",ascii_crc32(payload.c_str(),payload.c_str()+payload.size()));return "#"+payload+suffix;};
   HorizontalAccuracyData observed;
@@ -161,6 +178,8 @@ int main() {
   latest_horizontal_accuracy.received=true;
   latest_horizontal_accuracy.horizontal_1drms_m=0.012;
   latest_horizontal_accuracy.received_ms=host_now;
+  latest_horizontal_accuracy.position_valid=true;latest_horizontal_accuracy.differential_age_ms=500;latest_horizontal_accuracy.solution_station=7;
+  const auto current_msm=msm(1074,3000);assert(correction_health.observe(current_msm.data(),current_msm.size(),host_now));
   latest_gnss_time.valid=latest_gnss_time.received=true;
   latest_gnss_time.year=2026; latest_gnss_time.month=9; latest_gnss_time.day=8;
   latest_gnss_time.hour=18; latest_gnss_time.minute=24; latest_gnss_time.received_ms=host_now;
