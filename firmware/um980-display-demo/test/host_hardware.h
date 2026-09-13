@@ -63,9 +63,12 @@ class HardwareSerial : public HostPrint {
   explicit HardwareSerial(int = 0) {}
   template<class... Args> void begin(Args...) {}
   void setRxBufferSize(int) {}
+  void setTxBufferSize(int) {}
+  int tx_free=2048;size_t short_limit=2048;std::vector<uint8_t> binary_output;
+  int availableForWrite(){return tx_free;}
   int available() { return 0; }
   int read() { return -1; }
-  size_t write(const uint8_t *, size_t length) { return length; }
+  size_t write(const uint8_t *p, size_t length) {size_t n=std::min(length,short_limit);binary_output.insert(binary_output.end(),p,p+n);return n;}
 };
 HardwareSerial Serial;
 int esp_reset_reason(){return 1;}
@@ -94,6 +97,7 @@ class IPAddress {
   uint8_t bytes[4];
   IPAddress(uint8_t a=0, uint8_t b=0, uint8_t c=0, uint8_t d=0) : bytes{a,b,c,d} {}
   uint8_t operator[](size_t i) const { return bytes[i]; }
+  bool operator==(const IPAddress &other)const{return !std::memcmp(bytes,other.bytes,4);}
   std::string toString() const { return "192.168.4.2"; }
 };
 struct HostWiFi {
@@ -125,7 +129,7 @@ class WiFiUDP {
   bool begin(int) { return true; }
   void stop() {}
   bool beginPacket(IPAddress, int) { return true; }
-  size_t write(const uint8_t *, size_t length) { return length; }
+  size_t write(const uint8_t *,size_t n){return n;}
   int endPacket() { return 1; }
   int parsePacket() { return 0; }
   int available() { return 0; }

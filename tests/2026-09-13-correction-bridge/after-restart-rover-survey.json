@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "role": "ROVER",
+  "storage_ready": true,
+  "storage_error": "",
+  "unit": "B",
+  "boot_id": 1230436371,
+  "uptime_ms": 7558,
+  "reset_reason": 0,
+  "free_heap": 163840,
+  "min_heap": 159592,
+  "free_psram": 8254683,
+  "records_used": 0,
+  "record_limit": 1024,
+  "active_job": "",
+  "targets_used": 0,
+  "target_limit": 64,
+  "lines_used": 0,
+  "line_limit": 64,
+  "jobs": [],
+  "block_reason": "Create or open a job.",
+  "operation": {
+    "id": "",
+    "state": "idle",
+    "message": ""
+  },
+  "collection": {
+    "active": false,
+    "samples": 0,
+    "elapsed_ms": 0,
+    "point_id": ""
+  },
+  "gnss": {
+    "fixed": false,
+    "position_valid": false,
+    "profile_verified": false,
+    "station": -1,
+    "base_reference_available": false,
+    "base_revision": 0,
+    "base_mode": "temporary",
+    "correction_age_ms": 4294967295,
+    "h_uncertainty_m": 0,
+    "v_uncertainty_m": 0
+  }
+}

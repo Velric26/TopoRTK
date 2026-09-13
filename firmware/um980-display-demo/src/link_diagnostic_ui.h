@@ -10,6 +10,13 @@ const char kDiagnosticPage[] PROGMEM=R"HTML(<!doctype html>
 
 <p id="controlState" class="muted">View only</p><button id="control" disabled>Take control</button><button id="release" class="secondary" disabled>Release control</button>
 </section>
+<section><h2>Live correction routing · bench preview</h2>
+<p>Start SiK on Base, then copy its session number to Rover. Only one correction link is used. Start a new session after a restart; Wi-Fi is the startup default. Radio tests require switching back to Wi-Fi first.</p>
+<p id="routeState" role="status">Loading correction routing…</p><p id="routeError" role="alert"></p>
+<label id="sessionLabel">Base session number<input id="liveSession" inputmode="numeric" maxlength="10" autocomplete="off"></label>
+<button id="liveStart" disabled>Start SiK session</button><button id="liveWifi" class="secondary" disabled>Use Wi-Fi corrections</button>
+<p id="routeCounters" class="muted"></p><p class="muted">COM2 counts mean bytes queued to the receiver UART. RTK readiness still requires the receiver's own fresh solution and matching base reference. SiK reception and survey accuracy are not established by starting a session.</p>
+</section>
 <section><h2>2. Match settings on Base and Rover</h2><div class="grid">
 <label>Six-digit test code<input id="run" inputmode="numeric" pattern="[0-9]{6}" maxlength="6"></label>
 <label>Link<select id="transport"><option value="sik">SiK radio</option><option value="wifi">Wi-Fi between instruments</option></select></label>
@@ -44,7 +51,8 @@ function report(){return state?.state==='idle'?state.last_report:state?.run?stat
 function controls(){
   $('control').disabled=!online||requesting||owner;$('release').disabled=!online||requesting||!owner;
   $('controlState').textContent=owner&&online?'You control this instrument':'View only · Take control to start or cancel';
-  for(const id of ['arm','pairarm','probe','selftest'])$(id).disabled=!online||!owner||requesting||state?.busy;
+  for(const id of ['arm','pairarm','probe','selftest'])$(id).disabled=!online||!owner||requesting||state?.busy||state?.corrections?.transport==='sik';
+  for(const id of ['liveStart','liveWifi','liveSession'])$(id).disabled=!online||!owner||requesting||state?.busy;
   $('cancel').disabled=!online||!owner||requesting||!['armed','running'].includes(state?.state);
   for(const id of ['run','transport','mode','seconds','rate','confirm','profile'])$(id).disabled=!!state?.busy||requesting;
   $('download').disabled=!report();$('selfdownload').disabled=!state?.self_test;
@@ -77,6 +85,12 @@ $('pairarm').onclick=()=>action(async()=>{
   const run=Number($('run').value);if(!/^[0-9]{6}$/.test($('run').value)||run<100000||run===state?.run)throw Error('Use a fresh test code from 100000 to 999999.');
   remember('diagnosticRun',$('run').value);await api('/api/v1/diagnostic',{op:'pairtest',run,seconds:Number($('seconds').value),profile:$('profile').value,confirm:true});message('Arm request queued. Match the RTCM profile, test code and duration on the other instrument.');
 });
+$('liveStart').onclick=()=>action(async()=>{
+  const base=state?.role==='BASE',session=base?0:Number($('liveSession').value);
+  if(!base&&(!/^[0-9]{7,10}$/.test($('liveSession').value)||session<1000000||session>4294967295))throw Error('Copy the current session number from Base.');
+  await api('/api/v1/diagnostic',{op:'corrections',transport:'sik',session,confirm:true});message('Routing request queued. Check the live session shown below.');
+});
+$('liveWifi').onclick=()=>action(async()=>{await api('/api/v1/diagnostic',{op:'corrections',transport:'wifi',confirm:true});message('Wi-Fi request queued. Check the live route below.')});
 $('cancel').onclick=()=>action(async()=>{await api('/api/v1/diagnostic',{op:'cancel',run:state.run});message('Cancellation requested. Check for “Test stopped” below.')});
 $('selftest').onclick=()=>action(async()=>{await api('/api/v1/diagnostic',{op:'selftest',confirm:true});message('Local fault checks requested. See their separate report below.')});
 $('selfdownload').onclick=()=>{const d=state?.self_test;if(!d)return;const a=document.createElement('a'),u=URL.createObjectURL(new Blob([JSON.stringify(d,null,2)],{type:'application/json'}));a.href=u;a.download='TopoRTK-local-transport-'+d.run+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)};
@@ -88,6 +102,12 @@ $('download').onclick=()=>{
 const descriptions={waiting_for_other_instrument:'Waiting for the other instrument. Match the test code and settings, then arm it.',peer_timeout:'No matching peer arrived within two minutes.',cancelled:'Cancelled on this instrument.',peer_aborted:'The other instrument stopped the test.',instrument_restarted_during_test:'The instrument restarted before completion.',finish_survey_or_receiver_operation_first:'Finish the survey or receiver operation before arming.',cannot_save_test_start:'The test could not start because its restart marker could not be saved.'};
 function render(){
   $('connection').textContent='Connected · '+(state.role==='BASE'?'Base':'Rover');
+  const route=state.corrections,base=state.role==='BASE';
+  $('sessionLabel').hidden=base;$('liveStart').textContent=base?'Start new SiK session':'Join Base SiK session';
+  $('routeState').textContent=route?.transport==='sik'?'SiK selected · Session '+route.session+' · '+(route.fault?'Output fault':route.station>=0?'Station '+route.station:'Waiting for a base reference'):'Wi-Fi corrections selected';
+  $('routeError').textContent=route?.error||'';
+  const output=route?.output;
+  $('routeCounters').textContent=route?(base?'Base messages queued: '+route.submitted+'. Radio envelopes sent: '+route.envelopes+'. Rover reception is unconfirmed.':'Complete radio messages: '+route.received+'. COM2 frames queued: '+(output?.forwarded||0)+'.')+' Expired queue entries: '+(route.queue_expired+(output?.expired||0))+'. Radio CRC failures: '+route.wire_errors+'.':'';
   $('wiring').textContent='Radio wiring: '+state.radio_probe;
   const self=state.self_test;$('selfresult').textContent=state.self_test_error||(self?(self.passed?'PASS · '+self.checks+' local checks passed.':self.state==='interrupted'?'Interrupted · The instrument restarted before the self-test finished.':'Local self-test failed.')+(self.checks?' Memory '+self.workspace_bytes+' bytes; '+(self.duration_us/1000).toFixed(1)+' ms.':'')+' Radio qualification is separate.':'No local test has run.');
   const d=report(),saved=state.state==='idle'&&!!d;
@@ -104,7 +124,7 @@ function render(){
   $('metrics').hidden=!d||d.state==='interrupted';
   if(d){$('sent').textContent=(d.sent||0)+' / '+(d.expected_tx||0);$('received').textContent=(d.received||0)+' / '+(d.expected_rx||0);for(const id of ['errors','duplicates','reordered'])$(id).textContent=d[id]||0;$('gap').textContent=(d.max_gap_ms||0)+' ms'}
   if(d?.kind==='paired_rtcm_faults'){
-    if(d.state==='done')$('result').textContent=d.pair_pass?'PASS · All eligible RTCM test messages recovered; no invalid sink output.':d.local_pass&&!d.peer_report_received?'Local delivery checks complete. Waiting for the peer report.':'Not passed · Eligible messages missing or validation failed. Download both reports.';
+    if(d.state==='done')$('result').textContent=d.pair_pass?'PASS · All eligible RTCM test messages recovered; no invalid sink output.':d.local_pass&&!d.peer_report_received?'Local delivery checks complete. Waiting for the peer report.':d.integrity_violations?'Integrity check failed · Download both reports.':'Delivery incomplete · Some eligible messages are missing. Download both reports.';
     $('reportDetails').textContent='RTCM '+(d.profile==='clean'?'clean':'injected fault')+' test '+d.run+' · '+d.role+' · '+d.seconds+' s · SiK Base → Rover. Counts are complete messages. '+(d.profile==='clean'?'No faults are deliberately injected.':'CRC errors and duplicates are deliberately injected.')+' Invalid sink output: '+d.integrity_violations+'.';
     $('reordered').textContent='—';$('gap').textContent='—';
   }

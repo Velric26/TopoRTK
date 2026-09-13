@@ -1,0 +1,17 @@
+{
+  "result": "PASS",
+  "firmware": "0.10.4",
+  "receivers": "disconnected",
+  "checks": [
+    "both real pages use takeover without PIN",
+    "invalid production sessions rejected",
+    "Base creates and Rover selects matching session",
+    "live SiK excludes diagnostics in page and server",
+    "receiver-unconfirmed readiness stays false; no COM2 correction output",
+    "explicit Wi-Fi return",
+    "new Base session differs",
+    "restart returns to Wi-Fi with no old session",
+    "saved jobs, radio reports and local self-tests unchanged"
+  ],
+  "limitation": "No live UM980 RTCM/RTK recovery or radio payload qualification in this check."
+}

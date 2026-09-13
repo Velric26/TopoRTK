@@ -81,6 +81,9 @@ class Receiver {
   }
   const uint8_t *data()const{return data_;}
   size_t size()const{return ready_;}
+  // Only meaningful immediately after a successful accept/push. Excludes
+  // unobserved modem flight time, as does the reassembly age bound above.
+  uint32_t known_age(uint32_t now)const{return sender_age_+(now-started_);}
   bool assembling()const{return active_;}
 };
 class Stream {

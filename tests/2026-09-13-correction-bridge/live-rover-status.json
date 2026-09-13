@@ -1,0 +1,54 @@
+{
+  "api_version": 1,
+  "ui_version": "0.10.4",
+  "boot_id": "c975a9d7",
+  "uptime_ms": 251767,
+  "device": {
+    "unit": "B",
+    "role": "ROVER",
+    "profile": "CONFIGURING"
+  },
+  "state": {
+    "ready": false,
+    "gps_fixed": false,
+    "correction_link_connected": false
+  },
+  "gnss": {
+    "online": false,
+    "fix": "NO FIX",
+    "gga_quality": null,
+    "gga_age_ms": null,
+    "satellites": null,
+    "horizontal_uncertainty_m": null,
+    "horizontal_uncertainty_label": "---"
+  },
+  "link": {
+    "connected": false,
+    "transport": "SiK RADIO",
+    "quality": null,
+    "rssi_dbm": null,
+    "peer_age_ms": null,
+    "correction_age_ms": null,
+    "correction_state": "waiting_observations",
+    "received_packets": 976,
+    "sequence_gaps": 0,
+    "invalid_packets": 0,
+    "rtcm_received_frames": 0
+  },
+  "time": {
+    "local": null,
+    "utc": null,
+    "utc_offset": "-06:00"
+  },
+  "phone_wifi": {
+    "available": true,
+    "ssid": "TopoRTK-Rover-B-1670",
+    "address": "192.168.8.1",
+    "clients": 0
+  },
+  "warning": {
+    "title": "UM980 OFFLINE",
+    "detail": "Check receiver power and cable.",
+    "severity": "error"
+  }
+}

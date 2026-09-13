@@ -1,0 +1,14 @@
+rover POST {"op":"corrections","transport":"sik","session":999999,"confirm":true} 409
+rover POST {"op":"corrections","transport":"sik","session":4294967296,"confirm":true} 409
+rover POST {"op":"corrections","transport":"sik","session":-1,"confirm":true} 409
+rover POST {"op":"corrections","transport":"sik","session":"123456789","confirm":true} 409
+base POST {"op":"corrections","transport":"sik","session":0,"confirm":true} 202
+rover POST {"op":"corrections","transport":"sik","session":1879856489,"confirm":true} 202
+rover POST {"op":"corrections","transport":"sik","session":1879856489,"confirm":true} 202
+base POST {"op":"selftest","confirm":true} 202
+rover POST {"op":"selftest","confirm":true} 202
+base POST {"op":"corrections","transport":"wifi","confirm":true} 202
+rover POST {"op":"corrections","transport":"wifi","confirm":true} 202
+base POST {"op":"corrections","transport":"sik","session":0,"confirm":true} 202
+rover POST {"op":"corrections","transport":"sik","session":1992998016,"confirm":true} 202
+PASS: both live routing pages, session selection, diagnostic exclusion, restart and saved-data preservation; no GNSS output

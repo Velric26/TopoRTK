@@ -54,3 +54,8 @@ The subsequently selected approach is a separate ESP32 UART for each SiK radio, 
 - Retire this temporary exception after replacement and successful hardware checks.
 
 References: [carrier manual](references/bdrtk-980-board-manual.pdf), [UM980 manual](references/um980-user-manual-r1.10.pdf), and [recorded GNSS/RTCM tests](../../gnss-rtcm.md). Unicore documents three UARTs and the TXD/RXD directions; it does not establish the reliability of this suspect board or prescribe its temporary role.
+
+
+## Implementation update — 2026-09-13
+
+The ESP32/SiK/COM2 bridge is now implemented in 0.10.4 and its session controls are hardware-tested. Real UM980 correction and RTK recovery acceptance remains pending. Both receivers have been reconnected and their profiles verify. Keep the known-good receiver on Base and suspect COM2-only receiver on Rover; follow the [current wiring and validation procedure](../../live-correction-bridge.md). Historical text above stating the SiK adapter is unimplemented is superseded.

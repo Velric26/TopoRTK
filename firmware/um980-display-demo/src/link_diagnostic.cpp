@@ -2,6 +2,7 @@
 #include "link_diagnostic_core.h"
 #include "correction_transport_selftest.h"
 #include "correction_pair_test.h"
+#include "correction_bridge.h"
 #include <esp_system.h>
 #include "survey_service.h"
 #include <ArduinoJson.h>
@@ -13,6 +14,19 @@
 namespace {
 linktest::Engine engine;HardwareSerial radio(2);WiFiUDP udp;
 correctiontest::Engine pair_engine;bool paired=false;
+correction::Bridge live;char route_error[96]={};
+uint32_t live_tx_wait=0,live_output_rejected=0,live_short_writes=0;
+void live_json(JsonObject d){
+  d["transport"]=live.active()?"sik":"wifi";d["session"]=live.session();d["fault"]=live.fault();d["station"]=live.station();d["error"]=route_error;
+  d["submitted"]=live.submitted;d["envelopes"]=live.envelopes;d["received"]=live.complete;
+  d["station_rejected"]=live.station_rejected;d["queue_pending"]=live.queue().size();d["queue_expired"]=live.queue().expired;
+  d["queue_overflow"]=live.queue().overflow;d["queue_replaced"]=live.queue().replaced;d["sender_expired"]=live.sender_expired();
+  d["wire_errors"]=live.stats().wire_errors;d["assembly_expired"]=live.stats().expired;d["wrong_session"]=live.stats().wrong_session;
+  d["replays"]=live.stats().replays;d["rtcm_errors"]=live.stats().rtcm_errors;d["tx_wait"]=live_tx_wait;
+  d["output_rejected"]=live_output_rejected;d["short_writes"]=live_short_writes;d["workspace_bytes"]=sizeof(live);
+  const auto output=correction_output_stats();auto out=d.createNestedObject("output");out["forwarded"]=output.forwarded;
+  out["expired"]=output.expired;out["overflow"]=output.overflow;out["wait_polls"]=output.waiting;out["faults"]=output.faults;out["pending"]=output.queued;
+}
 bool test_busy(){return paired?pair_engine.busy():engine.busy();}
 bool peer_received(){return paired?pair_engine.peer_received:engine.peer_result;}
 bool radio_started=false,udp_started=false,locked=false,persisted=false,persisted_peer=false;
@@ -49,7 +63,7 @@ QueueHandle_t queue=nullptr;portMUX_TYPE guard=portMUX_INITIALIZER_UNLOCKED;
 char cached[kDiagnosticCapacity]="{\"state\":\"idle\"}",last_report[4096]="null";
 char self_report[1536]="null",self_error[80]={};
 bool cached_busy=false;uint32_t published=0;
-struct Request{bool cancel=false,probe=false,selftest=false,paired=false;linktest::Config config;uint8_t transport=0,profile=correctiontest::Injected;};
+struct Request{bool route=false;uint32_t session=0;bool cancel=false,probe=false,selftest=false,paired=false;linktest::Config config;uint8_t transport=0,profile=correctiontest::Injected;};
 const char *state_name(){switch(engine.state){case linktest::Armed:return "armed";case linktest::Running:return "running";case linktest::Done:return "done";case linktest::Failed:return "failed";default:return "idle";}}
 void result_json(JsonObject d){
   if(paired){
@@ -113,7 +127,7 @@ void publish(uint32_t now){
   if(paired)d["remaining_seconds"]=pair_engine.state==correctiontest::Running&&int32_t(now-pair_engine.start_at)>=0?std::max(0,int(pair_engine.seconds)-int((now-pair_engine.start_at)/1000)):0;
   DynamicJsonDocument previous(4096);if(!deserializeJson(previous,static_cast<const char*>(last_report)))d["last_report"]=previous.as<JsonVariant>();
   DynamicJsonDocument self(2048);if(!deserializeJson(self,static_cast<const char*>(self_report)))d["self_test"]=self.as<JsonVariant>();
-  d["self_test_error"]=self_error;
+  d["self_test_error"]=self_error;live_json(d.createNestedObject("corrections"));
   static char out[kDiagnosticCapacity];size_t n=serializeJson(d,out,sizeof(out));
   if(!d.overflowed()&&n<sizeof(out)-1){portENTER_CRITICAL(&guard);std::memcpy(cached,out,n+1);cached_busy=test_busy()||probe_phase;portEXIT_CRITICAL(&guard);}published=now;
 }
@@ -128,11 +142,23 @@ void diagnostic_begin(){
   if(saved.begin("linkdiag",true)){String value=saved.getString("selftest","null");if(value.length()<sizeof(self_report))std::strcpy(self_report,value.c_str());saved.end();}
   publish(millis());
 }
+bool correction_radio_active(){return live.active();}
+bool correction_radio_linked(uint32_t now){return live.linked(now);}
+bool correction_radio_submit(const uint8_t *frame,size_t size,uint32_t now){return live.enqueue(frame,size,now);}
+void correction_radio_stop(){live.stop();correction_output_reset();}
 bool diagnostic_busy(){portENTER_CRITICAL(&guard);bool value=cached_busy;portEXIT_CRITICAL(&guard);return value;}
 bool diagnostic_snapshot(char *out,size_t capacity){portENTER_CRITICAL(&guard);size_t n=std::strlen(cached);bool ok=n<capacity;if(ok)std::memcpy(out,cached,n+1);portEXIT_CRITICAL(&guard);return ok;}
 bool diagnostic_request(const char *json){
   StaticJsonDocument<512>d;if(!queue||deserializeJson(d,json))return false;Request r;
-  const char *op=d["op"]|"";if(!std::strcmp(op,"selftest")){r.selftest=true;return d["confirm"]==true&&xQueueSend(queue,&r,0)==pdTRUE;}if(!std::strcmp(op,"probe")){r.probe=true;return d["confirm"]==true&&xQueueSend(queue,&r,0)==pdTRUE;}r.cancel=std::strcmp(op,"cancel")==0;
+  const char *op=d["op"]|"";
+  if(!std::strcmp(op,"corrections")){
+    r.route=true;const char *t=d["transport"]|"";
+    if(d["confirm"]!=true||(std::strcmp(t,"sik")&&std::strcmp(t,"wifi")))return false;
+    r.transport=!std::strcmp(t,"sik");
+    if(d.containsKey("session")){if(!d["session"].is<uint32_t>())return false;r.session=d["session"];if(r.session&&r.session<1000000)return false;}
+    return xQueueSend(queue,&r,0)==pdTRUE;
+  }
+  if(!std::strcmp(op,"selftest")){r.selftest=true;return d["confirm"]==true&&xQueueSend(queue,&r,0)==pdTRUE;}if(!std::strcmp(op,"probe")){r.probe=true;return d["confirm"]==true&&xQueueSend(queue,&r,0)==pdTRUE;}r.cancel=std::strcmp(op,"cancel")==0;
   r.paired=!std::strcmp(op,"pairtest");if(!r.cancel&&!r.paired&&std::strcmp(op,"arm"))return false;
   if(!d["run"].is<uint32_t>())return false;r.config.run=d["run"];
   if(r.paired){if(!d["seconds"].is<uint16_t>())return false;r.config.seconds=d["seconds"];r.config.rate=1000;r.config.mode=0;r.transport=1;
@@ -148,7 +174,28 @@ bool diagnostic_request(const char *json){
 void diagnostic_service(uint32_t now,bool rover,IPAddress peer,bool profile_busy){
   Request request;
   if(queue&&xQueueReceive(queue,&request,0)==pdTRUE){
-    if(request.selftest){
+    if(request.route){
+      route_error[0]=0;
+      if(test_busy()||probe_phase||profile_busy||!survey_diagnostic_acquire())std::strcpy(route_error,"Finish the current test, survey or receiver operation first.");
+      else {
+        if(request.transport&&((rover&&request.session<1000000)||(!rover&&request.session)))std::strcpy(route_error,"Start a new Base session, then copy its number to Rover.");
+        else if(request.transport&&rover&&live.active()&&live.session()==request.session){
+          // Retried join requests must not reset replay history or queues.
+        }
+        else {
+          correction_radio_stop();
+          // Stop completed diagnostic result repetitions before assigning UART2.
+          paired=false;engine=linktest::Engine{};pair_engine.state=correctiontest::Idle;pair_engine.run=0;engine.node=rover?1:0;
+          if(request.transport){uint32_t session=request.session;
+            if(!rover){do{session=esp_random();}while(session<1000000);}
+            start_radio();live.begin(session,rover);live_tx_wait=live_output_rejected=live_short_writes=0;
+          }
+        }
+        survey_diagnostic_release();
+      }
+    }
+    else if(live.active()){std::strcpy(route_error,"Switch corrections to Wi-Fi before running diagnostics.");}
+    else if(request.selftest){
       if(test_busy()||probe_phase||profile_busy||!survey_diagnostic_acquire())std::strcpy(self_error,"Finish the current test, survey or receiver operation first.");
       else {run_transport_selftest();survey_diagnostic_release();}
     }
@@ -167,6 +214,21 @@ void diagnostic_service(uint32_t now,bool rover,IPAddress peer,bool profile_busy
           if(!transport&&!udp_started)engine.abort(now,"wifi_diagnostic_socket_unavailable");
         }
       }
+    }
+  }
+  if(live.active()&&live.rover()!=rover){correction_radio_stop();std::strcpy(route_error,"Role changed; select a new correction session.");}
+  if(live.active()){
+    live.tick(now);
+    for(unsigned budget=0;budget<2048&&radio.available();++budget){
+      if(live.byte(uint8_t(radio.read()),now)&&!correction_radio_input(live.data(),live.size(),now-live.known_age(now)))++live_output_rejected;
+    }
+    correction::Packet packet;
+    if(live.next(packet,now)){
+      if(radio.availableForWrite()>=int(sizeof(packet))){
+        const size_t written=radio.write(packet.bytes,sizeof(packet));
+        if(written==sizeof(packet))live.committed();
+        else {++live_short_writes;live.fail();correction_output_reset();std::strcpy(route_error,"Radio output fault; select a new session.");}
+      }else ++live_tx_wait;
     }
   }
   if(paired&&pair_engine.busy()&&pair_engine.node!=(rover?1:0))pair_engine.abort(now,"role_changed");

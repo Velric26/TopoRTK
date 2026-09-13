@@ -86,3 +86,13 @@ The operator explicitly deferred radio-loss investigation and authorized continu
 Production-code host tests passed. Details and limitations: [freshness evidence](../tests/2026-09-12-correction-freshness/README.md). This is the first stage-3 increment, **not a completed live SiK bridge**. Next implement selected-source/session integration, bounded RTCM burst/reference/output queues and receiver forwarding, then reconnect UM980s for real correction-age and RTK-recovery validation. Do not require perfect synthetic delivery before doing that work.
 
 **Pause/deployment status:** both 0.10.3 builds passed, but no flash or real-device validation of this increment was performed. Both units remain on 0.10.2. The user reconnected both ESP32s and COM4/COM10 were visible; UM980s remain disconnected. The latest five-hour check rose from 89% used to 95% used during checks/documentation, crossing the user's 90% stop threshold; implementation stopped and this checkpoint was committed/pushed. Resume with review of the freshness observer and hardware validation, then the remaining forwarding work. The weekly allowance was not used for this decision.
+
+
+## Stage 3 continuation — 0.10.4 (2026-09-13)
+
+The live SiK adapter is implemented with explicit local session selection, reserved reference/observation burst queues and bounded COM2 output. Both native regression and actual two-instrument control-plane checks passed; saved jobs/reports survived restart. The preview returns to Wi-Fi at boot and requires a new Base session; automatic persistent pairing remains future work. See [bridge operation and limits](live-correction-bridge.md) and [test/deployment evidence](../tests/2026-09-13-correction-bridge/README.md).
+
+The operator has now connected both UM980s. Both profiles verify, but initial Rover status has zero satellites/no fix and neither unit has a base reference. Antenna sky view and real RTCM/RTK outage recovery remain to be checked. Do not equate control-plane or native passes with receiver/field acceptance. The last five-hour check was 85% used; preserve this checkpoint and obey the 90% pause threshold.
+
+
+Final pause: five-hour allowance reached **91% used / 9% remaining**. Operator confirmed GNSS antennas are connected but have no sky view indoors; PC USB must be disconnected to move outdoors. No live correction/recovery test was started. Follow the outdoor handoff in `docs/live-correction-bridge.md`; keep all instrument components powered, select a fresh session after any restart and validate receiver quality before testing outage recovery. Implementation stopped; documentation and backup are the remaining checkpoint actions.

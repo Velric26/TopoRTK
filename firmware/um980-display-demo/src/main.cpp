@@ -19,6 +19,7 @@
 #include "rover_ap.h"
 #include "survey_service.h"
 #include "correction_health.h"
+#include "correction_queue.h"
 #include "link_diagnostic.h"
 #include "wifi_credentials.h"
 
@@ -293,6 +294,40 @@ uint32_t rtcm_forwarded_bytes = 0;
 uint16_t rtcm_last_message = 0;
 uint32_t rtcm_last_rx_ms = 0;
 correction::Health correction_health;
+correction::BurstQueue correction_output;
+correction::StationGuard correction_station;
+uint32_t correction_output_forwarded=0,correction_output_waits=0,correction_output_faults=0;
+bool correction_output_fault=false;
+void correction_output_reset(){
+  correction_health.reset();correction_output.clear();correction_station.reset();
+  survey_reference_ms=0;correction_output_fault=false;
+}
+CorrectionOutputStats correction_output_stats(){
+  CorrectionOutputStats s;s.forwarded=correction_output_forwarded;s.expired=correction_output.expired;
+  s.overflow=correction_output.overflow;s.waiting=correction_output_waits;s.faults=correction_output_faults;s.queued=correction_output.size();return s;
+}
+bool queue_correction(const uint8_t *frame,size_t size,uint32_t at){
+  if(is_base()||!unit_profile_applied||diagnostic_busy()||correction_output_fault)return false;
+  if(!correction_station.accept(frame,size))return false;
+  return correction_output.enqueue(frame,size,at,millis());
+}
+bool correction_radio_input(const uint8_t *frame,size_t size,uint32_t at){
+  return correction_radio_active()&&queue_correction(frame,size,at);
+}
+void service_correction_output(){
+  const uint32_t now=millis();
+  if(is_base()||!unit_profile_applied||diagnostic_busy()||correction_output_fault){correction_output.clear();return;}
+  const auto *frame=correction_output.front(now);if(!frame)return;
+  // Single main-loop writer and a TX ring larger than the largest whole frame.
+  // This reports UART buffer admission, not receiver acknowledgement.
+  if(gnss.availableForWrite()<int(frame->size)){++correction_output_waits;return;}
+  const size_t written=gnss.write(frame->data,frame->size);
+  if(written!=frame->size){++correction_output_faults;correction_output_fault=true;correction_health.reset();correction_output.clear();return;}
+  ++correction_output_forwarded;rtcm_forwarded_bytes+=written;
+  rtcm_last_message=correction::message_type(frame->data);rtcm_last_rx_ms=now;
+  correction_health.observe(frame->data,frame->size,frame->at);
+  capture_reference(frame->data,frame->size);correction_output.pop(frame);
+}
 GgaData latest_gga;
 HorizontalAccuracyData latest_horizontal_accuracy;
 GnssTimeData latest_gnss_time;
@@ -534,7 +569,7 @@ bool send_rtcm_packet(const uint8_t *frame, size_t frame_length,
 }
 
 bool handle_wifi_rtcm_packet(uint8_t *packet, size_t packet_length) {
-  if (is_base() || !unit_profile_applied || packet == nullptr ||
+  if (correction_radio_active() || is_base() || !unit_profile_applied || packet == nullptr ||
       packet_length < sizeof(WiFiRtcmHeader)) {
     return false;
   }
@@ -561,16 +596,8 @@ bool handle_wifi_rtcm_packet(uint8_t *packet, size_t packet_length) {
     return false;
   }
 
-  const size_t written = gnss.write(frame, header.rtcm_length);
-  if (written != header.rtcm_length) return false;
-  ++rtcm_wifi_rx_frames;
-  rtcm_forwarded_bytes += written;
-  rtcm_last_message = header.rtcm_message;
-  rtcm_last_rx_ms = millis();
-  correction_health.observe(frame,header.rtcm_length,rtcm_last_rx_ms);
-  wifi_last_peer_ms = millis();
-  capture_reference(frame,header.rtcm_length);
-  return true;
+  if(!queue_correction(frame,header.rtcm_length,millis()))return false;
+  ++rtcm_wifi_rx_frames;wifi_last_peer_ms=millis();return true;
 }
 
 void start_wifi() {
@@ -592,7 +619,7 @@ void start_wifi() {
   rtcm_wifi_sequence = rtcm_wifi_tx_frames = rtcm_wifi_rx_frames = 0;
   rtcm_forwarded_bytes = rtcm_uart_frames = rtcm_uart_bad = 0;
   rtcm_last_rx_ms = rtcm_last_message = 0;
-  correction_health.reset();
+  correction_output_reset();
   last_wifi_send_ms = 0;
   WiFi.persistent(false);
   WiFi.setSleep(false);
@@ -642,7 +669,7 @@ bool select_config(const DeviceConfig &requested) {
     last_gga_ms = 0;
     rtcm_frame_length = rtcm_expected_length = rx_length = 0;
     rtcm_last_rx_ms = 0;
-    correction_health.reset();
+    correction_output_reset();
     std::strcpy(receiver_role, "UNKNOWN");
     while (gnss.available()) gnss.read();
     if (version_ok) apply_unit_profile();
@@ -697,6 +724,8 @@ void receive_wifi_packets() {
 
     if (packet_length >= static_cast<int>(sizeof(WiFiRtcmHeader)) &&
         packet_bytes[5] == network::kRtcmPacket) {
+      if(correction_radio_active())continue; // Never feed parallel Wi-Fi copies.
+      if(!wifi_peer_known||!(wifi_udp.remoteIP()==wifi_peer)){++wifi_invalid_packets;continue;}
       if (!handle_wifi_rtcm_packet(packet_bytes, packet_length)) {
         ++wifi_invalid_packets;
       }
@@ -1256,7 +1285,7 @@ bool gps_required_fix() {
 }
 
 bool correction_link_connected(uint32_t now) {
-  return peer_linked(now);
+  return correction_radio_active()?correction_radio_linked(now):peer_linked(now);
 }
 
 uint32_t verified_correction_age(uint32_t now){
@@ -1723,7 +1752,7 @@ struct DashboardWarning {
 
 DashboardWarning dashboard_warning(uint32_t now) {
   const bool uart_active = byte_count > 0 && now - last_rx_ms < 3000;
-  const bool linked = peer_linked(now);
+  const bool linked = correction_link_connected(now);
   const char *alert = "CHECK FIX QUALITY";
   const char *detail = "Wait for a stable required fix.";
   uint16_t alert_color = colors::kWarning;
@@ -1747,12 +1776,14 @@ DashboardWarning dashboard_warning(uint32_t now) {
   } else if (is_base() && !device_config.base_rtcm) {
     alert = "CORRECTION OUTPUT OFF";
     detail = "Enable RTCM from the USB console.";
+  } else if(correction_radio_active()&&is_base()){
+    alert="SiK OUTPUT SELECTED";detail="Rover reception is unconfirmed.";
   } else if (!linked) {
     alert = is_base() ? "ROVER LINK DOWN" : "BASE LINK DOWN";
     detail = is_base() ? "Set the other unit to Rover." : "Power on the base; check range.";
     alert_color = RGB565_RED;
   } else if (!is_base() &&
-             (rtcm_last_rx_ms == 0 || now - rtcm_last_rx_ms > 3000)) {
+             !fresh_rover_corrections(now)) {
     alert = "NO FRESH CORRECTIONS";
     detail = "Check base fix and RTCM output.";
   } else if (std::strcmp(receiver_role, "BASE") == 0 &&
@@ -1783,7 +1814,7 @@ const char *current_fix_label(uint32_t now) {
 }
 
 void draw_main_dashboard(uint32_t now) {
-  const bool linked = peer_linked(now);
+  const bool linked = correction_link_connected(now);
   const int16_t rssi = current_link_rssi();
   char value[64] = {};
   draw_status_card(60, 66, "CORRECTION LINK", linked ? "CONNECTED" : "NO LINK",
@@ -1793,7 +1824,8 @@ void draw_main_dashboard(uint32_t now) {
   format_horizontal_accuracy(value, sizeof(value), now);
   draw_status_card(208, 66, "HORIZONTAL UNCERTAINTY / 1DRMS", value,
                    std::strcmp(value, "---") == 0 ? colors::kWarning : RGB565_WHITE);
-  if (linked) std::snprintf(value, sizeof(value), "%s  %d dBm", link_quality_label(rssi), rssi);
+  if(correction_radio_active())std::strcpy(value,"SiK RSSI unavailable");
+  else if (linked) std::snprintf(value, sizeof(value), "%s  %d dBm", link_quality_label(rssi), rssi);
   else std::strcpy(value, "---");
   draw_status_card(282, 66, "LINK SIGNAL", value, linked ? link_quality_color(rssi) : RGB565_RED);
   const DashboardWarning warning = dashboard_warning(now);
@@ -1825,9 +1857,9 @@ size_t format_web_status(char *output, size_t capacity, uint32_t now) {
   if (std::strcmp(accuracy, "---") != 0 && std::strcmp(accuracy, "N/A (BASE)") != 0)
     std::snprintf(accuracy_m, sizeof(accuracy_m), "%.6f", latest_horizontal_accuracy.horizontal_1drms_m);
   if (latest_gga.received) std::snprintf(gga_age, sizeof(gga_age), "%lu", static_cast<unsigned long>(now-last_gga_ms));
-  if (wifi_last_peer_ms) std::snprintf(peer_age, sizeof(peer_age), "%lu", static_cast<unsigned long>(now-wifi_last_peer_ms));
+  if (wifi_last_peer_ms&&!correction_radio_active()) std::snprintf(peer_age, sizeof(peer_age), "%lu", static_cast<unsigned long>(now-wifi_last_peer_ms));
   if (verified_correction_age(now)!=UINT32_MAX) std::snprintf(correction_age, sizeof(correction_age), "%lu", static_cast<unsigned long>(verified_correction_age(now)));
-  if (linked) {
+  if (linked&&!correction_radio_active()) {
     std::snprintf(rssi, sizeof(rssi), "%d", current_link_rssi());
     std::snprintf(signal, sizeof(signal), "\"%s\"", link_quality_label(current_link_rssi()));
   }
@@ -1854,9 +1886,9 @@ size_t format_web_status(char *output, size_t capacity, uint32_t now) {
     is_base() ? "BASE" : "ROVER", unit_profile_applied ? "VERIFIED" : profile_failed ? "FAILED" : "CONFIGURING",
     system_ready(now) ? "true" : "false", gps_required_fix() ? "true" : "false", linked ? "true" : "false",
     online ? "true" : "false", current_fix_label(now), quality, gga_age, satellites, accuracy_m, accuracy,
-    linked ? "true" : "false", wifi_transport_label(), signal, rssi, peer_age, correction_age,correction_health_state(now),
+    linked ? "true" : "false", correction_radio_active()?"SiK RADIO":wifi_transport_label(), signal, rssi, peer_age, correction_age,correction_health_state(now),
     static_cast<unsigned long>(wifi_rx_packets), static_cast<unsigned long>(wifi_sequence_gaps),
-    static_cast<unsigned long>(wifi_invalid_packets), static_cast<unsigned long>(rtcm_wifi_rx_frames), local, utc,
+    static_cast<unsigned long>(wifi_invalid_packets), static_cast<unsigned long>(correction_output_forwarded), local, utc,
     rover_ap_ready() ? "true" : "false",rover_ap_ssid(),rover_ap_address(),rover_ap_clients(),
     warning.title, warning.detail, warning.color == RGB565_RED ? "error" : "warning");
   return length >= 0 && static_cast<size_t>(length) < capacity ? length : 0;
@@ -2257,9 +2289,9 @@ void handle_complete_rtcm(const uint8_t *frame, size_t frame_length) {
   rtcm_last_message = rtcm_message_type(frame, frame_length);
   if (is_base()) rtcm_last_rx_ms = millis();
 
-  if (is_base() && unit_profile_applied && device_config.base_rtcm &&
-      send_rtcm_packet(frame, frame_length, rtcm_last_message)) {
-    ++rtcm_wifi_tx_frames;
+  if(is_base()&&unit_profile_applied&&device_config.base_rtcm&&!diagnostic_busy()){
+    if(correction_radio_active())correction_radio_submit(frame,frame_length,millis());
+    else if(send_rtcm_packet(frame,frame_length,rtcm_last_message))++rtcm_wifi_tx_frames;
   }
 }
 
@@ -2377,7 +2409,7 @@ void service_gnss_startup() {
     latest_gga = GgaData{};
     latest_horizontal_accuracy = HorizontalAccuracyData{};
     rtcm_last_rx_ms = 0;
-    correction_health.reset();
+    correction_output_reset();
     std::strcpy(receiver_role, "UNKNOWN");
     rtcm_command_acks = 0;
   }
@@ -2396,7 +2428,7 @@ void service_gnss_startup() {
 }
 
 void apply_unit_profile() {
-  correction_health.reset();gnss_handshake_step=0;
+  correction_output_reset();gnss_handshake_step=0;
   survey_reference_ms=0;
   if(is_base() && base_settings_failed){unit_profile_applied=false;profile_failed=true;profile_running=false;return;}
   unit_profile_applied = false;
@@ -2639,6 +2671,7 @@ void setup() {
   }
 
   gnss.setRxBufferSize(2048);
+  gnss.setTxBufferSize(2048);
   gnss.begin(board::kGnssBaud, SERIAL_8N1, board::kGnssRx, board::kGnssTx);
   next_gnss_handshake_ms = millis() + 1500;
   print_console_help();
@@ -2674,7 +2707,7 @@ void service_survey() {
   f.received=latest_horizontal_accuracy.received_ms;f.epoch=latest_horizontal_accuracy.epoch;
   f.fixed=latest_horizontal_accuracy.rtk_fixed && latest_gga.received && latest_gga.quality==4 && now-last_gga_ms<1500;
   f.hacc=latest_horizontal_accuracy.horizontal_1drms_m;f.vacc=latest_horizontal_accuracy.vertical_sigma_m;
-  f.linked=peer_linked(now);f.correction_age=verified_correction_age(now);
+  f.linked=correction_link_connected(now);f.correction_age=verified_correction_age(now);
   f.position_valid=f.position_valid && latest_horizontal_accuracy.solution_station==survey_station;
   f.reference_valid=survey_reference_ms!=0;f.reference=survey_reference;f.station=survey_station;
   f.reference_age=survey_reference_ms?now-survey_reference_ms:UINT32_MAX;f.satellites=latest_gga.satellites;
@@ -2689,6 +2722,7 @@ void loop() {
   service_profile();
   service_wifi();
   diagnostic_service(millis(),!is_base(),wifi_peer_known?wifi_peer:IPAddress(),profile_running);
+  service_correction_output();
   service_survey();
   service_swipe_navigation();
   service_brightness();

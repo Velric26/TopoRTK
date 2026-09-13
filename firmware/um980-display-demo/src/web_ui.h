@@ -44,15 +44,15 @@ details{border-top:1px solid var(--line);border-bottom:1px solid var(--line)}sum
 <div><dt>GNSS age</dt><dd id="gga-age">—</dd></div><div><dt>Corrections age</dt><dd id="rtcm-age">—</dd></div>
 <div><dt>Correction readiness</dt><dd id="correction-state">—</dd></div>
 <div><dt>Peer age</dt><dd id="peer-age">—</dd></div><div><dt>Satellites</dt><dd id="satellites">—</dd></div>
-<div><dt>Received packets</dt><dd id="packets">—</dd></div><div><dt>Packet gaps / errors</dt><dd id="errors">—</dd></div>
-<div><dt>RTCM frames received</dt><dd id="rtcm-frames">—</dd></div><div><dt>GNSS UTC</dt><dd id="utc">TIME WAIT</dd></div>
+<div><dt>Wi-Fi packets</dt><dd id="packets">—</dd></div><div><dt>Wi-Fi gaps / errors</dt><dd id="errors">—</dd></div>
+<div><dt>RTCM frames to receiver</dt><dd id="rtcm-frames">—</dd></div><div><dt>GNSS UTC</dt><dd id="utc">TIME WAIT</dd></div>
 </dl></details>
 <details><summary>Connect a phone or tablet</summary><div class="sub" style="margin:0 0 18px">
 <p>On the Rover touchscreen, open <strong>Link → Phone / Tablet</strong>. Join the Wi-Fi shown there and tap <strong>Show key</strong> for its password.</p>
 <p>Open <strong id="phone-url">the address on the Rover screen</strong> in Chrome. This network provides instrument access only. Keep the connection when Android reports no Internet.</p>
 <p id="phone-network">The Rover screen shows the current network name and address.</p>
 </div></details>
-</main><footer><span>Local connection · Updates every second</span><span>Read-only · UI 0.10.0</span></footer>
+</main><footer><span>Local connection · Updates every second</span><span>Read-only · UI 0.10.4</span></footer>
 </div>
 <script>
 'use strict';
@@ -81,7 +81,7 @@ function render(s) {
   set('fix', s.gnss.fix); el('fix').dataset.good = String(s.state.gps_fixed);
   set('fix-sub', s.gnss.online ? (s.gnss.gga_age_ms === null ? 'Waiting for GNSS data' : 'GNSS data age ' + age(s.gnss.gga_age_ms)) : 'GNSS receiver offline');
   set('accuracy', s.gnss.horizontal_uncertainty_label); set('quality', s.link.quality || '—');
-  set('rssi', s.link.rssi_dbm === null ? 'No current signal' : s.link.rssi_dbm + ' dBm · Wi-Fi signal');
+  set('rssi', s.link.rssi_dbm === null ? (s.link.transport==='SiK RADIO'?'SiK signal unavailable':'No current signal') : s.link.rssi_dbm + ' dBm · Wi-Fi signal');
   el('warning').dataset.severity = s.warning.severity; set('warning-title', s.warning.title); set('warning-detail', s.warning.detail);
   set('transport', s.link.transport); set('profile', s.device.profile); set('gga-age', age(s.gnss.gga_age_ms));
   set('rtcm-age', age(s.link.correction_age_ms)); set('peer-age', age(s.link.peer_age_ms));

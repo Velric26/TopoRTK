@@ -94,3 +94,8 @@ Six-metre follow-up (run 913205): both ends received 465/468 packets during the 
 The approved [transport development plan](loss-tolerant-transport.md) separates fresh RTCM delivery, acknowledged duplicate-safe commands and periodic status. Start with a fixed-memory core and on-instrument fault self-tests, then paired synthetic SiK transport, then real UM980 COM2/RTK validation. Keep both UM980s disconnected through the synthetic stages.
 
 Stage 1 is now implemented and flashed to both ESP32s: all 22 local transport fault checks pass, saved reports survive restart, and earlier RF results remain separate. Use `/diagnostics` → **Run local fault checks**. The core uses fixed memory; its full ESP32 test workspace is 4744 bytes. Next is paired synthetic SiK integration; no real correction forwarding is connected and UM980s remain disconnected. Evidence: `tests/2026-09-12-correction-transport/README.md`.
+
+
+## Live bridge update — 2026-09-13
+
+Firmware 0.10.4 implements the ESP32 UART2 → RTM1 → COM2 bridge as an explicitly selected bench preview. No radio settings changed. Control-plane hardware checks passed; live receiver/RTK acceptance is pending. See [operation, pins, queues and limitations](live-correction-bridge.md). Earlier integration-pending notes describe historical checkpoints.

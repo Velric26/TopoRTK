@@ -51,6 +51,37 @@ int main() {
   data.back()^=1;assert(!health.observe(data.data(),data.size(),4000));health.reset();assert(health.arrival_age(4000)==UINT32_MAX);
   data=msm(1074,604799000);assert(health.observe(data.data(),data.size(),0xfffffff0u));data=msm(1074,0);assert(health.observe(data.data(),data.size(),10));assert(health.arrival_age(20)==10);
   data=msm(1074,604799000);assert(!health.observe(data.data(),data.size(),30));
+  // Actual firmware queue and COM2 writer: no partial admission under pressure.
+  {
+    const auto before=host_now;device_config.role=DeviceRole::kRover;unit_profile_applied=true;
+    correction_output_reset();gnss.binary_output.clear();gnss.tx_free=0;
+    auto reference=msm(1006,0),observation=msm(1074,1000);
+    assert(!queue_correction(observation.data(),observation.size(),host_now));
+    assert(queue_correction(reference.data(),reference.size(),host_now));service_correction_output();assert(gnss.binary_output.empty());
+    host_now+=1500;service_correction_output();assert(!correction_output.size()&&gnss.binary_output.empty());
+    assert(queue_correction(reference.data(),reference.size(),host_now));
+    assert(queue_correction(observation.data(),observation.size(),host_now));gnss.tx_free=31;
+    service_correction_output();assert(gnss.binary_output.empty());gnss.tx_free=2048;
+    service_correction_output();assert(gnss.binary_output==reference);service_correction_output();
+    auto expected=reference;expected.insert(expected.end(),observation.begin(),observation.end());assert(gnss.binary_output==expected);
+    assert(correction_health.arrival_age(host_now)==0);
+    // A SiK selection excludes Wi-Fi copies, even when the old peer is online.
+    WiFiRtcmHeader header{};header.magic=network::kMagic;header.version=network::kVersion;header.type=network::kRtcmPacket;
+    header.rtcm_length=reference.size();header.rtcm_message=1006;header.packet_size=sizeof(header)+reference.size();
+    std::vector<uint8_t> packet(header.packet_size);std::memcpy(packet.data(),&header,sizeof(header));std::memcpy(packet.data()+sizeof(header),reference.data(),reference.size());
+    header.checksum=fnv1a(packet.data(),packet.size());std::memcpy(packet.data(),&header,sizeof(header));
+    host_radio_active=true;assert(!handle_wifi_rtcm_packet(packet.data(),packet.size()));
+    assert(correction_radio_input(reference.data(),reference.size(),host_now-1000));
+    host_now+=500;service_correction_output();assert(correction_output.size()==0); // carried age expires
+    host_radio_active=false;
+    // A surfaced adapter fault latches inhibition; it never retries a suffix.
+    assert(queue_correction(reference.data(),reference.size(),host_now));gnss.short_limit=3;service_correction_output();
+    assert(correction_output_fault&&correction_health.arrival_age(host_now)==UINT32_MAX);
+    assert(!queue_correction(reference.data(),reference.size(),host_now));gnss.short_limit=2048;
+    correction_output_reset();unit_profile_applied=false;assert(!queue_correction(reference.data(),reference.size(),host_now));
+    host_now=before;gnss.binary_output.clear();
+    std::puts("PASS: production COM2 whole-frame admission, backpressure/expiry, carried age, exclusive route, profile gate and latched output fault");
+  }
   // Five startup commands are scheduled individually; no invocation advances time.
   profile_running=false;version_ok=false;gnss_startup_complete=false;next_gnss_handshake_ms=host_now;gnss_handshake_step=0;
   for(unsigned i=0;i<5;++i){const auto before=host_now;service_gnss_startup();assert(host_now==before);host_now+=100;}assert(!gnss_handshake_step);

@@ -17,6 +17,11 @@ source = re.sub(r'^#include <' + hardware + r'>\n', '', source, flags=re.M)
 generated = root / '.pio/host_firmware.cpp'
 stubs = '''
 bool host_diagnostic_busy=false;
+bool host_radio_active=false;
+bool correction_radio_active(){return host_radio_active;}
+bool correction_radio_linked(uint32_t){return false;}
+bool correction_radio_submit(const uint8_t *,size_t,uint32_t){return true;}
+void correction_radio_stop(){host_radio_active=false;}
 void diagnostic_begin() {}
 void diagnostic_service(uint32_t,bool,IPAddress,bool) {}
 bool diagnostic_busy() {return host_diagnostic_busy;}
@@ -39,6 +44,7 @@ for name in ('ready', 'stale'):
     snapshot = json.loads((root / f'.pio/status-{name}.json').read_text())
     assert snapshot['api_version'] == 1 and snapshot['device']['role'] == 'ROVER'
     assert snapshot['state']['ready'] == (name == 'ready')
+    assert snapshot['link']['rtcm_received_frames'] == 2  # Two actual whole-frame admissions in firmware_cases.
 print('PASS: JSON snapshots, unavailable values, bounded response, read-only state generation')
 
 def chunk(kind, data):

@@ -1,0 +1,2 @@
+checks=22 failed_mask=00000000 workspace=4760 sender=1060 stream=1360
+PASS: local suite, all 2048 single-bit errors, byte-order fixture, newest queued message and 10000 mutated envelopes
