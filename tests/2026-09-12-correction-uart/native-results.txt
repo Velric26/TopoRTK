@@ -1,0 +1,1 @@
+PASS clean/injected profiles: all durations, loss, timer wrap, profile isolation, missing sequence and stalled-adapter expiry/recovery; workspace 4184 bytes

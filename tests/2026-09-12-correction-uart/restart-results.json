@@ -1,0 +1,16 @@
+[
+  {
+    "ip": "192.168.100.20",
+    "report_unchanged": true,
+    "boot_changed": true,
+    "state": "idle",
+    "busy": false
+  },
+  {
+    "ip": "192.168.100.19",
+    "report_unchanged": true,
+    "boot_changed": true,
+    "state": "idle",
+    "busy": false
+  }
+]

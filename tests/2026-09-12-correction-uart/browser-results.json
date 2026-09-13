@@ -1,0 +1,16 @@
+{
+  "result": "PASS",
+  "checks": [
+    "live connection and role",
+    "Both roles use takeover without a PIN",
+    "explicit claim/release and reload retention",
+    "confirm/arm/state lock",
+    "offline and stale controls disabled",
+    "current failed report never replaced with old pass",
+    "report download",
+    "320/390/768/1280 widths and 200% text",
+    "separate local fault self-test and downloaded report",
+    "probe has no ineffective cancel button",
+    "no page errors"
+  ]
+}

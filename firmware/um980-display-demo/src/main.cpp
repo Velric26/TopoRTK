@@ -2458,7 +2458,7 @@ void print_console_help() {
 }
 
 void handle_usb_command(const char *command) {
-  if(std::strcmp(command,"diag?")==0){char data[4096];if(diagnostic_snapshot(data,sizeof(data)))Serial.println(data);return;}
+  if(std::strcmp(command,"diag?")==0){static char data[kDiagnosticCapacity];if(diagnostic_snapshot(data,sizeof(data)))Serial.println(data);return;}
   if(std::strncmp(command,"diag ",5)==0){Serial.println(diagnostic_request(command+5)?"DIAG QUEUED":"DIAG REJECTED");return;}
   Serial.print("CONSOLE> ");
   Serial.println(command);

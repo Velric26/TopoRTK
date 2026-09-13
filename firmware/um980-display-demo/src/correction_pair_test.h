@@ -15,6 +15,7 @@ inline void source(uint8_t *b,uint32_t run,uint32_t sequence){
   b[message_size-3]=uint8_t(crc>>16);b[message_size-2]=uint8_t(crc>>8);b[message_size-1]=uint8_t(crc);
 }
 enum State {Idle,Armed,Running,Done,Failed};
+enum Profile : uint8_t {Clean=0,Injected=1};
 class Engine {
   correction::Sender sender_;correction::Packet fragments_[3]{},control_{};
   uint8_t data_[message_size]{},seen_[20]{};size_t control_used_=0;
@@ -23,7 +24,7 @@ class Engine {
   void complete(uint32_t now){state=Done;finished_=now;reason="complete";control_sent_=false;}
   void consume(){
     const auto &r=stream.receiver;uint32_t seq=r.size()==message_size?correction::u32(r.data()+7):0;
-    if(!seq||seq>planned()||!deliverable(seq)){++invalid;return;}
+    if(!seq||seq>planned()||!eligible(seq)){++invalid;return;}
     source(data_,run,seq);
     if(r.size()!=message_size||std::memcmp(data_,r.data(),message_size)){++invalid;return;}
     const unsigned bit=seq-1;if(seen_[bit/8]&(1u<<(bit%8))){++invalid;return;}
@@ -32,7 +33,7 @@ class Engine {
   void receive_control(uint32_t now){
     const uint8_t *b=control_.bytes;
     if(correction::u32(b+252)!=correction::crc32(b,252)){++control_errors;return;}
-    if(b[4]!=1||b[5]<1||b[5]>3||b[6]!=(1-node)||b[7]!=1||correction::u32(b+8)!=run||correction::u16(b+12)!=seconds)return;
+    if(b[4]!=1||b[5]<1||b[5]>3||b[6]!=(1-node)||b[7]!=profile||correction::u32(b+8)!=run||correction::u16(b+12)!=seconds)return;
     for(size_t i=14;i<16;++i)if(b[i])return;
     for(size_t i=32;i<252;++i)if(b[i])return;
     if(b[5]==1&&state==Armed){state=Running;start_at=now+2000;reason="synthetic_rtcm_running";}
@@ -46,15 +47,18 @@ class Engine {
   correction::Stream stream;
   State state=Idle;uint32_t run=0,start_at=0,sent=0,accepted=0,invalid=0,tx_expired=0,wire_sent=0,control_errors=0;
   uint32_t dropped=0,corrupted=0,duplicated=0,peer_sent=0,peer_accepted=0,peer_invalid=0,peer_tx_expired=0;
-  uint16_t seconds=0;uint8_t node=0;bool peer_received=false;const char *reason="";
+  uint16_t seconds=0;uint8_t node=0,profile=Injected;bool peer_received=false;const char *reason="";
+  unsigned selected_fault(uint32_t sequence)const{return profile==Clean?0:fault(sequence);}
+  bool eligible(uint32_t sequence)const{return profile==Clean||deliverable(sequence);}
   unsigned planned()const{return seconds/2;}
-  unsigned expected()const{unsigned n=0;for(unsigned i=1;i<=planned();++i)if(deliverable(i))++n;return n;}
+  unsigned expected()const{unsigned n=0;for(unsigned i=1;i<=planned();++i)if(eligible(i))++n;return n;}
+  unsigned first_missing()const{if(!node)return 0;for(unsigned i=1;i<=planned();++i)if(eligible(i)&&!(seen_[(i-1)/8]&(1u<<((i-1)%8))))return i;return 0;}
   bool busy()const{return state==Armed||state==Running;}
   bool local_pass()const{return state==Done&&!invalid&&!tx_expired&&(node?accepted==expected():sent==planned());}
   bool pair_pass()const{return local_pass()&&peer_received&&!peer_invalid&&!peer_tx_expired&&(node?peer_sent==planned():peer_accepted==expected());}
-  bool arm(uint32_t id,uint16_t duration,uint8_t role,uint32_t now){
-    if(busy()||id<100000||id>999999||id==run||role>1||(duration!=30&&duration!=60&&duration!=120&&duration!=300))return false;
-    this->~Engine();new(this) Engine;run=id;seconds=duration;node=role;armed_=now;state=Armed;reason="waiting_for_other_instrument";
+  bool arm(uint32_t id,uint16_t duration,uint8_t role,uint32_t now,uint8_t selected=Injected){
+    if(busy()||id<100000||id>999999||id==run||role>1||selected>Injected||(duration!=30&&duration!=60&&duration!=120&&duration!=300))return false;
+    this->~Engine();new(this) Engine;run=id;seconds=duration;node=role;profile=selected;armed_=now;state=Armed;reason="waiting_for_other_instrument";
     sender_.begin(run,0);stream.select(run,0);return true;
   }
   void abort(uint32_t now,const char *why){state=Failed;reason=why;finished_=now;outputs_=0;control_sent_=false;}
@@ -75,7 +79,7 @@ class Engine {
     const bool hello=state==Armed||(state==Running&&int32_t(now-start_at)<0);
     const bool final=(state==Done||state==Failed)&&now-finished_<60000;
     if((hello||final)&&(!control_sent_||now-last_control_>=(hello?250u:500u))){
-      p=correction::Packet{};auto b=p.bytes;std::memcpy(b,"RTC1",4);b[4]=1;b[5]=hello?1:state==Done?2:3;b[6]=node;b[7]=1;
+      p=correction::Packet{};auto b=p.bytes;std::memcpy(b,"RTC1",4);b[4]=1;b[5]=hello?1:state==Done?2:3;b[6]=node;b[7]=profile;
       correction::put32(b+8,run);correction::put16(b+12,seconds);correction::put32(b+16,sent);
       correction::put32(b+20,accepted);correction::put32(b+24,invalid);correction::put32(b+28,tx_expired);correction::seal(p);return true;
     }
@@ -84,22 +88,22 @@ class Engine {
       if(sent>=planned()||now-start_at<sent*2000)return false;
       ++sent;queued_=now;source(data_,run,sent);sender_.enqueue(sent,data_,sizeof(data_),now);
       for(auto &fragment:fragments_){sender_.next(fragment,now);sender_.committed();}
-      output_=0;outputs_=fault(sent)==1?4:fault(sent)==3?2:3;
-      if(fault(sent)==3)++dropped;
+      output_=0;outputs_=selected_fault(sent)==1?4:selected_fault(sent)==3?2:3;
+      if(selected_fault(sent)==3)++dropped;
     }
     if(now-queued_>=correction::age_limit_ms){++tx_expired;output_=outputs_;return false;}
     unsigned index=output_;
-    if(fault(sent)==1)index=output_?output_-1:0; // repeat first fragment before completing
-    if(fault(sent)==3&&output_==1)index=2;
-    if(fault(sent)==4)index=2-output_;
+    if(selected_fault(sent)==1)index=output_?output_-1:0; // repeat first fragment before completing
+    if(selected_fault(sent)==3&&output_==1)index=2;
+    if(selected_fault(sent)==4)index=2-output_;
     p=fragments_[index];correction::put32(p.bytes+24,now-queued_);correction::seal(p);
-    if(fault(sent)==2&&index==1)p.bytes[252]^=1;
+    if(selected_fault(sent)==2&&index==1)p.bytes[252]^=1;
     return true;
   }
   void committed(const correction::Packet &p,uint32_t now){
     if(!std::memcmp(p.bytes,"RTC1",4)){last_control_=now;control_sent_=true;return;}
-    if(fault(sent)==1&&output_==1)++duplicated;
-    if(fault(sent)==2&&output_==1)++corrupted;
+    if(selected_fault(sent)==1&&output_==1)++duplicated;
+    if(selected_fault(sent)==2&&output_==1)++corrupted;
     ++output_;++wire_sent;
   }
 };

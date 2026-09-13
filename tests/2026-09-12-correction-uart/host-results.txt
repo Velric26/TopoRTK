@@ -1,0 +1,5 @@
+PASS: BESTNAV epoch, ellipsoidal height, correction age/base ID, invalid data and saved fixed-base command
+PASS: Rover AP persistence, corrupt/failed storage, rotation, touch confirmation, subnet isolation, no password in API/logs
+PASS: production profile, NVS failures/reload, reset grace, touch actions/cancellation, UI bounds and repaint cache
+PASS: JSON snapshots, unavailable values, bounded response, read-only state generation
+UI previews: .pio/ui-0.png through ui-4.png and ui-base-selection.png

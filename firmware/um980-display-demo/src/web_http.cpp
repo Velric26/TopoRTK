@@ -117,10 +117,10 @@ esp_err_t release_control(httpd_req_t *r){
 
 esp_err_t get_diagnostic_page(httpd_req_t *r){headers(r);httpd_resp_set_type(r,"text/html; charset=utf-8");return httpd_resp_send(r,kDiagnosticPage,sizeof(kDiagnosticPage)-1);}
 esp_err_t get_diagnostic(httpd_req_t *r){
-  char data[4096];
-  if(!diagnostic_snapshot(data,sizeof(data)))return error(r,"503 Service Unavailable","{\"error\":\"diagnostic_unavailable\"}");
+  auto *data=new(std::nothrow) char[kDiagnosticCapacity];if(!data)return error(r,"503 Service Unavailable","{\"error\":\"memory_unavailable\"}");
+  if(!diagnostic_snapshot(data,kDiagnosticCapacity)){delete[] data;return error(r,"503 Service Unavailable","{\"error\":\"diagnostic_unavailable\"}");}
   httpd_resp_set_hdr(r,"X-Controller",auth(r)?"true":"false");
-  return error(r,"200 OK",data);
+  const auto result=error(r,"200 OK",data);delete[] data;return result;
 }
 esp_err_t post_diagnostic(httpd_req_t *r){
   if(!same_origin(r))return error(r,"403 Forbidden","{\"error\":\"origin_rejected\"}");
