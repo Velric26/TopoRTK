@@ -1704,8 +1704,8 @@ void draw_debug_settings(){
     draw_fitted_text(12,112,296,"Passive monitoring keeps surveying",1,colors::kMuted);
     draw_fitted_text(12,132,296,"and corrections running normally.",1,colors::kMuted);
     draw_fitted_text(12,168,296,"Open the Debug tab in the web UI.",1,RGB565_WHITE);
-    draw_fitted_text(12,194,296,"Off after 15 minutes without use.",1,colors::kMuted);
-    draw_fitted_text(12,214,296,"Always off after restarting.",1,colors::kMuted);
+    draw_fitted_text(12,194,296,"On until you disable it.",1,colors::kMuted);
+    draw_fitted_text(12,214,296,"On by default after restart.",1,colors::kMuted);
   }
   draw_button(10,layout::kDebugToggle,enabled?"DISABLE DEBUG":"ENABLE DEBUG","",enabled);
   if(ui_region_changed(15,314,"debug-info")){
@@ -1851,18 +1851,23 @@ const char *current_fix_label(uint32_t now) {
 void draw_main_dashboard(uint32_t now) {
   const bool linked = correction_link_connected(now);
   const int16_t rssi = current_link_rssi();
+  const bool radio = correction_radio_active();
   char value[64] = {};
-  draw_status_card(60, 66, "CORRECTION LINK", linked ? "CONNECTED" : "NO LINK",
-                   linked ? RGB565_GREEN : RGB565_RED);
-  draw_status_card(134, 66, "GNSS SOLUTION", current_fix_label(now),
+  // Single peer-link indicator: transport first, then state or signal.
+  if (linked) {
+    if (radio) std::strcpy(value, "Radio Connected");
+    else std::snprintf(value, sizeof(value), "Wi-Fi  %d dBm", rssi);
+  } else {
+    std::snprintf(value, sizeof(value), "%s Disconnected", radio ? "Radio" : "Wi-Fi");
+  }
+  const uint16_t link_color = !linked ? RGB565_RED
+                              : radio ? RGB565_GREEN : link_quality_color(rssi);
+  draw_status_card(60, 90, "BASE/ROVER LINK", value, link_color);
+  draw_status_card(158, 90, "GNSS SOLUTION", current_fix_label(now),
                    now - last_gga_ms > 3000 ? RGB565_RED : fix_color(latest_gga.quality));
   format_horizontal_accuracy(value, sizeof(value), now);
-  draw_status_card(208, 66, "HORIZONTAL UNCERTAINTY / 1DRMS", value,
+  draw_status_card(256, 90, "HORIZONTAL UNCERTAINTY / 1DRMS", value,
                    std::strcmp(value, "---") == 0 ? colors::kWarning : RGB565_WHITE);
-  if(correction_radio_active())std::strcpy(value,"SiK RSSI unavailable");
-  else if (linked) std::snprintf(value, sizeof(value), "%s  %d dBm", link_quality_label(rssi), rssi);
-  else std::strcpy(value, "---");
-  draw_status_card(282, 66, "LINK SIGNAL", value, linked ? link_quality_color(rssi) : RGB565_RED);
   const DashboardWarning warning = dashboard_warning(now);
   const char *alert = warning.title;
   const char *detail = warning.detail;
@@ -2765,7 +2770,6 @@ void ota_reset_corrections(){
   latest_horizontal_accuracy=HorizontalAccuracyData{};
 }
 void loop() {
-  debug_service();
   ota_service(millis(),!is_base(),profile_running,display_ready&&!config_error&&survey_service_ready()&&web_service_ready());
   if(!ota_locked())read_usb_console();
   if(!ota_paused())read_gnss();

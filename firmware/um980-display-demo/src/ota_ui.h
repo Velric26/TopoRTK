@@ -53,7 +53,7 @@ async function pollUpdate(){
   if(update.state==='failed'){armed=false;awaitingBoot=false;$('otaProgress').textContent=update.error||'Update stopped. Current firmware retained.';}
   if(update.state==='ready'&&armed&&selected)upload();
   if(awaitingBoot&&update.boot_id!==oldBoot){
-   if(update.firmware===targetVersion&&update.boot==='New firmware verified'){enabled=owner=false;report=null;controls();$('otaProgress').textContent='Update complete. New firmware passed startup checks. Debug is Off after restart.';awaitingBoot=false;}
+   if(update.firmware===targetVersion&&update.boot==='New firmware verified'){owner=false;report=null;controls();$('otaProgress').textContent='Update complete. New firmware passed startup checks. Debug is On after restart (default).';awaitingBoot=false;}
    else if(update.boot.includes('rollback')){$('otaProgress').textContent='Update rolled back. Previous firmware restored; review diagnostics before retrying.';awaitingBoot=false;}
    else $('otaProgress').textContent='Instrument reconnected: '+update.boot+'. Waiting for verified startup.';
   }

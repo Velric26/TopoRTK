@@ -1,0 +1,103 @@
+{
+  "started": "2026-09-14T18:54:39.456Z",
+  "peer": [
+    {
+      "at": "2026-09-14T18:54:41.144Z",
+      "status": "Rover preparing update"
+    },
+    {
+      "at": "2026-09-14T18:54:42.218Z",
+      "status": "Rover updating - reception paused"
+    },
+    {
+      "at": "2026-09-14T18:55:16.827Z",
+      "status": ""
+    }
+  ],
+  "stages": [
+    "Peer preparation acknowledged"
+  ],
+  "oldBoot": 1450655027,
+  "network": [
+    {
+      "at": "2026-09-14T18:54:46.114Z",
+      "path": "/api/v1/diagnostic",
+      "error": "net::ERR_ABORTED"
+    },
+    {
+      "at": "2026-09-14T18:55:04.783Z",
+      "path": "/api/v1/update/upload",
+      "status": 200
+    },
+    {
+      "at": "2026-09-14T18:55:09.213Z",
+      "path": "/api/v1/update",
+      "error": "net::ERR_ABORTED"
+    },
+    {
+      "at": "2026-09-14T18:55:10.005Z",
+      "path": "/api/v1/debug",
+      "error": "net::ERR_ABORTED"
+    },
+    {
+      "at": "2026-09-14T18:55:13.213Z",
+      "path": "/api/v1/update",
+      "error": "net::ERR_ABORTED"
+    }
+  ],
+  "warning": "Before updating Rover: collection must be idle. Rover correction reception, local processing, web access and Debug monitoring will pause during flash/restart. Base can continue generating corrections. Existing jobs/settings must be preserved.",
+  "result": "Update complete. New firmware passed startup checks. Debug is Off after restart.",
+  "terminal": {
+    "state": "idle",
+    "available": true,
+    "version": 1,
+    "unit": 2,
+    "firmware": "0.11.3",
+    "boot_id": 3486442266,
+    "boot": "New firmware verified",
+    "locked": false,
+    "paused": false,
+    "peer_acknowledged": false,
+    "unconfirmed_override": false,
+    "received": 0,
+    "total": 128,
+    "attempt": 0,
+    "error": "",
+    "target_version": "",
+    "peer_status": ""
+  },
+  "after": {
+    "state": "idle",
+    "available": true,
+    "version": 1,
+    "unit": 2,
+    "firmware": "0.11.3",
+    "boot_id": 3486442266,
+    "boot": "New firmware verified",
+    "locked": false,
+    "paused": false,
+    "peer_acknowledged": false,
+    "unconfirmed_override": false,
+    "received": 0,
+    "total": 128,
+    "attempt": 0,
+    "error": "",
+    "target_version": "",
+    "peer_status": ""
+  },
+  "debug": {
+    "version": 1,
+    "firmware": "0.11.3",
+    "boot_id": 3486442266,
+    "uptime_ms": 11401,
+    "enabled": false,
+    "passive": true,
+    "ota_available": true,
+    "peer_update_notice_available": true,
+    "peer_status": "",
+    "update_paused": false,
+    "update_locked": false
+  },
+  "savedStateUnchanged": true,
+  "browserErrors": []
+}

@@ -157,8 +157,8 @@ esp_err_t upload_update(httpd_req_t *r){
   uint32_t progress=millis();unsigned retries=0;
   while(remaining){
     const uint32_t now=millis();
-    if(now-started>=120000||now-progress>=12000){
-      ota_upload_abort(now-started>=120000?"Upload exceeded 120-second deadline":"Upload stalled for 12 seconds");
+    if(now-started>=300000||now-progress>=12000){
+      ota_upload_abort(now-started>=300000?"Upload exceeded 300-second deadline":"Upload stalled for 12 seconds");
       Serial.printf("OTA HTTP: timeout bytes=%u retries=%u elapsed_ms=%lu\n",unsigned(r->content_len-remaining),retries,static_cast<unsigned long>(now-started));
       return reject_upload(r,"408 Request Timeout","{\"error\":\"upload_timed_out_current_firmware_retained\"}");
     }
@@ -173,7 +173,7 @@ esp_err_t upload_update(httpd_req_t *r){
       Serial.printf("OTA HTTP: receive=%d bytes=%u retries=%u elapsed_ms=%lu\n",n,unsigned(r->content_len-remaining),retries,static_cast<unsigned long>(millis()-started));
       return reject_upload(r,"408 Request Timeout","{\"error\":\"upload_incomplete_current_firmware_retained\"}");
     }
-    if(millis()-started>=120000){ota_upload_abort("Upload exceeded 120-second deadline");return reject_upload(r,"408 Request Timeout","{\"error\":\"upload_timed_out_current_firmware_retained\"}");}
+    if(millis()-started>=300000){ota_upload_abort("Upload exceeded 300-second deadline");return reject_upload(r,"408 Request Timeout","{\"error\":\"upload_timed_out_current_firmware_retained\"}");}
     if(!ota_upload_write(chunk,n))return reject_upload(r,"400 Bad Request","{\"error\":\"package_or_upload_rejected\"}");
     remaining-=n;progress=millis();
   }
@@ -197,7 +197,6 @@ esp_err_t post_debug(httpd_req_t *r){
   if(!body(r,raw)||raw.size()>128||deserializeJson(d,raw))return error(r,"400 Bad Request","{\"error\":\"invalid_request\"}");
   const char *op=d["op"]|"";
   if(!std::strcmp(op,"disable"))debug_disable();
-  else if(!std::strcmp(op,"activity")){if(!debug_activity())return error(r,"403 Forbidden","{\"error\":\"enable_debug_on_touchscreen\"}");}
   else return error(r,"400 Bad Request","{\"error\":\"operation_not_available\"}");
   return error(r,"200 OK","{\"state\":\"applied\"}");
 }

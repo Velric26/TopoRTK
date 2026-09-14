@@ -4,6 +4,12 @@
 
 Unit B successfully updated from 0.11.1 to 0.11.2 over local Wi-Fi with the actual browser workflow, verified its new boot, preserved saved survey state and returned Debug to Off. Unit A (still 0.11.0) displayed preparation, Updating and Reconnected statuses. The complete transfer took 118.602 seconds with zero receive-timeout retries, leaving little margin below 120 seconds. This proves one successful local-router OTA/acceptance cycle, not hotspot coverage, sustained throughput, actual rollback or field reliability. The preceding attempt stopped before upload; 0.11.2 corrects a host-reproduced race between HTTP timestamps and the main-loop clock. See [full evidence and next work](../tests/2026-09-14-ota-success/README.md). Earlier checkpoints below are historical.
 
+## Source increments — 0.11.3/0.11.4/0.11.5, 2026-09-14
+
+**0.11.5 (flash pending):** Debug is **On by default at startup** — an operator request. A manual disable persists only until the next restart; there is still no stored preference, no idle timer and no HTTP enable path. Capture remains RAM-only and empty at boot. All other Debug/OTA behavior is unchanged.
+
+**0.11.3 (deployed):** The OTA transfer deadline was raised from 120 to 300 seconds after the real 118.6-second transfer left almost no margin; the 12-second no-progress stall limit is unchanged. Debug lost its 15-minute idle timer: it stays On until disabled on the instrument or web. The `POST /api/v1/debug` `activity` operation and the browser keep-alive/extend controls were removed with the timer; the controller's separate two-minute lease and all OTA guard deadlines are unchanged. **0.11.4 (deployed):** the dashboard's Correction Link and Link Signal cards merged into one BASE/ROVER LINK indicator. Both versions were verified on hardware by Wi-Fi OTA with acknowledged peer notices.
+
 ## Current checkpoint — 0.11.0 software, 2026-09-14
 
 Peer transport integration, the guarded package uploader, role-specific confirmations, browser progress/new-boot verification, deferred boot acceptance and rollback handling are now implemented in source. Software checks and both firmware builds pass. **Both units have received 0.11.0 by USB. The first Unit B Wi-Fi OTA transfer timed out after 37,336 bytes and safely retained the running firmware. Successful OTA and rollback acceptance remain pending.** Peer preparation and Updating notices were observed on Unit A. See the [live result and next work](../tests/2026-09-14-ota-live/README.md). Routine development updates use a small settings snapshot when practical; full flash backups are optional. See the [operator guide and actual behavior](ota-operator-guide.md), [software validation](../tests/2026-09-14-ota/README.md) and [USB installation evidence](../tests/2026-09-14-ota-usb/README.md).
@@ -15,7 +21,7 @@ SiK restoration after OTA deliberately carries peer-status traffic only: correct
 ## Accepted operator requirements
 
 - Name the feature **Debug**, including the touchscreen setting and dedicated web tab.
-- Enable/disable from **Setup → Debug** on the instrument. Default Off after restart. Turn Off after **15 minutes idle**; normal background polls must not keep it enabled.
+- Enable/disable from **Setup → Debug** on the instrument. On by default at startup (0.11.5 supersedes the original default-off). Stays On until disabled on the instrument or web; a disable lasts until the next restart.
 - Gray out the web Debug tab when unavailable and explain how to enable it. An unavailable/stale connection must also disable access.
 - Passive monitoring must not pause surveying, corrections or normal receiver communication.
 - Treat firmware flashing as a separate, explicitly confirmed disruptive operation. Explain the affected functions before starting.
@@ -28,11 +34,11 @@ SiK restoration after OTA deliberately carries peer-status traffic only: correct
 | Mode/action | Normal operation | Access and lifetime |
 |---|---|---|
 | Debug Off | Surveying and corrections run normally; ordinary status remains available | Debug tab disabled with touchscreen instructions; private capture unavailable |
-| Debug On, passive view | Same receiver/radio owners and normal forwarding; no injected queries or test traffic | Hardware enable, existing latest-request takeover for private logs; 15-minute user-idle timer |
+| Debug On, passive view | Same receiver/radio owners and normal forwarding; no injected queries or test traffic | Hardware enable, existing latest-request takeover for private logs; no idle timer — persists until disabled or restart |
 | Active tests or receiver commands | May change UART traffic or receiver state | Separate named action and existing occupation/configuration admission gates; never started merely by opening Debug |
 | Firmware update | Local processing/forwarding must quiesce, and web/Debug access disconnects during reboot | Validate image, show role-specific impact, acquire exclusive update ownership, notify peer, then explicit confirmation |
 
-Turning Debug On is **not** a general system pause. Physical disable or expiry ends capture and clears the in-memory history; it must not revoke an ongoing ordinary survey operation. During a future admitted OTA transaction, idle expiry/disable must not tear down a flash write halfway through: defer shutdown to a safe transaction boundary, then reboot or abort safely. No OTA transaction is exposed in the first increment.
+Turning Debug On is **not** a general system pause. Physical disable ends capture and clears the in-memory history; it must not revoke an ongoing ordinary survey operation. During a future admitted OTA transaction, disable must not tear down a flash write halfway through: defer shutdown to a safe transaction boundary, then reboot or abort safely. No OTA transaction is exposed in the first increment.
 
 ## Increment 1 — implemented in 0.10.5, deployment pending
 
@@ -44,9 +50,9 @@ The touchscreen has a Debug page and On/Off control. The Survey interface gains 
 
 Capture includes recent GNSS text, GNSS RTCM summaries, selected live SiK complete-message RX/envelope TX summaries and Wi-Fi correction RX/TX summaries. It does not provide a complete raw serial recording, all RF bytes, driver-level receive-error capture, a universal `Serial` mirror or historical logs before enabling Debug. Capture throttling/overwrites/truncation have separate counters and must not be described as radio loss. Payload output uses text rendering, not HTML interpretation. Credentials/control tokens are never passed to the observer; sensitive position/receiver text is available only to the current controller while Debug is enabled.
 
-The browser can pause its view and download the current bounded snapshot. Reading or polling does not renew the 15-minute timer; explicit actions and throttled trusted browser input renew it. The normal controller's two-minute lease remains separate. Both heartbeat requests and direct API mutations still require the current token. Mode and capture are RAM-only and Off/empty at boot.
+The browser can pause its view and download the current bounded snapshot. Debug has no idle timer and is On by default at startup (0.11.5): it remains on until disabled or restart. The normal controller's two-minute lease remains separate. Both heartbeat requests and direct API mutations still require the current token. Mode and capture are RAM-only; capture is empty at boot.
 
-Public availability: `GET /api/v1/debug`. Private history: `GET /api/v1/debug/log`. Authenticated same-origin `POST /api/v1/debug` accepts only `activity` and `disable` in this increment. `/debug-nav.js` adds a disabled-by-default button with a visible `aria-describedby` note and verifies fresh availability before enabling it. No updater or arbitrary command route exists yet. The web page explicitly shows the remaining update plan with the upload control disabled.
+Public availability: `GET /api/v1/debug`. Private history: `GET /api/v1/debug/log`. Authenticated same-origin `POST /api/v1/debug` accepts only `disable`. `/debug-nav.js` adds a disabled-by-default button with a visible `aria-describedby` note and verifies fresh availability before enabling it. No arbitrary command route exists. The web page explicitly shows the remaining update plan with the upload control disabled.
 
 ## Increment 2 — peer update-notice protocol
 

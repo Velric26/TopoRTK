@@ -14,12 +14,12 @@ const source=fs.readFileSync(path.join(__dirname,'../src/debug_ui.h'),'utf8'),ht
    if(url.pathname==='/api/v1/control'){owner=true;token='a'.repeat(32);return route.fulfill({json:{token}})}
    if(r.headers().authorization!=='Bearer '+token||!owner)return route.fulfill({status:401,json:{error:'claim_control_first'}});
    if(data.op==='disable')enabled=false;
-   else if(data.op!=='activity'||!enabled)return route.fulfill({status:403,json:{error:'enable_debug_on_touchscreen'}});
+   else return route.fulfill({status:400,json:{error:'operation_not_available'}});
    return route.fulfill({json:{state:'applied'}});
   }
   if(url.pathname==='/api/v1/debug'){
    if(!frozen)uptime+=1000;
-   return route.fulfill({json:{version:1,boot_id:7,uptime_ms:uptime,firmware:'0.10.5',enabled,remaining_ms:enabled?900000:0,ota_available:false},headers:{'X-Controller':String(owner&&r.headers().authorization==='Bearer '+token)}});
+   return route.fulfill({json:{version:1,boot_id:7,uptime_ms:uptime,firmware:'0.11.3',enabled,ota_available:false},headers:{'X-Controller':String(owner&&r.headers().authorization==='Bearer '+token)}});
   }
   if(url.pathname==='/api/v1/debug/log')return route.fulfill({json:report});
   if(url.pathname==='/api/v1/survey')return route.fulfill({json:{unit:'B',role,collection:{active:true},gnss:{profile_verified:true,fixed:true}}});
@@ -35,18 +35,18 @@ const source=fs.readFileSync(path.join(__dirname,'../src/debug_ui.h'),'utf8'),ht
  await page.locator('#claim').click();await page.waitForFunction(()=>document.querySelector('#log').textContent.includes('GPGGA'));
  assert.equal(await page.locator('#log img').count(),0);assert.equal(await page.evaluate(()=>window.injected),undefined);
  assert.equal(await page.locator('#gnss').innerText(),'RTK FIXED');assert.equal(await page.locator('#forwarded').innerText(),'42');
- const activity=posts.filter(p=>p.data.op==='activity').length;await page.waitForTimeout(2500);assert.equal(posts.filter(p=>p.data.op==='activity').length,activity,'polling must not renew Debug');
+ await page.waitForTimeout(2500);assert(!posts.some(p=>p.data.op==='activity'),'no idle-timer activity posts');
  await page.locator('#filter').selectOption('SiK RX');assert(!(await page.locator('#log').innerText()).includes('GPGGA'));
  const downloaded=page.waitForEvent('download');await page.locator('#download').click();const download=await downloaded;assert.deepEqual(JSON.parse(fs.readFileSync(await download.path(),'utf8')),report);
  await page.locator('#pause').click();assert.equal(await page.locator('#pause').innerText(),'Resume view');
  owner=false;await page.waitForFunction(()=>document.querySelector('#ownership').textContent.startsWith('Take control'));assert(await page.locator('#download').isDisabled());assert(!(await page.locator('#log').innerText()).includes('GPGGA'));
  await page.locator('#claim').click();await page.waitForFunction(()=>document.querySelector('#ownership').textContent.startsWith('You control'));await page.locator('#pause').click();
- frozen=true;await page.waitForFunction(()=>document.querySelector('#connection').textContent.startsWith('Disconnected'),null,{timeout:10000});assert(await page.locator('#extend').isDisabled());frozen=false;await page.waitForFunction(()=>!document.querySelector('#extend').disabled);
+ frozen=true;await page.waitForFunction(()=>document.querySelector('#connection').textContent.startsWith('Disconnected'),null,{timeout:10000});assert(await page.locator('#pause').isDisabled());frozen=false;await page.waitForFunction(()=>!document.querySelector('#pause').disabled);
  for(const width of [320,390,768,1280]){await page.setViewportSize({width,height:900});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.screenshot({path:path.join(out,'debug-'+width+'.png'),fullPage:true})}
  role='BASE';await page.waitForFunction(()=>document.querySelector('#identity').textContent.includes('BASE'));assert.match(await page.locator('#updateWarning').innerText(),/Rover may lose RTK fix/);assert.equal(await page.locator('nav a').count(),1);
  enabled=false;await page.waitForFunction(()=>document.querySelector('#mode').textContent.includes('Debug unavailable'));assert(await page.locator('#claim').isDisabled());assert(await page.locator('#download').isDisabled());
  await page.goto('http://debug.test/survey');await page.waitForSelector('#debugTab');assert(await page.locator('#debugTab').isDisabled());
  offline=true;await page.waitForFunction(()=>document.querySelector('#debugAvailability').textContent.includes('disconnected'));assert(await page.locator('#debugTab').isDisabled());
  assert(posts.every(p=>p.path==='/api/v1/control'||p.path==='/api/v1/debug'),'passive page must not send survey, GNSS or radio commands');assert.deepEqual(errors,[]);
- fs.writeFileSync(path.join(out,'debug-browser.json'),JSON.stringify({result:'PASS',checks:['gray tab and enable instructions','hardware-enabled availability','takeover without PIN','monitoring while occupation is active','polling does not renew idle timer','text escaping/filter/download/pause','controller loss clears private view','stale/offline and timeout disable access','role-specific update warnings and guarded OTA controls','320/390/768/1280 layouts','no active diagnostic or survey commands']},null,2));console.log('PASS: Debug navigation, passive browser, access/expiry, role warnings, downloads and responsive layout');
+ fs.writeFileSync(path.join(out,'debug-browser.json'),JSON.stringify({result:'PASS',checks:['gray tab and enable instructions','hardware-enabled availability','takeover without PIN','monitoring while occupation is active','no idle timer; debug persists until disabled','text escaping/filter/download/pause','controller loss clears private view','stale/offline and timeout disable access','role-specific update warnings and guarded OTA controls','320/390/768/1280 layouts','no active diagnostic or survey commands']},null,2));console.log('PASS: Debug navigation, passive browser, persistent debug, role warnings, downloads and responsive layout');
  }finally{await browser.close()}})().catch(e=>{console.error(e);process.exitCode=1});

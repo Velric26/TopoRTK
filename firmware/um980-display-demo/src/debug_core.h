@@ -3,15 +3,14 @@
 #include <cstddef>
 #include <cstring>
 namespace debugmode {
-constexpr uint32_t idle_ms=15u*60u*1000u;
+// Debug is enabled by default whenever the instrument starts; a disable
+// persists only until the next boot. No idle timer, no stored preference.
 class Session {
-  bool enabled_=false;uint32_t activity_=0;
+  bool enabled_=true;
  public:
-  void enable(uint32_t now){enabled_=true;activity_=now;}
+  void enable(uint32_t){enabled_=true;}
   void disable(){enabled_=false;}
-  bool active(uint32_t now)const{return enabled_&&now-activity_<idle_ms;}
-  uint32_t remaining(uint32_t now)const{return active(now)?idle_ms-(now-activity_):0;}
-  bool touch(uint32_t now){if(!active(now))return false;activity_=now;return true;}
+  bool active(uint32_t)const{return enabled_;}
 };
 enum class Channel:uint8_t {Event,GnssRx,GnssTx,RadioRx,RadioTx,WifiRx,WifiTx};
 inline const char *channel_name(Channel c){switch(c){case Channel::GnssRx:return "GNSS RX";case Channel::GnssTx:return "GNSS TX";case Channel::RadioRx:return "SiK RX";case Channel::RadioTx:return "SiK TX";case Channel::WifiRx:return "Wi-Fi RX";case Channel::WifiTx:return "Wi-Fi TX";default:return "Debug";}}

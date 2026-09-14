@@ -56,9 +56,9 @@ int main(int argc,char **argv){
   bool opened=ota_upload_begin(test_token,640);
   if(test=="begin_failure"){assert(!opened);step();assert(!ota_locked()&&selected==running);return 0;}
   assert(opened);assert(!ota_request("{\"op\":\"cancel\"}",test_token));
-  debug_on=false;step();assert(ota_paused()); // Idle Debug expiry cannot abort flash.
+  debug_on=false;step();assert(ota_paused()); // Debug disabled mid-upload cannot abort flash.
   if(test=="disconnect"){assert(ota_upload_write(package.data(),180));ota_upload_abort("Disconnected");step();assert(!ota_locked()&&aborts==1&&selected==running);return 0;}
-  if(test=="timeout")clock_ms+=120001;
+  if(test=="timeout")clock_ms+=300001;
   if(test=="write_failure")write_error=1;
   if(test=="changed_header")package[48]^=1;
   if(test=="changed_identity")package[128+216]=2;

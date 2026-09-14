@@ -85,7 +85,7 @@ int main() {
     assert(correction_output_fault&&correction_health.arrival_age(host_now)==UINT32_MAX);
     assert(!queue_correction(reference.data(),reference.size(),host_now));gnss.short_limit=2048;
     correction_output_reset();unit_profile_applied=false;assert(!queue_correction(reference.data(),reference.size(),host_now));
-    host_now=before;gnss.binary_output.clear();debug_enable_local(false);
+    host_now=before;gnss.binary_output.clear();
     std::puts("PASS: production COM2 whole-frame admission, backpressure/expiry, carried age, exclusive route, profile gate and latched output fault");
   }
   // Five startup commands are scheduled individually; no invocation advances time.
@@ -304,20 +304,23 @@ int main() {
   assert(format_web_status(json,sizeof(json),host_now) > 0);
   assert(!std::strstr(json,rotated.c_str()) && Serial.output.find(rotated) == std::string::npos);
   std::puts("PASS: Rover AP persistence, corrupt/failed storage, rotation, touch confirmation, subnet isolation, no password in API/logs");
-  // Hardware-only enable, polling does not extend lease, user activity does.
-  assert(!debug_enabled());change_page(ScreenPage::kSettings);profile_running=true;
-  tap(260,400);assert(current_page==ScreenPage::kDebug);tap(140,268);assert(debug_enabled());
+  // Debug is enabled by default at boot; the touchscreen toggle turns it off
+  // and on, including during receiver setup, and the session persists over time.
+  assert(debug_enabled());change_page(ScreenPage::kSettings);profile_running=true;
+  tap(260,400);assert(current_page==ScreenPage::kDebug);tap(140,268);assert(!debug_enabled());
+  tap(140,268);assert(debug_enabled());
   profile_running=false;const auto debug_start=host_now;char debug_json[8192];
   debug_observe(debugmode::Channel::GnssRx,"$GPGGA,observed");assert(debug_logs(debug_json,sizeof(debug_json)));assert(std::strstr(debug_json,"GPGGA"));
   for(unsigned i=0;i<10;++i){host_now=debug_start+i*80000;assert(debug_status(debug_json,sizeof(debug_json)));}
-  host_now=debug_start+899999;assert(debug_enabled());assert(debug_activity());
-  host_now+=899999;assert(debug_enabled());host_now+=1;debug_service();assert(!debug_enabled());assert(!debug_logs(debug_json,sizeof(debug_json)));
+  host_now=debug_start+899999;assert(debug_enabled());assert(std::strstr(debug_json,"\"enabled\":true"));
+  host_now+=1800000;assert(debug_enabled());assert(debug_status(debug_json,sizeof(debug_json)));assert(std::strstr(debug_json,"\"enabled\":true")&&debug_logs(debug_json,sizeof(debug_json)));
+  tap(140,268);assert(!debug_enabled());assert(!debug_logs(debug_json,sizeof(debug_json)));
   debug_enable_local(true);assert(debug_logs(debug_json,sizeof(debug_json)));assert(!std::strstr(debug_json,"GPGGA"));
   tap(140,268);assert(!debug_enabled());host_now=debug_start;
-  debugmode::Session wrapped;wrapped.enable(0xfffffff0u);assert(wrapped.active(100));assert(!wrapped.active(uint32_t(0xfffffff0u+debugmode::idle_ms)));
+  debugmode::Session fresh;assert(fresh.active(0)); // A constructed session is enabled by default.
   debugmode::Log bounded;bounded.clear(0);for(unsigned i=0;i<1000;++i)bounded.push(debugmode::Channel::Event,"test",0);assert(bounded.size()==8&&bounded.throttled==992);
   for(unsigned t=1000;t<10000;t+=1000)for(unsigned i=0;i<8;++i)bounded.push(debugmode::Channel::Event,"line",t);assert(bounded.size()==32&&bounded.overwritten>0);
-  std::puts("PASS: Debug physical touch, enable during receiver setup, 15-minute idle lease, polling isolation, activity renewal, expiry/clear, wrap, bounded capture and unchanged COM2 output");
+  std::puts("PASS: Debug default-on at boot, touchscreen toggle during receiver setup, persistent session over time, disable clears capture, bounded capture and unchanged COM2 output");
   for (unsigned page=0; page<6; ++page) {
     current_page=static_cast<ScreenPage>(page); pending_role=device_config.role;
     draw_static_screen(); draw_dynamic_screen();

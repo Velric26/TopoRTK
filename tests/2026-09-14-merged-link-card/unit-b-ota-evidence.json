@@ -1,0 +1,102 @@
+{
+  "started": "2026-09-14T19:07:50.954Z",
+  "peer": [
+    {
+      "at": "2026-09-14T19:07:53.251Z",
+      "status": "Rover preparing update"
+    },
+    {
+      "at": "2026-09-14T19:07:54.280Z",
+      "status": "Rover updating - reception paused"
+    },
+    {
+      "at": "2026-09-14T19:08:34.927Z",
+      "status": "Peer reconnected - checking corrections"
+    },
+    {
+      "at": "2026-09-14T19:08:35.285Z",
+      "status": ""
+    }
+  ],
+  "stages": [
+    "Peer preparation acknowledged"
+  ],
+  "oldBoot": 3926322292,
+  "network": [
+    {
+      "at": "2026-09-14T19:07:58.119Z",
+      "path": "/api/v1/debug/log",
+      "error": "net::ERR_ABORTED"
+    },
+    {
+      "at": "2026-09-14T19:08:23.057Z",
+      "path": "/api/v1/update/upload",
+      "status": 200
+    },
+    {
+      "at": "2026-09-14T19:08:28.013Z",
+      "path": "/api/v1/debug",
+      "error": "net::ERR_ABORTED"
+    },
+    {
+      "at": "2026-09-14T19:08:28.351Z",
+      "path": "/api/v1/update",
+      "error": "net::ERR_ABORTED"
+    }
+  ],
+  "warning": "Before updating Rover: collection must be idle. Rover correction reception, local processing, web access and Debug monitoring will pause during flash/restart. Base can continue generating corrections. Existing jobs/settings must be preserved.",
+  "result": "Update complete. New firmware passed startup checks. Debug is Off after restart.",
+  "terminal": {
+    "state": "idle",
+    "available": true,
+    "version": 1,
+    "unit": 2,
+    "firmware": "0.11.4",
+    "boot_id": 1061894404,
+    "boot": "New firmware verified",
+    "locked": false,
+    "paused": false,
+    "peer_acknowledged": false,
+    "unconfirmed_override": false,
+    "received": 0,
+    "total": 128,
+    "attempt": 0,
+    "error": "",
+    "target_version": "",
+    "peer_status": ""
+  },
+  "after": {
+    "state": "idle",
+    "available": true,
+    "version": 1,
+    "unit": 2,
+    "firmware": "0.11.4",
+    "boot_id": 1061894404,
+    "boot": "New firmware verified",
+    "locked": false,
+    "paused": false,
+    "peer_acknowledged": false,
+    "unconfirmed_override": false,
+    "received": 0,
+    "total": 128,
+    "attempt": 0,
+    "error": "",
+    "target_version": "",
+    "peer_status": ""
+  },
+  "debug": {
+    "version": 1,
+    "firmware": "0.11.4",
+    "boot_id": 1061894404,
+    "uptime_ms": 11341,
+    "enabled": false,
+    "passive": true,
+    "ota_available": true,
+    "peer_update_notice_available": true,
+    "peer_status": "",
+    "update_paused": false,
+    "update_locked": false
+  },
+  "savedStateUnchanged": true,
+  "browserErrors": []
+}

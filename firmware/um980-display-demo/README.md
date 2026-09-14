@@ -38,7 +38,7 @@ Role, brightness (`Auto`, `Day`, `Night`), and the base RTCM enable flag survive
 
 Every profile clears old COM2 streams, waits for command acknowledgements, and verifies the final receiver role before permitting correction forwarding. Failed saves retain the previous active settings; failed receiver setup provides a retry action. No `SAVECONFIG` is sent. Base still uses temporary autonomous survey-in: base coordinates are not saved or certified by this feature.
 
-The redesigned portrait interface has larger status values, four equal-height cards, two-line actionable warnings, and permanent **Home / GPS / Link / Setup** tabs. Existing vertical swipes remain available. Detailed text is fitted to the available width, and unchanged regions do not repaint.
+The redesigned portrait interface has larger status values, three equal-height cards, two-line actionable warnings, and permanent **Home / GPS / Link / Setup** tabs. Existing vertical swipes remain available. Detailed text is fitted to the available width, and unchanged regions do not repaint.
 
 Backlight brightness uses GPIO6 PWM at 5 kHz, matching the Waveshare example. `DAY` is full duty, `NIGHT` is approximately 10% duty, and transitions complete in about 1.2 seconds. `AUTO` uses checksum-validated GNSS UTC time converted to fixed UTC-6; when GNSS time is invalid or stale it deliberately remains full brightness and labels the state `AUTO: NO GNSS TIME`. The `brightness?` console command reports the requested mode, current/target duty, hardware duty, and PWM frequency.
 
@@ -99,9 +99,9 @@ Bidirectional operation was proven by stopping COM2 output from the separate BDR
 
 ## Display and Navigation
 
-The main screen shows correction-link state, role-aware GNSS state, horizontal 1DRMS uncertainty, link RSSI/quality, and the highest-priority warning. Use the bottom tabs to open Home, GPS, Link, or Setup. A top-origin downward swipe opens GPS details; a bottom-origin upward swipe opens Wi-Fi details. The opposite gesture returns to the main screen.
+The main screen shows a single peer-link indicator, role-aware GNSS state, horizontal 1DRMS uncertainty, and the highest-priority warning. The **BASE/ROVER LINK** card names the transport first (`Wi-Fi` or `Radio`) followed by `Disconnected` or the signal strength in dBm (the SiK radio reports no RSSI, so a linked radio shows `Radio Connected`). Use the bottom tabs to open Home, GPS, Link, or Setup. A top-origin downward swipe opens GPS details; a bottom-origin upward swipe opens Wi-Fi details. The opposite gesture returns to the main screen.
 
-The four main information cards use equal height and spacing. The renderer caches each header, card, warning, and detail row and repaints only a region whose content or color changed. This avoids the previous four-times-per-second full-region repaint that caused visible flicker.
+The three main information cards use equal height and spacing. The renderer caches each header, card, warning, and detail row and repaints only a region whose content or color changed. This avoids the previous four-times-per-second full-region repaint that caused visible flicker.
 
 All screens use the same centralized definitions:
 

@@ -10,7 +10,7 @@ The Debug tab now offers package review, role-specific interruption warnings, ex
 
 ### Debug (0.10.5 source; hardware validation pending)
 
-Enable **Setup → Debug → Enable Debug** on the instrument touchscreen. Debug defaults Off after restart and expires after 15 minutes without user activity; passive polling does not renew it. The web Survey interface has a dedicated Debug tab on both roles, gray/disabled with enable instructions when unavailable. The current controller can view bounded GNSS and correction summaries, filter or pause the view, and download a snapshot without injecting receiver commands or diagnostic traffic. There is no PIN and no remote enable operation.
+Debug is On by default at startup (0.11.5) and stays On until disabled on the instrument touchscreen or web; there is no idle timer. When manually disabled, the web Survey interface grays the Debug tab on both roles and shows enable instructions. The current controller can view bounded GNSS and correction summaries, filter or pause the view, and download a snapshot without injecting receiver commands or diagnostic traffic. There is no PIN and no remote enable operation.
 
 The Debug page contains role-specific flashing warnings and the update/peer-status plan. Upload and actual peer update notices are **not implemented yet**. Passive monitoring never announces a paused link. See the [Debug and OTA design](debug-and-ota.md) and [host/browser validation](../tests/2026-09-13-debug/README.md).
 
@@ -161,7 +161,7 @@ The USB commands `role rover`, `role base-test`, `brightness auto|day|night`, an
 
 Touch uses single-finger release events, a movement threshold, and a maximum tap duration. Swipes, drags out and back, multi-touch, and I2C errors cannot apply a role. Buttons and hit-testing share the same rectangles. Portrait rotations `0` and `2` are supported; `2` transforms both touch axes.
 
-The redesigned dashboard has four equal-height cards, larger values, an actionable two-line warning, and bounded text fitting. The detail pages reserve space for the navigation bar. Cached regions repaint only when their content changes.
+The redesigned dashboard has three equal-height cards, larger values, an actionable two-line warning, and bounded text fitting. The **BASE/ROVER LINK** card (0.11.4) merges the former correction-link and signal cards: transport first (`Wi-Fi` or `Radio`), then `Disconnected` or the signal strength in dBm (`Radio Connected` — the SiK radio reports no RSSI). Cached regions repaint only when their content changes.
 
 See the [2026-09-08 validation record](../tests/2026-09-08-touch-role-settings/README.md) for the distinction between host checks, Unit B hardware checks, and outstanding physical touch/power-cycle tests.
 

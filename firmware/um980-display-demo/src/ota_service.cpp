@@ -149,7 +149,7 @@ bool ota_upload_begin(const char *token,size_t length){
 }
 bool ota_upload_write(const uint8_t *bytes,size_t size){
   if(!gate||xSemaphoreTake(gate,pdMS_TO_TICKS(100))!=pdTRUE)return false;
-  bool ok=state==State::Uploading&&millis()-upload_started<120000&&survey_authorized(owner,true)&&size<=128+ota_package::size(header)-received;
+  bool ok=state==State::Uploading&&millis()-upload_started<300000&&survey_authorized(owner,true)&&size<=128+ota_package::size(header)-received;
   if(ok&&received<128){const auto n=std::min(size,size_t(128-received));ok=!std::memcmp(bytes,header.bytes+received,n);bytes+=n;size-=n;received+=n;}
   if(ok&&size){const uint32_t position=received-128;
     ok=identity_check.feed(bytes,size,position)&&mbedtls_sha256_update_ret(&sha,bytes,size)==0&&esp_ota_write(handle,bytes,size)==ESP_OK;received+=size;
@@ -159,7 +159,7 @@ bool ota_upload_write(const uint8_t *bytes,size_t size){
 }
 bool ota_upload_finish(){
   if(!gate||xSemaphoreTake(gate,pdMS_TO_TICKS(100))!=pdTRUE)return false;
-  uint8_t digest[32];bool ok=state==State::Uploading&&millis()-upload_started<120000&&received==128+ota_package::size(header)&&identity_check.complete()&&access(owner)&&
+  uint8_t digest[32];bool ok=state==State::Uploading&&millis()-upload_started<300000&&received==128+ota_package::size(header)&&identity_check.complete()&&access(owner)&&
     mbedtls_sha256_finish_ret(&sha,digest)==0&&!std::memcmp(digest,header.bytes+16,32);
   if(ok){const auto result=esp_ota_end(handle);handle=0;ok=result==ESP_OK;}
   if(ok)ok=save_receipt(role)&&esp_ota_set_boot_partition(partition)==ESP_OK;

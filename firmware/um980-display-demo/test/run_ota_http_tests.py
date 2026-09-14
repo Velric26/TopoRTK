@@ -38,7 +38,7 @@ int main(int argc,char **argv){assert(argc==2);std::string test=argv[1];httpd_re
  if(test=="transient"){steps={{40,1},{-3,2000},{-3,2000},{60,1}};assert(upload_update(&request)==ESP_OK);assert(writes==100&&finishes==1&&abort_reason.empty());}
  else if(test=="stall"){for(int i=0;i<6;++i)steps.push_back({-3,2000});assert(upload_update(&request)==ESP_FAIL);assert(reads==6&&abort_reason=="Upload stalled for 12 seconds");}
  else if(test=="disconnect"||test=="receive_error"){steps={{40,1},{test=="disconnect"?0:-1,1}};assert(upload_update(&request)==ESP_FAIL);assert(writes==40&&finishes==0);}
- else if(test=="deadline"){request.content_len=1000;for(int i=0;i<60;++i)steps.push_back({1,2000});assert(upload_update(&request)==ESP_FAIL);assert(writes==59&&finishes==0&&abort_reason=="Upload exceeded 120-second deadline");}
+ else if(test=="deadline"){request.content_len=1000;for(int i=0;i<150;++i)steps.push_back({1,2000});assert(upload_update(&request)==ESP_FAIL);assert(writes==149&&finishes==0&&abort_reason=="Upload exceeded 300-second deadline");}
  else if(test=="takeover"){lose_owner=true;steps={{-3,2000}};assert(upload_update(&request)==ESP_FAIL);assert(abort_reason=="Upload controller lost"&&reads==1);}
  else if(test=="origin"){origin=false;assert(upload_update(&request)==ESP_FAIL);assert(begins==0&&reads==0);}
  else if(test=="content_type"){type="text/plain";assert(upload_update(&request)==ESP_FAIL);assert(begins==0&&reads==0);}

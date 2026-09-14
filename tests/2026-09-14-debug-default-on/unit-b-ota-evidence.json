@@ -1,0 +1,97 @@
+{
+  "started": "2026-09-14T19:32:44.061Z",
+  "peer": [
+    {
+      "at": "2026-09-14T19:32:45.521Z",
+      "status": "Rover preparing update"
+    },
+    {
+      "at": "2026-09-14T19:32:46.196Z",
+      "status": "Rover updating - reception paused"
+    },
+    {
+      "at": "2026-09-14T19:33:10.110Z",
+      "status": "Peer reconnected - checking corrections"
+    },
+    {
+      "at": "2026-09-14T19:33:10.862Z",
+      "status": ""
+    }
+  ],
+  "stages": [
+    "Peer preparation acknowledged"
+  ],
+  "oldBoot": 3009318891,
+  "network": [
+    {
+      "at": "2026-09-14T19:32:58.027Z",
+      "path": "/api/v1/update/upload",
+      "status": 200
+    },
+    {
+      "at": "2026-09-14T19:33:02.904Z",
+      "path": "/api/v1/debug/log",
+      "error": "net::ERR_ABORTED"
+    },
+    {
+      "at": "2026-09-14T19:33:03.456Z",
+      "path": "/api/v1/update",
+      "error": "net::ERR_ABORTED"
+    }
+  ],
+  "warning": "Before updating Rover: collection must be idle. Rover correction reception, local processing, web access and Debug monitoring will pause during flash/restart. Base can continue generating corrections. Existing jobs/settings must be preserved.",
+  "result": "Update complete. New firmware passed startup checks. Debug is Off after restart.",
+  "terminal": {
+    "state": "idle",
+    "available": true,
+    "version": 1,
+    "unit": 2,
+    "firmware": "0.11.5",
+    "boot_id": 3087794233,
+    "boot": "New firmware verified",
+    "locked": false,
+    "paused": false,
+    "peer_acknowledged": false,
+    "unconfirmed_override": false,
+    "received": 0,
+    "total": 128,
+    "attempt": 0,
+    "error": "",
+    "target_version": "",
+    "peer_status": ""
+  },
+  "after": {
+    "state": "idle",
+    "available": true,
+    "version": 1,
+    "unit": 2,
+    "firmware": "0.11.5",
+    "boot_id": 3087794233,
+    "boot": "New firmware verified",
+    "locked": false,
+    "paused": false,
+    "peer_acknowledged": false,
+    "unconfirmed_override": false,
+    "received": 0,
+    "total": 128,
+    "attempt": 0,
+    "error": "",
+    "target_version": "",
+    "peer_status": ""
+  },
+  "debug": {
+    "version": 1,
+    "firmware": "0.11.5",
+    "boot_id": 3087794233,
+    "uptime_ms": 11605,
+    "enabled": true,
+    "passive": true,
+    "ota_available": true,
+    "peer_update_notice_available": true,
+    "peer_status": "",
+    "update_paused": false,
+    "update_locked": false
+  },
+  "savedStateUnchanged": true,
+  "browserErrors": []
+}

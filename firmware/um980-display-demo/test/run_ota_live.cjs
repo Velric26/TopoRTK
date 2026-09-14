@@ -36,14 +36,14 @@ const subset=s=>Object.fromEntries(['unit','role','active_job','jobs','records_u
   await page.screenshot({path:path.join(dir,'ota-review.png'),fullPage:true});
   await page.locator('#acceptInterruption').check();assert.equal(await page.locator('#allowUnconfirmed').isChecked(),false);
   await page.locator('#confirmFirmware').click();console.log('Confirmed; browser manages upload.');
-  await page.waitForFunction(()=>document.querySelector('#otaState').textContent.startsWith('Update: failed')||/Update complete|Update rolled back|Upload rejected|Update stopped/.test(document.querySelector('#otaProgress').textContent),{},{timeout:170000});
+  await page.waitForFunction(()=>document.querySelector('#otaState').textContent.startsWith('Update: failed')||/Update complete|Update rolled back|Upload rejected|Update stopped/.test(document.querySelector('#otaProgress').textContent),{},{timeout:360000});
   evidence.result=await page.locator('#otaProgress').innerText();console.log(evidence.result);evidence.terminal=await get(base+'/api/v1/update');
   assert.match(evidence.result,/Update complete/);
   evidence.after=await get(base+'/api/v1/update');assert.notEqual(evidence.after.boot_id,old.boot_id);assert.equal(evidence.after.boot,'New firmware verified');
-  evidence.debug=await get(base+'/api/v1/debug');assert.equal(evidence.debug.enabled,false);
+  evidence.debug=await get(base+'/api/v1/debug');assert.equal(evidence.debug.enabled,true); // Debug is On by default at boot (0.11.5).
   evidence.savedStateUnchanged=JSON.stringify(subset(await get(base+'/api/v1/survey')))===JSON.stringify(subset(before));assert.equal(evidence.savedStateUnchanged,true);
   evidence.browserErrors=errors;assert.deepEqual(errors,[]);
   await page.screenshot({path:path.join(dir,'ota-complete.png'),fullPage:true});
-  console.log('PASS: new boot verified, Debug Off, saved survey state unchanged.');
+  console.log('PASS: new boot verified, Debug On (default), saved survey state unchanged.');
  }finally{clearInterval(timer);await browser.close();fs.writeFileSync(path.join(dir,'ota-evidence.json'),JSON.stringify(evidence,null,2))}
 })().catch(e=>{console.error(e.message);process.exitCode=1});

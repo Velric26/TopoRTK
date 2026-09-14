@@ -1,7 +1,7 @@
 const {chromium}=require('playwright'),fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
 const source=fs.readFileSync(path.join(__dirname,'../src/debug_ui.h'),'utf8'),html=source.split('R"HTML(')[1].split(')HTML"')[0];
 const js=fs.readFileSync(path.join(__dirname,'../src/ota_ui.h'),'utf8').split('R"JS(')[1].split(')JS"')[0];
-const out=path.resolve(process.env.TOPORTK_TEST_RECORD||path.join(__dirname,'../../../tests/2026-09-14-ota'));fs.mkdirSync(out,{recursive:true});
+const root=path.resolve(__dirname,'../../..'),out=path.join(root,process.env.TOPORTK_TEST_RECORD||'tests/2026-09-14-ota');fs.mkdirSync(out,{recursive:true});
 (async()=>{const browser=await chromium.launch({channel:'msedge',headless:true});try{
  const page=await browser.newPage({viewport:{width:390,height:844}}),errors=[],posts=[];
  let owner=false,enabled=true,uptime=0,ack=false,boot=7,version='0.11.0',state='idle',pending=0;
@@ -25,12 +25,12 @@ const out=path.resolve(process.env.TOPORTK_TEST_RECORD||path.join(__dirname,'../
    }
    return route.fulfill({json:{state:'queued'}});
   }
-  if(url.pathname==='/api/v1/debug')return route.fulfill({json:{version:1,boot_id:boot,uptime_ms:++uptime*1000,firmware:version,enabled,remaining_ms:900000},headers:{'X-Controller':String(owner)}});
+  if(url.pathname==='/api/v1/debug')return route.fulfill({json:{version:1,boot_id:boot,uptime_ms:++uptime*1000,firmware:version,enabled},headers:{'X-Controller':String(owner)}});
   if(url.pathname==='/api/v1/debug/log')return route.fulfill({json:{entries:[],throttled:0,overwritten:0,truncated:0}});
   if(url.pathname==='/api/v1/survey')return route.fulfill({json:{unit:'B',role:'ROVER',gnss:{fixed:false,profile_verified:true}}});
   if(url.pathname==='/api/v1/diagnostic')return route.fulfill({json:{corrections:{transport:'sik'}}});
   if(url.pathname==='/api/v1/update'){
-   if(pending&&!--pending){if(state==='pausing')state='ready';else{state='idle';boot=8;version='0.11.1';enabled=owner=false;}}
+   if(pending&&!--pending){if(state==='pausing')state='ready';else{state='idle';boot=8;version='0.11.1';owner=false;}}
    return route.fulfill({json:{version:1,state,unit:2,firmware:version,available:true,locked:!['idle','failed'].includes(state),boot_id:boot,boot:boot===8?'New firmware verified':'USB / normal boot',error:state==='failed'?'Upload stalled for 12 seconds':'',peer_acknowledged:ack,peer_status:'Base updating - corrections paused'}});
   }
   if(url.pathname==='/update-ui.js')return route.fulfill({body:js,contentType:'application/javascript'});
@@ -55,6 +55,6 @@ const out=path.resolve(process.env.TOPORTK_TEST_RECORD||path.join(__dirname,'../
  await page.waitForFunction(()=>document.querySelector('#otaProgress').textContent==='Upload stalled for 12 seconds',null,{timeout:10000});
  assert.equal(uploadCount,2);assert.equal(boot,8);assert(await page.locator('#confirmFirmware').isDisabled());
  assert(!await page.evaluate(()=>window.otaUploading));
- assert.deepEqual(errors,[]);fs.writeFileSync(path.join(out,'ota-browser.json'),JSON.stringify({result:'PASS',checks:['file selection has no mutation','wrong unit rejected','current-controller gate','explicit interruption confirmation','unconfirmed peer override','one binary upload after ready','new boot verification before success','Debug off after restart','specific failure shown without automatic retry','responsive 320/390/768/1280']},null,2));
+ assert.deepEqual(errors,[]);fs.writeFileSync(path.join(out,'ota-browser.json'),JSON.stringify({result:'PASS',checks:['file selection has no mutation','wrong unit rejected','current-controller gate','explicit interruption confirmation','unconfirmed peer override','one binary upload after ready','new boot verification before success','Debug on (default) after restart','specific failure shown without automatic retry','responsive 320/390/768/1280']},null,2));
  console.log('PASS: OTA browser target/review/confirmation, unconfirmed-peer override, upload and new-boot verification');
  }finally{await browser.close()}})().catch(e=>{console.error(e);process.exitCode=1});
