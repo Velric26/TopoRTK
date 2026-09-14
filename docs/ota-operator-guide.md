@@ -1,10 +1,10 @@
 # Debug OTA operator guide — 0.11.0 preview
 
-**Partial USB installation; OTA hardware acceptance pending.** Unit A/Base is installed with 0.11.0: USB write verification, startup, saved survey state and Debug-Off gates passed. Unit B/Rover remains on 0.10.4. On 2026-09-14 the user requested stopping before any further flash. Neither unit has been updated over Wi-Fi yet. See the [installation evidence](../tests/2026-09-14-ota-usb/README.md).
+**Both units installed with 0.11.0 by USB; first Wi-Fi OTA transfer failed safely.** Unit B's browser upload timed out after 37,336 of 1,238,768 bytes. Its boot ID remained unchanged, its update lock/pause cleared, and saved survey state was preserved. Unit A acknowledged preparation and displayed the Rover-updating notice. No successful OTA reboot or hardware rollback has yet been demonstrated. See the [USB evidence](../tests/2026-09-14-ota-usb/README.md) and [first OTA result](../tests/2026-09-14-ota-live/README.md).
 
 ## First installation and later updates
 
-1. Install the completed 0.11.0 firmware/bootloader on both ESP32s by USB and verify the flashed image and startup. Unit A is complete; Unit B is pending and currently paused at the user's request. Keep USB access available for the first OTA and rollback checks.
+1. Install the completed 0.11.0 firmware/bootloader on both ESP32s by USB and verify the flashed image and startup. Both units are complete, with USB write hashes and startup verified. Keep USB access available for the first OTA and rollback checks.
 2. On each instrument touchscreen, open **Setup → Debug → Enable Debug**. Debug is Off after restart and after 15 minutes without user activity. There is no HTTP enable command and no PIN. The current takeover owner may use private Debug/OTA actions.
 3. Connect through the existing local Wi-Fi or instrument hotspot and open **Debug** in the Survey interface. Use the displayed instrument address. The Base in Local Router mode does not gain a new independent phone hotspot from this feature; Direct Link's Base AP remains available. Network provisioning/topology is unchanged.
 4. Choose the `.tpk` package for **hardware Unit A or B**, independently of its current Base/Rover role. Select **Review package and notify peer**. This reserves the instrument and rejects active collection, queued survey mutations, receiver setup and diagnostics. Correction forwarding continues during review.

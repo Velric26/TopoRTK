@@ -1,6 +1,6 @@
 # Partial USB installation — 2026-09-14
 
-Unit A/Base received 0.11.0 by USB. Unit B/Rover remains on 0.10.4; the user explicitly stopped further flashing after backups. No Wi-Fi OTA upload has occurred on either unit.
+Unit A/Base received 0.11.0 by USB. Following the initial pause, the user explicitly requested Unit B installation: its USB upload passed in 15.062 seconds with the written data hash verified. Live HTTP confirmed Unit B / 0.11.0, normal USB boot, Debug Off, idle/unlocked OTA and unchanged saved survey state. Both units are now USB-installed. A subsequent Wi-Fi test is recorded separately in [live OTA evidence](../2026-09-14-ota-live/README.md).
 
 ## Unit A observed results
 
@@ -20,4 +20,4 @@ node firmware/um980-display-demo/test/check_debug_installed.cjs http://192.168.1
 
 Private full 16 MB snapshots for both units completed before the stop. Unit B's full read completed just before cancellation; a subsequent 28,672-byte settings/OTA-metadata snapshot completed in 0.7 seconds. Files and raw device snapshots remain in ignored `.pio/ota-usb-2026-09-14/`, outside Git. Full backups are optional going forward; see the operator guide for settings versus firmware recovery limits.
 
-Pending: Unit B installation, physical Debug enable/expiry, actual Wi-Fi OTA, peer update notices during a real upload and actual bootloader rollback/failure recovery. Host tests and successful USB installation do not establish those results. Resume only when the user requests it.
+At completion of USB installation, actual Wi-Fi OTA, physical Debug expiry and bootloader rollback remained pending. The later live OTA record supersedes this checkpoint for transfer and paired-notice results; successful USB installation alone does not establish OTA acceptance.

@@ -1,0 +1,26 @@
+{
+  "result": "FAIL: OTA transfer timed out; current firmware retained",
+  "update": {
+    "state": "failed",
+    "available": true,
+    "version": 1,
+    "unit": 2,
+    "firmware": "0.11.0",
+    "boot_id": 4042490384,
+    "boot": "USB / normal boot",
+    "locked": false,
+    "paused": false,
+    "peer_acknowledged": true,
+    "unconfirmed_override": false,
+    "received": 37336,
+    "total": 1238768,
+    "attempt": 1,
+    "error": "Upload connection lost or timed out",
+    "target_version": "0.11.0",
+    "peer_status": ""
+  },
+  "debug_enabled": true,
+  "saved_state_unchanged": true,
+  "collection_active": false,
+  "gnss_profile_verified": true
+}

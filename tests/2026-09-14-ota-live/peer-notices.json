@@ -1,0 +1,22 @@
+{
+  "started": "2026-09-14T15:36:50.622Z",
+  "peer": [
+    {
+      "at": "2026-09-14T15:36:52.251Z",
+      "status": "Rover preparing update"
+    },
+    {
+      "at": "2026-09-14T15:36:52.869Z",
+      "status": "Rover updating - reception paused"
+    },
+    {
+      "at": "2026-09-14T15:37:02.452Z",
+      "status": ""
+    }
+  ],
+  "stages": [
+    "Peer preparation acknowledged"
+  ],
+  "oldBoot": 4042490384,
+  "warning": "Before updating Rover: collection must be idle. Rover correction reception, local processing, web access and Debug monitoring will pause during flash/restart. Base can continue generating corrections. Existing jobs/settings must be preserved."
+}
