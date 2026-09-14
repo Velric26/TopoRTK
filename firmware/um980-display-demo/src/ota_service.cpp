@@ -104,10 +104,17 @@ void ota_service(uint32_t now,bool rover,bool profile_busy,bool healthy){
     }
   }
   if(!gate||xSemaphoreTake(gate,0)!=pdTRUE)return;
+  // HTTP may have advanced changed after the caller sampled now. Resample
+  // while holding the same mutex, otherwise unsigned elapsed time can wrap
+  // and expire a request that is only a millisecond old.
+  now=millis();
   role=rover;
   if(state==State::Success){if(now-changed>=1500)ESP.restart();xSemaphoreGive(gate);return;}
   if(locked&&state!=State::Uploading&&state!=State::Failed&&
-      (cancel||!survey_authorized(owner,false)||(!paused&&!debug_enabled())||now-changed>60000))fail(cancel?"Update cancelled":"Update expired or controller lost",now);
+      (cancel||!survey_authorized(owner,false)||(!paused&&!debug_enabled())||now-changed>60000)){
+    const char *reason=cancel?"Update cancelled":!survey_authorized(owner,false)?"Update controller lost":(!paused&&!debug_enabled())?"Debug disabled before update":"Update stage expired";
+    fail(reason,now);
+  }
   if(state==State::Failed&&locked){
     if(notice_started)peer_update_phase(update_notice::Kind::Cancel,now);
     notice_started=false;if(paused)ota_reset_corrections();paused=false;

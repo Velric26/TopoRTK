@@ -1,0 +1,39 @@
+{
+  "started": "2026-09-14T16:09:09.267Z",
+  "peer": [
+    {
+      "at": "2026-09-14T16:09:11.191Z",
+      "status": "Rover preparing update"
+    },
+    {
+      "at": "2026-09-14T16:09:12.230Z",
+      "status": ""
+    }
+  ],
+  "stages": [
+    "Peer preparation acknowledged"
+  ],
+  "oldBoot": 2935605947,
+  "network": [],
+  "warning": "Before updating Rover: collection must be idle. Rover correction reception, local processing, web access and Debug monitoring will pause during flash/restart. Base can continue generating corrections. Existing jobs/settings must be preserved.",
+  "result": "Update expired or controller lost",
+  "terminal": {
+    "state": "failed",
+    "available": true,
+    "version": 1,
+    "unit": 2,
+    "firmware": "0.11.1",
+    "boot_id": 2935605947,
+    "boot": "USB / normal boot",
+    "locked": false,
+    "paused": false,
+    "peer_acknowledged": true,
+    "unconfirmed_override": false,
+    "received": 0,
+    "total": 1239968,
+    "attempt": 2,
+    "error": "Update expired or controller lost",
+    "target_version": "0.11.1",
+    "peer_status": ""
+  }
+}

@@ -18,7 +18,7 @@ generated.write_text('#include "ota_hardware.h"\n' + source + '\n#include "ota_s
 exe = output / 'ota_service.exe'
 subprocess.run(['g++', '-std=c++17', '-DTOPORTK_UNIT_ID=1', '-I'+str(root/'test'), '-I'+str(root/'src'),
                 '-I'+str(root/'.pio/libdeps/unit_a/ArduinoJson/src'), str(generated), '-o', str(exe)], check=True)
-cases = ['wrong_target', 'debug_off', 'busy', 'cancel', 'takeover', 'no_ack', 'begin_failure',
+cases = ['stage_deadline', 'stale_success_clock', 'stale_prepare_clock', 'stale_start_clock', 'wrong_target', 'debug_off', 'busy', 'cancel', 'takeover', 'no_ack', 'begin_failure',
          'disconnect', 'timeout', 'write_failure', 'changed_header', 'changed_identity', 'owner_lost',
          'digest_failure', 'end_failure', 'nvs_failure', 'select_failure', 'boot_health', 'boot_failure']
 for case in cases:

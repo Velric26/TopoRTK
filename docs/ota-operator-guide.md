@@ -1,8 +1,8 @@
-# Debug OTA operator guide — 0.11.1 preview
+# Debug OTA operator guide — 0.11.2 preview
 
-**Both units installed with 0.11.0 by USB; first Wi-Fi OTA transfer failed safely.** Unit B's browser upload timed out after 37,336 of 1,238,768 bytes. Its boot ID remained unchanged, its update lock/pause cleared, and saved survey state was preserved. Unit A acknowledged preparation and displayed the Rover-updating notice. No successful OTA reboot or hardware rollback has yet been demonstrated. See the [USB evidence](../tests/2026-09-14-ota-usb/README.md) and [first OTA result](../tests/2026-09-14-ota-live/README.md).
+**One real Wi-Fi OTA cycle passed.** Unit B updated from 0.11.1 to 0.11.2 over the local router, restarted, passed startup acceptance, preserved saved settings/jobs and returned Debug to Off. Unit A remains on 0.11.0 and displayed the preparation, Updating and Reconnected notices. This did not flash either UM980 or SiK radio.
 
-**Recovery increment:** Unit B now runs 0.11.1, installed by USB with write/startup verification and saved state preserved. Unit A remains 0.11.0. The new upload handler retries transient receives with a 12-second no-progress limit, retains the 120-second total limit, and closes failed requests without draining their remaining body. Debug browser requests are cancelled/paused during upload. Software checks pass; a new physical Debug enable on Unit B and a real Wi-Fi retry are still required. See [recovery evidence](../tests/2026-09-14-ota-recovery/README.md).
+The transfer took 118.602 seconds, close to the 120-second limit. Investigate throughput and time margin before depending on OTA without easy USB recovery. Actual rollback, intentional interruption recovery and hotspot OTA remain untested. Version 0.11.2 also fixes a reproduced clock race that could immediately expire a fresh update request. See [successful hardware evidence](../tests/2026-09-14-ota-success/README.md); the earlier timeout/recovery records remain historical evidence.
 
 ## First installation and later updates
 

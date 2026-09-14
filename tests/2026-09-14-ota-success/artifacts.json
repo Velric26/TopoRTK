@@ -1,0 +1,16 @@
+[
+  {
+    "unit": "unit_a",
+    "version": "0.11.2",
+    "image_bytes": 1239936,
+    "sha256": "74cdbbf1c2f58ab28cc5768e89837e3d9fc595158bf6dc9d8d11bcc0a73c24f1"
+  },
+  {
+    "unit": "unit_b",
+    "version": "0.11.2",
+    "image_bytes": 1239936,
+    "sha256": "367f2a427e761eb84df0bf97f4f97466f64d2ab1746a263d43221e2c7b1bdb54",
+    "package_bytes": 1240064,
+    "package_sha256": "e54fb37dd788e984a6f0f99ce9a5962104cfaf24d067afddaf1b5ec8e0d4e370"
+  }
+]

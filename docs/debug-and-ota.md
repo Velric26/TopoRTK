@@ -1,5 +1,9 @@
 # Debug, OTA and paired update status
 
+## Latest hardware checkpoint — 0.11.2, 2026-09-14
+
+Unit B successfully updated from 0.11.1 to 0.11.2 over local Wi-Fi with the actual browser workflow, verified its new boot, preserved saved survey state and returned Debug to Off. Unit A (still 0.11.0) displayed preparation, Updating and Reconnected statuses. The complete transfer took 118.602 seconds with zero receive-timeout retries, leaving little margin below 120 seconds. This proves one successful local-router OTA/acceptance cycle, not hotspot coverage, sustained throughput, actual rollback or field reliability. The preceding attempt stopped before upload; 0.11.2 corrects a host-reproduced race between HTTP timestamps and the main-loop clock. See [full evidence and next work](../tests/2026-09-14-ota-success/README.md). Earlier checkpoints below are historical.
+
 ## Current checkpoint — 0.11.0 software, 2026-09-14
 
 Peer transport integration, the guarded package uploader, role-specific confirmations, browser progress/new-boot verification, deferred boot acceptance and rollback handling are now implemented in source. Software checks and both firmware builds pass. **Both units have received 0.11.0 by USB. The first Unit B Wi-Fi OTA transfer timed out after 37,336 bytes and safely retained the running firmware. Successful OTA and rollback acceptance remain pending.** Peer preparation and Updating notices were observed on Unit A. See the [live result and next work](../tests/2026-09-14-ota-live/README.md). Routine development updates use a small settings snapshot when practical; full flash backups are optional. See the [operator guide and actual behavior](ota-operator-guide.md), [software validation](../tests/2026-09-14-ota/README.md) and [USB installation evidence](../tests/2026-09-14-ota-usb/README.md).

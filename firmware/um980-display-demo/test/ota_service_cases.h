@@ -32,6 +32,11 @@ int main(int argc,char **argv){
   if(test=="debug_off"){debug_on=false;assert(!ota_request(prepare_request().c_str(),test_token));return 0;}
   assert(ota_request(prepare_request().c_str(),test_token));assert(ota_locked()&&!ota_paused());
   assert(!ota_request(prepare_request().c_str(),test_token));
+  if(test=="stage_deadline"){step(60001);assert(!ota_locked()&&begins==0&&status().find("Update stage expired")!=std::string::npos);return 0;}
+  if(test=="stale_prepare_clock"){
+    const uint32_t old_now=clock_ms-1;ota_service(old_now,false,false,true);
+    assert(ota_locked()&&status().find("notifying")!=std::string::npos);return 0;
+  }
   if(test=="busy")admission=false;
   step();
   if(test=="busy"){step();assert(!ota_locked()&&begins==0&&status().find("Finish collection")!=std::string::npos);return 0;}
@@ -39,6 +44,12 @@ int main(int argc,char **argv){
   step(3501);
   if(test=="cancel"){assert(ota_request("{\"op\":\"cancel\"}",test_token));step();assert(!ota_locked()&&begins==0&&release_count==1);return 0;}
   if(test=="takeover"){controller=false;step();assert(!ota_locked()&&begins==0);return 0;}
+  if(test=="stale_start_clock"){
+    const uint32_t old_now=clock_ms;++clock_ms;
+    assert(ota_request("{\"op\":\"start\",\"confirm\":true}",test_token));
+    ota_service(old_now,false,false,true);
+    assert(ota_locked()&&ota_paused()&&status().find("pausing")!=std::string::npos);return 0;
+  }
   if(test=="no_ack")assert(!ota_request("{\"op\":\"start\",\"confirm\":true}",test_token));
   assert(ota_request("{\"op\":\"start\",\"confirm\":true,\"allow_unconfirmed\":true}",test_token));step();assert(ota_paused());step(3501);
   if(test=="begin_failure")begin_error=1;
@@ -65,7 +76,9 @@ int main(int argc,char **argv){
   if(test=="digest_failure"||test=="end_failure"||test=="nvs_failure"||test=="select_failure"){
     assert(!complete);step();assert(!ota_locked()&&selected==running);return 0;
   }
-  assert(complete&&selected==&second_slot);step(1600);assert(ESP.restarts==1);
+  assert(complete&&selected==&second_slot);
+  if(test=="stale_success_clock"){ota_service(clock_ms-1,false,false,true);assert(ESP.restarts==0);step(1500);assert(ESP.restarts==1);return 0;}
+  step(1600);assert(ESP.restarts==1);
   if(test=="boot_health"||test=="boot_failure"){
     running=selected;image_state=ESP_OTA_IMG_PENDING_VERIFY;ota_boot_begin();
     step(10001,test=="boot_health");
