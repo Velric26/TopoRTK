@@ -38,6 +38,23 @@ Public availability: `GET /api/v1/debug`. Private history: `GET /api/v1/debug/lo
 
 ## Increment 2 — peer update-notice protocol
 
+### Portable core checkpoint — 2026-09-13
+
+Implementation paused when the five-hour usage check reported **91% used / 9% remaining**, per the operator's limit. The passing portable core, test evidence and continuation steps are committed together. No transport integration or OTA flash was started.
+
+`src/update_notice.h` now implements a bounded, hardware-independent notice codec and sender/peer state machines. `test/run_update_tests.py` compiles it with warnings as errors and runs wire-bit corruption, reserved-field rejection, loss/retry, wrong role/unit/session/attempt, phase reorder, cancellation overtaking prepare, timer rollover and 1,000 seeded fault schedules. The tests pass. This core is **not integrated into either transport, display or OTA service**; it does not change the running firmware and does not make the upload control available. Evidence: [protocol checkpoint](../tests/2026-09-13-update-notice/README.md).
+
+The wire record is 40 bytes: `TUP1`, version 1, kind, sender/recipient instrument IDs, little-endian session/attempt/sequence/duration, role, acknowledged kind, ten reserved zero bytes, and CRC32 over the first 36 bytes. IDs 1/2 identify hardware, independently of Base/Rover role. Prepare/Updating deadlines are bounded to 3–180 seconds from reception; no phase/retry may extend an existing deadline. A sender offers at most six writes over three seconds, spaced 500 ms after successful transmission. The adapter must call `committed` only after accepting the entire record. Acknowledgements correlate session, attempt, sequence, phase and peer; they cannot authorize a flash operation.
+
+Attempts must increase within a newly provisioned session. Selecting the same session preserves replay history. A cancellation received before its prepare/update records a closed attempt, so delayed messages cannot reopen it. Reconnection remains a separate status until the adapter supplies fresh identity and receiver-quality evidence. CRC provides corruption detection, not authentication. Transport adapters must enforce trusted pairing/session selection and bounded acknowledgement scheduling; these are not supplied by this portable core.
+
+Next implementation steps, in dependency order:
+
+1. Add a shared UART envelope demultiplexer and scheduler for RTCM plus notices. Do not feed an independent notice parser arbitrary RTCM payload bytes: an embedded marker could otherwise be mistaken for control traffic. Add equivalent selected-peer Wi-Fi routing, without silently substituting Wi-Fi when SiK is selected.
+2. Provide fresh session/attempt correlation across reboot and role changes, bounded acknowledgement scheduling, and truthful touchscreen/web peer labels. Persist or explicitly restore the current SiK selection before promising automatic post-update recovery.
+3. Implement the image package/target validation and OTA admission/ownership service, then the upload UI, deferred boot acceptance and rollback checks described below.
+4. Run transport, HTTP, browser and firmware builds before the combined USB preparation and real OTA/failure tests. The user accepted completing OTA before this USB installation on 2026-09-13.
+
 Implement a small bounded control channel independently of RTCM freshness and command execution. It must work on the **selected instrument link**, including SiK; local-router reachability cannot be a prerequisite in the field. Share the existing UART2 owner and scheduler. Use explicit peer identity, current session, update-attempt ID, sequence, finite deadline and CRC; validate source/session and reject malformed, stale or replayed notices. CRC/session matching is protocol isolation, not cryptographic authentication. Define/provision authentication separately before claiming authenticated RF control.
 
 Use `prepare-update`, `acknowledged`, `updating`, `cancelled` and `reconnected` states with bounded retries and repeat suppression. Sending an acknowledgement must not itself change receiver configuration or cancel an occupation. An update notice records intent; `updating` follows only when interruption actually starts. A repeated notice must not indefinitely extend the peer's deadline. A peer that receives no notice shows the ordinary lost-link state.

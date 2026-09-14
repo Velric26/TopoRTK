@@ -1,0 +1,1 @@
+PASS: update notice wire corruption, bounded retry/loss, role/session/attempt isolation, reorder/cancel tombstones, deadline and timer wrap, recovery quality gate (1000 fault runs)
