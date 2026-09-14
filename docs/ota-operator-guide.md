@@ -1,14 +1,23 @@
-# Debug OTA operator guide — 0.11.2 preview (0.11.3 source pending flash)
+# ESP32 firmware updates — OTA preferred
 
-**One real Wi-Fi OTA cycle passed.** Unit B updated from 0.11.1 to 0.11.2 over the local router, restarted, passed startup acceptance, preserved saved settings/jobs and returned Debug to Off. Unit A remains on 0.11.0 and displayed the preparation, Updating and Reconnected notices. This did not flash either UM980 or SiK radio.
+**OTA over Wi-Fi is the preferred method for routine firmware flashing and updates.** Use the existing web Debug workflow or the supported browser automation below. USB/serial flashing is the fallback when OTA is unavailable, the instrument cannot be reached over the network, or bootloader/partition recovery or first-time provisioning is required. A normal OTA update does not require connecting USB or removing the batteries/holder; keep stable power throughout.
 
-The transfer took 118.602 seconds, close to the 120-second limit then in force. The 0.11.3 source raises the transfer deadline to 300 seconds (deployed 2026-09-14; exercised by later update cycles). Bootloader rollback, watchdog recovery and interrupted-upload retention were proven on hardware 2026-09-14 with deliberate fault-injection images — see [rollback acceptance evidence](../tests/2026-09-14-rollback-acceptance/README.md). Hotspot OTA remains untested. Version 0.11.2 also fixes a reproduced clock race that could immediately expire a fresh update request. See [successful hardware evidence](../tests/2026-09-14-ota-success/README.md); the earlier timeout/recovery records remain historical evidence.
+Both units have validated local-router OTA. Debug defaults **On** at startup from 0.11.5 and has no idle timeout. If manually disabled, enable it on the touchscreen; there is no remote enable command. The transfer budget is 300 seconds with a 12-second no-progress limit. Interrupted-upload retention and bootloader/watchdog rollback have been tested on hardware; hotspot OTA remains unvalidated. See [default-on deployment](../tests/2026-09-14-debug-default-on/README.md) and [rollback evidence](../tests/2026-09-14-rollback-acceptance/README.md).
 
-## First installation and later updates
+## Known local-router addresses
 
-1. Install the appropriate firmware/bootloader on each ESP32 by USB and verify the flashed image and startup. Both units are complete, with USB write hashes and startup verified. Keep USB access available for the first OTA and rollback checks.
-2. On each instrument touchscreen, open **Setup → Debug → Enable Debug**. Debug is On by default at startup (0.11.5) and stays On until disabled on the instrument or web (no idle timer). There is no HTTP enable command and no PIN. The current takeover owner may use private Debug/OTA actions.
-3. Connect through the existing local Wi-Fi or instrument hotspot and open **Debug** in the Survey interface. Use the displayed instrument address. The Base in Local Router mode does not gain a new independent phone hotspot from this feature; Direct Link's Base AP remains available. Network provisioning/topology is unchanged.
+| Hardware | Known IP | Debug page |
+|---|---|---|
+| Unit A | `192.168.100.20` | [Unit A Debug](http://192.168.100.20/debug) |
+| Unit B | `192.168.100.19` | [Unit B Debug](http://192.168.100.19/debug) |
+
+These are last-known DHCP addresses, not guaranteed static assignments. Hardware A/B identity determines the package; Base/Rover roles can change. Check `/api/v1/survey` (`unit`) and `/api/v1/update` (numeric `unit`, firmware and boot status) before updating. If an address changes, use the instrument's Link display. Hotspot addresses depend on the active network configuration and need not match this table.
+
+## Recommended OTA procedure
+
+1. Build and package the intended hardware variant using the commands below. Verify the package target and version against the intended source/build; do not reuse a stale `.tpk`. Both existing instruments are already provisioned for OTA. Update one instrument at a time, with collection and active diagnostics stopped.
+2. Check Debug availability on the target. It is On by default at startup (0.11.5) and stays On until disabled on the instrument or web (no idle timer). Only if it is Off, open **Setup → Debug → Enable Debug** on that instrument. There is no HTTP enable command and no PIN. The current takeover owner may use private Debug/OTA actions.
+3. Connect through the existing local Wi-Fi or instrument hotspot and open **Debug** in the Survey interface. Select **Take control** (the latest accepted request owns control), then verify the unit identity. Use the known address above or the displayed instrument address. The Base in Local Router mode does not gain a new independent phone hotspot from this feature; Direct Link's Base AP remains available. Network provisioning/topology is unchanged.
 4. Choose the `.tpk` package for **hardware Unit A or B**, independently of its current Base/Rover role. Select **Review package and notify peer**. This reserves the instrument and rejects active collection, queued survey mutations, receiver setup and diagnostics. Correction forwarding continues during review.
 5. Read the role-specific interruptions. Accept the interruption/power checkbox. If peer acknowledgement cannot be confirmed, explicitly choose whether to permit an unconfirmed notification. **Confirm interruption and install** pauses local processing and starts a separate Updating notice. Without the override, a missing final acknowledgement aborts before writing flash.
 6. Keep power connected. The browser shows transfer progress, then waits for a new boot and its startup verdict. HTTP/Debug polling pauses during the synchronous upload. A successful transfer alone is not reported as a successful update. If the connection is lost, reconnect and check the outcome before retrying.
@@ -58,3 +67,38 @@ python tools/package_firmware.py firmware/um980-display-demo/.pio/build/unit_b/f
 Keep packages under ignored `.pio` and distribute locally to the intended instruments. Compiled firmware can contain the ignored build-time Wi-Fi configuration; binaries/packages must not be committed to the repository.
 
 The [design](debug-and-ota.md) records decisions and the [software evidence](../tests/2026-09-14-ota/README.md) separates completed checks from outstanding hardware acceptance.
+
+## Supported scripted OTA (optional)
+
+Run from the repository root after the build/package commands above. Requires Node.js, Playwright available to Node, and Microsoft Edge installed (the runner launches Edge). Use the project's existing Node environment; if needed, set `NODE_PATH` to the environment containing Playwright. The manual browser procedure requires none of these automation dependencies.
+
+```powershell
+# Update hardware Unit A; monitor Unit B as its peer.
+node firmware/um980-display-demo/test/run_ota_live.cjs --install A http://192.168.100.20 http://192.168.100.19 firmware/um980-display-demo/.pio/build/unit_a/firmware.tpk
+
+# Or update hardware Unit B; monitor Unit A as its peer.
+node firmware/um980-display-demo/test/run_ota_live.cjs --install B http://192.168.100.19 http://192.168.100.20 firmware/um980-display-demo/.pio/build/unit_b/firmware.tpk
+```
+
+**These commands really install firmware.** Run one at a time. The runner validates package target/size/digest, checks live identity, Debug and idle state, takes control, reviews the package, requires peer preparation acknowledgement, accepts the interruption warning, and uploads without enabling the unconfirmed-peer override. It verifies a changed boot ID, startup acceptance, current default Debug On, and unchanged saved survey state. It never retries automatically. Evidence is private under `firmware/um980-display-demo/.pio/ota-live-<timestamp>/`. If peer acknowledgement is unavailable, the runner stops; use the manual workflow only after reviewing its explicit unconfirmed-peer warning.
+
+### Address detection: recommended follow-up, not implemented
+
+The current runner requires both URLs; it does **not** scan these addresses automatically. A future wrapper should probe both known addresses with bounded read-only HTTP requests, read their hardware identities, and map A/B to reachable URLs. Select the unique identity matching the package, never simply the first reachable IP. Reject duplicate/ambiguous identities, a missing target or busy target; report an unavailable peer without silently bypassing its acknowledgement. Permit explicit URL overrides for changed DHCP or hotspot addresses. This removes routine manual IP selection without risking an update to the wrong unit.
+
+Automatic discovery was considered but deferred because the five-hour usage pause threshold had already been reached during this documentation update. No detection capability or device changes are claimed here.
+
+## USB/serial fallback
+
+Use USB when OTA cannot be used or for recovery/initial provisioning. Confirm the USB identity/port first: current project defaults are Unit A `COM4`, Unit B `COM10`, but enumeration can change. From the repository root, select only the required target:
+
+```powershell
+platformio run -d firmware/um980-display-demo -e unit_a -t upload
+# Or:
+platformio run -d firmware/um980-display-demo -e unit_b -t upload
+
+# Optional USB console (close before uploading):
+platformio device monitor -d firmware/um980-display-demo -e unit_b
+```
+
+Verify the write hash, boot/version, and preserved settings/jobs afterward. Do not erase flash as a routine update step. Full-flash backups remain optional as described above; USB recovery restores firmware, not erased user data.

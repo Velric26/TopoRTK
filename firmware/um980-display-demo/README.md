@@ -1,5 +1,7 @@
 # UM980 Display Demo
 
+**Firmware updates: OTA over Wi-Fi is preferred.** Known router addresses: Unit A `192.168.100.20`, Unit B `192.168.100.19` (verify hardware identity; DHCP addresses can change). Use the [OTA operator guide](../../docs/ota-operator-guide.md) for build/package commands, the web workflow and the supported install script. USB/serial is for unavailable OTA, unreachable devices, first provisioning or recovery. Earlier dated sections below retain historical validation details.
+
 > Status: Both units have validated bidirectional TTL Channel 2, rotation `0`, automatic startup profiles, and CRC-validated BESTNAV accuracy parsing. On 2026-09-06 Unit A generated live base RTCM over the ESP32 Wi-Fi bridge and Unit B reached `RTK FIXED` using HA-609 antennas. Absolute accuracy and repeatability remain untested.
 
 This firmware keeps the validated display initialization and adds a dedicated UART connection to the UM980. It displays the most recent NMEA GGA position and mirrors receiver lines to native USB serial.
@@ -20,7 +22,7 @@ The read-only overview shows readiness, correction link, GNSS fix, horizontal un
 
 The original status endpoint remains read-only. UI 0.3 keeps an HTTP listener on both roles and adds paired survey commands; the HTTP task queues these for the survey/receiver workers. The Rover field access point is implemented; extended Android and field validation remain tracked in the phone Wi-Fi checkpoint.
 
-Build both hardware variants with `pio run -e unit_a -e unit_b`. Unit A uses COM4 and Unit B uses COM10; normal uploads use `pio run -e unit_a -t upload` / `pio run -e unit_b -t upload`. Both now have UI 0.3. The survey checkpoint records USB recovery and verified flashing alongside the [earlier status validation](../../tests/2026-09-10-rover-web-status/README.md).
+Build both hardware variants with `pio run -e unit_a -e unit_b`. Package and update through the [preferred OTA workflow](../../docs/ota-operator-guide.md). USB defaults are COM4 for Unit A and COM10 for Unit B; USB upload commands are fallback/recovery procedures, not the routine update method.
 
 ## Survey jobs and collection (UI 0.3)
 
@@ -115,9 +117,9 @@ GPS details contain UART, fix, local `UTC-6`, UTC date/time, coordinates, satell
 
 Base mode uses `BASE WAIT`, `BASE SURVEY`, and `BASE LOCKED` instead of the misleading generic `MANUAL` label. `H-ACC` shows `---` without a usable fix and `N/A (BASE)` after the autonomous base coordinate is locked.
 
-## Build, Flash, and Monitor
+## USB fallback: build, flash and monitor
 
-From this directory, select the instrument explicitly:
+For routine updates, use the [OTA procedure](../../docs/ota-operator-guide.md). When USB fallback is required, run from this directory and select the instrument explicitly:
 
 ```powershell
 pio run --environment unit_a

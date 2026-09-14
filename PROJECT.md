@@ -26,6 +26,12 @@ This applies to firmware, wiring, power, GNSS settings, RTCM, radio settings, st
 - Ask all known questions together up front. If further user input is required, ask and end the turn; do not stay active while waiting.
 - Pause implementation if the **five-hour** usage allowance reaches 10% remaining; update documentation, commit and push. Weekly usage is not this threshold.
 
+### Firmware update policy
+
+**OTA over Wi-Fi is the preferred flashing/update method.** Known local-router addresses are Unit A **192.168.100.20** and Unit B **192.168.100.19**; verify hardware identity because roles and DHCP addresses can change. Use the [OTA operator guide](docs/ota-operator-guide.md) for the web procedure, build/package commands and supported `run_ota_live.cjs --install` commands. USB/serial is the fallback for unavailable OTA, network-unreachable devices, initial provisioning and recovery. Full flash backups are optional for routine development updates.
+
+The existing OTA runner validates the selected unit but still requires explicit URLs. Identity-based discovery across the two known addresses is recommended and documented as a follow-up, not an implemented capability. Implementation paused at the five-hour usage threshold; this update changes documentation only.
+
 ### Debug checkpoint — 2026-09-13
 
 **2026-09-14 timeout changes (0.11.3 deployed):** Two operator-requested behavior changes shipped as 0.11.3: the OTA transfer deadline is raised from 120 to 300 seconds (the verified transfer took 118.602 s, nearly exhausting the old limit; the 12-second no-progress stall limit is unchanged), and Debug no longer expires after 15 idle minutes — it stays On until disabled on the instrument or web, or until restart; the `activity` keep-alive operation and browser extend control were removed with the timer. All host/HTTP/service suites and both browser regressions pass (Node.js 24.19.0 / Playwright 1.63.0 installed for the browser checks; see [test record](tests/2026-09-14-timeout-changes/README.md)). Both units then received 0.11.3 over Wi-Fi OTA using the standard browser workflow, each with acknowledged paired notices, verified new boots, Debug Off after restart and unchanged saved survey state — **both instruments are now aligned on 0.11.3**. The 300-second deadline itself governs the next update cycle; deliberate rollback acceptance and the SiK bench session remain the next P0 items.
