@@ -1,8 +1,10 @@
-# Live SiK correction bridge — 0.10.4 bench preview
+# Live SiK correction bridge
+
+**2026-09-14 bench validation (0.11.5):** the production SiK path was validated end-to-end with real receivers at bench range — Base UM980 COM2 RTCM (~4 frames/s full profile) over RTM1 envelopes to the Rover, ~94% delivered, every delivered frame forwarded into the Rover UM980, zero output faults; paired synthetic radio test passed 15/15 both directions with zero loss. Indoors: no GNSS fix, so RTK FIXED, recovery-under-sky and range remain outdoor work. Peer "Update overdue" indoors is the Rover quality gate, by design. See [bench evidence](../tests/2026-09-14-sik-bench/README.md).
 
 This increment connects the existing Base COM2 RTCM parser to the validated RTM1 transport core, then connects the Rover reassembler to a bounded COM2 output queue. Packet-loss investigation remains [deferred](packet-loss-investigation.md). A perfect synthetic delivery score is not a prerequisite for receiver testing.
 
-The portable bridge, production COM2 writer and browser controls have automated coverage. Both builds and flash verification passed. Real UM980 correction flow, receiver differential age, RTK recovery and independent field accuracy checks are still required. Firmware forwarding is implemented; field acceptance is not complete. See the [dated evidence](../tests/2026-09-13-correction-bridge/README.md).
+The portable bridge, production COM2 writer and browser controls have automated coverage. Both builds and flash verification passed. ~~Real UM980 correction flow~~ (validated at bench range 2026-09-14, above), receiver differential age under sky, RTK recovery and independent field accuracy checks are still required. See the [dated evidence](../tests/2026-09-13-correction-bridge/README.md).
 
 ## Connections
 
