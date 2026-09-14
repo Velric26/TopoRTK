@@ -1,5 +1,11 @@
 # Debug, OTA and paired update status
 
+## Current checkpoint — 0.11.0 software, 2026-09-14
+
+Peer transport integration, the guarded package uploader, role-specific confirmations, browser progress/new-boot verification, deferred boot acceptance and rollback handling are now implemented in source. Software checks and both firmware builds pass; **no unit has been flashed and hardware acceptance is pending**. The user requested finishing this software step and stopping. See the [operator guide and actual behavior](ota-operator-guide.md) and [validation evidence](../tests/2026-09-14-ota/README.md).
+
+SiK restoration after OTA deliberately carries peer-status traffic only: corrections require a fresh Base session and Rover rejoin, so restarted counters cannot reuse the old session's replay window. This implements the explicit manual-rejoin option below; seamless session negotiation remains deferred. The earlier increment sections retain their historical checkpoints and the original design requirements.
+
 ## Accepted operator requirements
 
 - Name the feature **Debug**, including the touchscreen setting and dedicated web tab.

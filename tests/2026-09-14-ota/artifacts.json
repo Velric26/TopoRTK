@@ -1,0 +1,20 @@
+[
+  {
+    "unit": "unit_a",
+    "version": "0.11.0",
+    "image_bytes": 1238640,
+    "image_sha256": "c811287e255d49a90a03cf5c34ba34304cec27dc0a0ba3bdbbb8e7f5e8c5e38b",
+    "package_bytes": 1238768,
+    "package_sha256": "769a4a6d4947af113820cc00d03dc3f3d2e1b7ba5450230c5ba794868235cc65",
+    "embedded_identity_offset": 18094
+  },
+  {
+    "unit": "unit_b",
+    "version": "0.11.0",
+    "image_bytes": 1238640,
+    "image_sha256": "b0ce12c023394f61ce4c4704f9e1f04156ce334d44b11c18aefcb49a16af5a8c",
+    "package_bytes": 1238768,
+    "package_sha256": "1e63022af6cf7a982315d456dcd481bc2b99d12da7504641809b525d7a3e410a",
+    "embedded_identity_offset": 18094
+  }
+]

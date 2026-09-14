@@ -12,6 +12,8 @@ Record toolchain, framework, dependencies, board settings, and required host too
 
 ## Build and Flash
 
+**2026-09-14:** 0.11.0 source contains guarded OTA and paired update notices, with passing software checks and hardware acceptance pending. No unit was flashed at the user's stop request. The [operator guide](ota-operator-guide.md) documents packages, interrupted-upload behavior, deferred boot acceptance, rollback checks and SiK rejoin. Do not interpret the earlier unimplemented-OTA checkpoint below as the current source status.
+
 **2026-09-13:** Debug 0.10.5 builds for Unit A and Unit B; it has not been flashed. The deployed baseline remains 0.10.4. OTA is not available yet: the next update workflow requires peer notices, guarded inactive-slot writing and verified boot rollback. See [Debug/OTA architecture and deployment order](debug-and-ota.md) and [build/test evidence](../tests/2026-09-13-debug/README.md).
 
 Document commands, cable/port requirements, recovery procedure, and how to confirm the flashed version.

@@ -4,6 +4,10 @@
 
 ## Users and Field Workflow
 
+### Debug OTA preview (0.11.0 source)
+
+The Debug tab now offers package review, role-specific interruption warnings, explicit final confirmation, peer acknowledgement/unconfirmed override and transfer/new-boot status. Peer update labels also appear on Survey tabs and the instrument dashboard. Passive Debug remains separate from the update pause. Both builds and software regressions pass; hardware deployment remains pending. See the [operator guide](ota-operator-guide.md), including the explicit fresh-session SiK rejoin after OTA.
+
 ### Debug (0.10.5 source; hardware validation pending)
 
 Enable **Setup → Debug → Enable Debug** on the instrument touchscreen. Debug defaults Off after restart and expires after 15 minutes without user activity; passive polling does not renew it. The web Survey interface has a dedicated Debug tab on both roles, gray/disabled with enable instructions when unavailable. The current controller can view bounded GNSS and correction summaries, filter or pause the view, and download a snapshot without injecting receiver commands or diagnostic traffic. There is no PIN and no remote enable operation.

@@ -74,6 +74,12 @@ int main() {
     assert(correction_radio_input(reference.data(),reference.size(),host_now-1000));
     host_now+=500;service_correction_output();assert(correction_output.size()==0); // carried age expires
     host_radio_active=false;
+    // Admitted OTA pause rejects new input and discards pending output. Preparing
+    // without a pause keeps forwarding available while collection is reserved.
+    host_ota_locked=true;assert(queue_correction(reference.data(),reference.size(),host_now));
+    host_ota_paused=true;assert(!queue_correction(reference.data(),reference.size(),host_now));
+    service_correction_output();assert(correction_output.size()==0);assert(!system_ready(host_now));
+    host_ota_paused=host_ota_locked=false;
     // A surfaced adapter fault latches inhibition; it never retries a suffix.
     assert(queue_correction(reference.data(),reference.size(),host_now));gnss.short_limit=3;service_correction_output();
     assert(correction_output_fault&&correction_health.arrival_age(host_now)==UINT32_MAX);

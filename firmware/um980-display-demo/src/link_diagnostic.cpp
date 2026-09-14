@@ -1,5 +1,7 @@
 #include "link_diagnostic.h"
 #include "debug_service.h"
+#include "peer_update.h"
+#include "ota_service.h"
 #include "link_diagnostic_core.h"
 #include "correction_transport_selftest.h"
 #include "correction_pair_test.h"
@@ -15,14 +17,16 @@
 namespace {
 linktest::Engine engine;HardwareSerial radio(2);WiFiUDP udp;
 correctiontest::Engine pair_engine;bool paired=false;
+peer_wire::Stream live_wire;
+bool live_rejoin=false;
 correction::Bridge live;char route_error[96]={};
 uint32_t live_tx_wait=0,live_output_rejected=0,live_short_writes=0;
 void live_json(JsonObject d){
-  d["transport"]=live.active()?"sik":"wifi";d["session"]=live.session();d["fault"]=live.fault();d["station"]=live.station();d["error"]=route_error;
+  d["rejoin_required"]=live_rejoin;d["transport"]=live.active()?"sik":"wifi";d["session"]=live.session();d["fault"]=live.fault();d["station"]=live.station();d["error"]=route_error;
   d["submitted"]=live.submitted;d["envelopes"]=live.envelopes;d["received"]=live.complete;
   d["station_rejected"]=live.station_rejected;d["queue_pending"]=live.queue().size();d["queue_expired"]=live.queue().expired;
   d["queue_overflow"]=live.queue().overflow;d["queue_replaced"]=live.queue().replaced;d["sender_expired"]=live.sender_expired();
-  d["wire_errors"]=live.stats().wire_errors;d["assembly_expired"]=live.stats().expired;d["wrong_session"]=live.stats().wrong_session;
+  d["wire_errors"]=live.stats().wire_errors+live_wire.wire_errors;d["assembly_expired"]=live.stats().expired;d["wrong_session"]=live.stats().wrong_session;
   d["replays"]=live.stats().replays;d["rtcm_errors"]=live.stats().rtcm_errors;d["tx_wait"]=live_tx_wait;
   d["output_rejected"]=live_output_rejected;d["short_writes"]=live_short_writes;d["workspace_bytes"]=sizeof(live);
   const auto output=correction_output_stats();auto out=d.createNestedObject("output");out["forwarded"]=output.forwarded;
@@ -145,8 +149,15 @@ void diagnostic_begin(){
 }
 bool correction_radio_active(){return live.active();}
 bool correction_radio_linked(uint32_t now){return live.linked(now);}
-bool correction_radio_submit(const uint8_t *frame,size_t size,uint32_t now){return live.enqueue(frame,size,now);}
-void correction_radio_stop(){live.stop();correction_output_reset();}
+bool correction_radio_submit(const uint8_t *frame,size_t size,uint32_t now){return !live_rejoin&&live.enqueue(frame,size,now);}
+bool correction_radio_needs_rejoin(){return live_rejoin;}
+uint32_t correction_radio_session(){return live.session();}
+void correction_radio_clear_pending(){live.clear_pending();live_wire.reset();}
+bool correction_radio_restore(uint32_t session,bool rover){
+  if(test_busy()||probe_phase||!live.begin(session,rover))return false;
+  start_radio();live_wire.reset();live_rejoin=true;std::strcpy(route_error,"OTA restart: start a fresh Base SiK session, then join it on Rover.");return true;
+}
+void correction_radio_stop(){live_rejoin=false;live.stop();live_wire.reset();correction_output_reset();}
 bool diagnostic_busy(){portENTER_CRITICAL(&guard);bool value=cached_busy;portEXIT_CRITICAL(&guard);return value;}
 bool diagnostic_snapshot(char *out,size_t capacity){portENTER_CRITICAL(&guard);size_t n=std::strlen(cached);bool ok=n<capacity;if(ok)std::memcpy(out,cached,n+1);portEXIT_CRITICAL(&guard);return ok;}
 bool diagnostic_request(const char *json){
@@ -175,13 +186,15 @@ bool diagnostic_request(const char *json){
 void diagnostic_service(uint32_t now,bool rover,IPAddress peer,bool profile_busy){
   Request request;
   if(queue&&xQueueReceive(queue,&request,0)==pdTRUE){
-    if(request.route){
+    if(ota_locked()){std::strcpy(route_error,"Firmware update owns the instrument; diagnostic request rejected.");}
+    else if(request.route){
       route_error[0]=0;
       if(test_busy()||probe_phase||profile_busy||!survey_diagnostic_acquire())std::strcpy(route_error,"Finish the current test, survey or receiver operation first.");
       else {
         if(request.transport&&((rover&&request.session<1000000)||(!rover&&request.session)))std::strcpy(route_error,"Start a new Base session, then copy its number to Rover.");
         else if(request.transport&&rover&&live.active()&&live.session()==request.session){
           // Retried join requests must not reset replay history or queues.
+          if(live_rejoin)std::strcpy(route_error,"Start a fresh Base session; the old session cannot be reused after OTA.");
         }
         else {
           correction_radio_stop();
@@ -218,16 +231,21 @@ void diagnostic_service(uint32_t now,bool rover,IPAddress peer,bool profile_busy
     }
   }
   if(live.active()&&live.rover()!=rover){correction_radio_stop();std::strcpy(route_error,"Role changed; select a new correction session.");}
+  peer_update_service(now,rover,live.session(),peer,peer_update_quality_ready());
   if(live.active()){
     live.tick(now);
     for(unsigned budget=0;budget<2048&&radio.available();++budget){
-      if(live.byte(uint8_t(radio.read()),now)){debug_frame(debugmode::Channel::RadioRx,live.data(),live.size());if(!correction_radio_input(live.data(),live.size(),now-live.known_age(now)))++live_output_rejected;}
+      correction::Packet received;
+      if(!live_wire.byte(uint8_t(radio.read()),received))continue;
+      if(peer_wire::control(received)){peer_update_receive(received,now);continue;}
+      if(!live_rejoin&&!ota_paused()&&live.packet(received,now)){debug_frame(debugmode::Channel::RadioRx,live.data(),live.size());if(!correction_radio_input(live.data(),live.size(),now-live.known_age(now)))++live_output_rejected;}
     }
     correction::Packet packet;
-    if(live.next(packet,now)){
+    const bool control=peer_update_next(packet,now);
+    if(control||(!live_rejoin&&!ota_paused()&&live.next(packet,now))){
       if(radio.availableForWrite()>=int(sizeof(packet))){
         const size_t written=radio.write(packet.bytes,sizeof(packet));debug_frame(debugmode::Channel::RadioTx,packet.bytes,written);
-        if(written==sizeof(packet))live.committed();
+        if(written==sizeof(packet)){if(control)peer_update_committed(packet,now);else live.committed();}
         else {++live_short_writes;live.fail();correction_output_reset();std::strcpy(route_error,"Radio output fault; select a new session.");}
       }else ++live_tx_wait;
     }

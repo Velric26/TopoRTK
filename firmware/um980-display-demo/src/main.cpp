@@ -22,6 +22,8 @@
 #include "correction_queue.h"
 #include "link_diagnostic.h"
 #include "debug_service.h"
+#include "ota_service.h"
+#include "peer_update.h"
 #include "wifi_credentials.h"
 
 #ifndef TOPORTK_DISPLAY_ROTATION
@@ -308,7 +310,7 @@ CorrectionOutputStats correction_output_stats(){
   s.overflow=correction_output.overflow;s.waiting=correction_output_waits;s.faults=correction_output_faults;s.queued=correction_output.size();return s;
 }
 bool queue_correction(const uint8_t *frame,size_t size,uint32_t at){
-  if(is_base()||!unit_profile_applied||diagnostic_busy()||correction_output_fault)return false;
+  if(is_base()||!unit_profile_applied||diagnostic_busy()||ota_paused()||correction_output_fault)return false;
   if(!correction_station.accept(frame,size))return false;
   return correction_output.enqueue(frame,size,at,millis());
 }
@@ -317,7 +319,7 @@ bool correction_radio_input(const uint8_t *frame,size_t size,uint32_t at){
 }
 void service_correction_output(){
   const uint32_t now=millis();
-  if(is_base()||!unit_profile_applied||diagnostic_busy()||correction_output_fault){correction_output.clear();return;}
+  if(is_base()||!unit_profile_applied||diagnostic_busy()||ota_paused()||correction_output_fault){correction_output.clear();return;}
   const auto *frame=correction_output.front(now);if(!frame)return;
   // Single main-loop writer and a TX ring larger than the largest whole frame.
   // This reports UART buffer admission, not receiver acknowledgement.
@@ -652,7 +654,7 @@ void start_wifi() {
 }
 
 bool select_config(const DeviceConfig &requested) {
-  if(diagnostic_busy())return false;
+  if(diagnostic_busy()||ota_locked())return false;
   if (profile_running) return false;
   if (!save_config(requested)) return false;
   const bool role_changed = requested.role != device_config.role;
@@ -1307,7 +1309,7 @@ bool fresh_rover_corrections(uint32_t now) {
 }
 
 bool system_ready(uint32_t now) {
-  if(diagnostic_busy())return false;
+  if(diagnostic_busy()||ota_locked())return false;
   const bool uart_active = byte_count > 0 && now - last_rx_ms < 3000;
   return uart_active && version_ok && unit_profile_applied &&
          correction_link_connected(now) && gps_required_fix() &&
@@ -1707,7 +1709,7 @@ void draw_debug_settings(){
   }
   draw_button(10,layout::kDebugToggle,enabled?"DISABLE DEBUG":"ENABLE DEBUG","",enabled);
   if(ui_region_changed(15,314,"debug-info")){
-    draw_fitted_text(12,320,296,"Firmware updates: planned separately.",1,colors::kWarning);
+    draw_fitted_text(12,320,296,"Firmware updates: open Debug on web.",1,colors::kWarning);
     draw_fitted_text(12,344,296,"Enabling Debug does not pause a link.",1,colors::kMuted);
     draw_fitted_text(12,388,296,"Logs are bounded and kept in RAM.",1,colors::kMuted);
   }
@@ -1780,6 +1782,10 @@ struct DashboardWarning {
 };
 
 DashboardWarning dashboard_warning(uint32_t now) {
+  if(ota_paused())return {"FIRMWARE UPDATE", "Local operations paused. Keep power on.",colors::kWarning};
+  if(correction_radio_needs_rejoin())return {"REJOIN SiK LINK","New Base session, then join Rover.",colors::kWarning};
+  static char peer_notice[80];peer_update_label(peer_notice,sizeof(peer_notice));
+  if(peer_notice[0])return {"PAIRED UNIT",peer_notice,colors::kWarning};
   const bool uart_active = byte_count > 0 && now - last_rx_ms < 3000;
   const bool linked = correction_link_connected(now);
   const char *alert = "CHECK FIX QUALITY";
@@ -2156,7 +2162,7 @@ void finish_swipe() {
     }
     if(action==TouchAction::kDebug){change_page(ScreenPage::kDebug);return;}
     if(action==TouchAction::kDebugToggle){debug_enable_local(!debug_enabled());draw_dynamic_screen();return;}
-    if (profile_running) return;
+    if (profile_running || ota_locked()) return;
     if (action == TouchAction::kPhone) change_page(ScreenPage::kPhone);
     else if (action == TouchAction::kShowKey) {
       phone_key_shown_ms = phone_key_shown_ms ? 0 : millis();
@@ -2324,7 +2330,7 @@ void handle_complete_rtcm(const uint8_t *frame, size_t frame_length) {
   rtcm_last_message = rtcm_message_type(frame, frame_length);
   if (is_base()) rtcm_last_rx_ms = millis();
 
-  if(is_base()&&unit_profile_applied&&device_config.base_rtcm&&!diagnostic_busy()){
+  if(is_base()&&unit_profile_applied&&device_config.base_rtcm&&!diagnostic_busy()&&!ota_paused()){
     if(correction_radio_active())correction_radio_submit(frame,frame_length,millis());
     else if(send_rtcm_packet(frame,frame_length,rtcm_last_message))++rtcm_wifi_tx_frames;
   }
@@ -2677,6 +2683,7 @@ void read_usb_console() {
 }
 
 void setup() {
+  ota_boot_begin();
   Serial.begin(115200);
   delay(1200);
   Serial.println();
@@ -2737,7 +2744,7 @@ void service_survey() {
   }
   const uint32_t now=millis();survey::Fix f;f.now=now;f.rover=!is_base();
   f.unit=board::kUnitLabel;f.boot_id=web_boot_id();f.reset_reason=esp_reset_reason();f.free_heap=ESP.getFreeHeap();f.min_heap=ESP.getMinFreeHeap();f.free_psram=ESP.getFreePsram();
-  f.profile_ok=unit_profile_applied&&!profile_failed&&!diagnostic_busy();f.base_apply_pending=profile_running;f.base_apply_failed=base_settings_failed||profile_failed;f.base_revision=base_settings.revision;
+  f.profile_ok=unit_profile_applied&&!profile_failed&&!diagnostic_busy()&&!ota_paused();f.base_apply_pending=profile_running;f.base_apply_failed=base_settings_failed||profile_failed;f.base_revision=base_settings.revision;
   f.base_attempt_revision=base_attempt_revision;f.base_fixed=base_settings.fixed;f.base_setting={base_settings.latitude,base_settings.longitude,base_settings.height};
   f.position=latest_horizontal_accuracy.position;f.position_valid=latest_horizontal_accuracy.position_valid;
   f.received=latest_horizontal_accuracy.received_ms;f.epoch=latest_horizontal_accuracy.epoch;
@@ -2751,19 +2758,26 @@ void service_survey() {
   survey_update(f);
 }
 
+bool peer_update_quality_ready(){return is_base()||(!ota_paused()&&verified_correction_age(millis())<=3000&&gps_required_fix());}
+void ota_reset_corrections(){
+  correction_output_reset();rtcm_frame_length=rtcm_expected_length=rx_length=0;
+  correction_radio_clear_pending();
+  latest_horizontal_accuracy=HorizontalAccuracyData{};
+}
 void loop() {
   debug_service();
-  read_usb_console();
-  read_gnss();
-  service_gnss_startup();
-  service_profile();
+  ota_service(millis(),!is_base(),profile_running,display_ready&&!config_error&&survey_service_ready()&&web_service_ready());
+  if(!ota_locked())read_usb_console();
+  if(!ota_paused())read_gnss();
+  else for(unsigned budget=0;budget<2048&&gnss.available();++budget)gnss.read();
+  if(!ota_locked()){service_gnss_startup();service_profile();}
   service_wifi();
   diagnostic_service(millis(),!is_base(),wifi_peer_known?wifi_peer:IPAddress(),profile_running);
   service_correction_output();
   service_survey();
   service_swipe_navigation();
   service_brightness();
-  service_sd_logging();
+  if(!ota_paused())service_sd_logging();
   service_web_status();
 
   const uint32_t now = millis();

@@ -1,5 +1,6 @@
 const {chromium}=require('playwright'),fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
-const root=path.resolve(__dirname,'../../..'),out=path.join(root,'tests/2026-09-13-debug');
+const root=path.resolve(__dirname,'../../..'),out=path.join(root,process.env.TOPORTK_TEST_RECORD||'tests/2026-09-14-ota');
+const otaJs=fs.readFileSync(path.join(__dirname,'../src/ota_ui.h'),'utf8').split('R"JS(')[1].split(')JS"')[0];
 const source=fs.readFileSync(path.join(__dirname,'../src/debug_ui.h'),'utf8'),html=source.split('R"HTML(')[1].split(')HTML"')[0],nav=source.split('R"JS(')[1].split(')JS"')[0];
 (async()=>{fs.mkdirSync(out,{recursive:true});const browser=await chromium.launch({channel:'msedge',headless:true});try{
  const context=await browser.newContext({viewport:{width:390,height:844},acceptDownloads:true}),page=await context.newPage(),errors=[],posts=[];
@@ -23,6 +24,8 @@ const source=fs.readFileSync(path.join(__dirname,'../src/debug_ui.h'),'utf8'),ht
   if(url.pathname==='/api/v1/debug/log')return route.fulfill({json:report});
   if(url.pathname==='/api/v1/survey')return route.fulfill({json:{unit:'B',role,collection:{active:true},gnss:{profile_verified:true,fixed:true}}});
   if(url.pathname==='/api/v1/diagnostic')return route.fulfill({json:{corrections:{transport:'sik',output:{forwarded:42}}}});
+  if(url.pathname==='/update-ui.js')return route.fulfill({body:otaJs,contentType:'application/javascript'});
+  if(url.pathname==='/api/v1/update')return route.fulfill({json:{version:1,state:'idle',unit:2,available:true,locked:false,boot:'Normal boot',boot_id:7}});
   if(url.pathname==='/debug-nav.js')return route.fulfill({body:nav,contentType:'application/javascript'});
   if(url.pathname==='/survey')return route.fulfill({body:'<nav><button>Jobs</button><button>Setup</button><button>Collect</button><button>Points</button></nav><script src="/debug-nav.js"></script>',contentType:'text/html'});
   return route.fulfill({body:html,contentType:'text/html'});
@@ -45,5 +48,5 @@ const source=fs.readFileSync(path.join(__dirname,'../src/debug_ui.h'),'utf8'),ht
  await page.goto('http://debug.test/survey');await page.waitForSelector('#debugTab');assert(await page.locator('#debugTab').isDisabled());
  offline=true;await page.waitForFunction(()=>document.querySelector('#debugAvailability').textContent.includes('disconnected'));assert(await page.locator('#debugTab').isDisabled());
  assert(posts.every(p=>p.path==='/api/v1/control'||p.path==='/api/v1/debug'),'passive page must not send survey, GNSS or radio commands');assert.deepEqual(errors,[]);
- fs.writeFileSync(path.join(out,'debug-browser.json'),JSON.stringify({result:'PASS',checks:['gray tab and enable instructions','hardware-enabled availability','takeover without PIN','monitoring while occupation is active','polling does not renew idle timer','text escaping/filter/download/pause','controller loss clears private view','stale/offline and timeout disable access','role-specific update warnings and unavailable OTA button','320/390/768/1280 layouts','no active diagnostic or survey commands']},null,2));console.log('PASS: Debug navigation, passive browser, access/expiry, role warnings, downloads and responsive layout');
+ fs.writeFileSync(path.join(out,'debug-browser.json'),JSON.stringify({result:'PASS',checks:['gray tab and enable instructions','hardware-enabled availability','takeover without PIN','monitoring while occupation is active','polling does not renew idle timer','text escaping/filter/download/pause','controller loss clears private view','stale/offline and timeout disable access','role-specific update warnings and guarded OTA controls','320/390/768/1280 layouts','no active diagnostic or survey commands']},null,2));console.log('PASS: Debug navigation, passive browser, access/expiry, role warnings, downloads and responsive layout');
  }finally{await browser.close()}})().catch(e=>{console.error(e);process.exitCode=1});

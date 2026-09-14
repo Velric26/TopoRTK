@@ -7,6 +7,8 @@
 #include "link_diagnostic_ui.h"
 #include "debug_service.h"
 #include "debug_ui.h"
+#include "ota_service.h"
+#include "ota_ui.h"
 #include <Arduino.h>
 #include <esp_http_server.h>
 #include <esp_system.h>
@@ -131,6 +133,26 @@ esp_err_t post_diagnostic(httpd_req_t *r){
   return error(r,"202 Accepted","{\"state\":\"queued\"}");
 }
 esp_err_t get_debug_page(httpd_req_t *r){headers(r);httpd_resp_set_type(r,"text/html; charset=utf-8");return httpd_resp_send(r,kDebugPage,sizeof(kDebugPage)-1);}
+esp_err_t get_update_ui(httpd_req_t *r){headers(r);httpd_resp_set_type(r,"application/javascript; charset=utf-8");return httpd_resp_send(r,kOtaUi,sizeof(kOtaUi)-1);}
+esp_err_t get_update(httpd_req_t *r){char out[1536];if(!ota_status(out,sizeof(out)))return error(r,"503 Service Unavailable","{\"error\":\"update_status_unavailable\"}");return error(r,"200 OK",out);}
+esp_err_t post_update(httpd_req_t *r){
+  if(!same_origin(r)||!auth(r))return error(r,"403 Forbidden","{\"error\":\"current_controller_required\"}");
+  char bearer[48]={};httpd_req_get_hdr_value_str(r,"Authorization",bearer,sizeof(bearer));
+  std::string raw;if(!body(r,raw)||raw.size()>768||!ota_request(raw.c_str(),bearer+7))return error(r,"409 Conflict","{\"error\":\"update_request_rejected_check_debug_target_and_state\"}");
+  return error(r,"202 Accepted","{\"state\":\"queued\"}");
+}
+esp_err_t upload_update(httpd_req_t *r){
+  if(!same_origin(r)||!auth(r))return error(r,"403 Forbidden","{\"error\":\"current_controller_required\"}");
+  char bearer[48]={},type[48]={};httpd_req_get_hdr_value_str(r,"Authorization",bearer,sizeof(bearer));
+  if(httpd_req_get_hdr_value_str(r,"Content-Type",type,sizeof(type))!=ESP_OK||std::strcmp(type,"application/octet-stream")||!ota_upload_begin(bearer+7,r->content_len))return error(r,"409 Conflict","{\"error\":\"review_and_confirm_update_first\"}");
+  uint8_t chunk[2048];size_t remaining=r->content_len;
+  while(remaining){const int n=httpd_req_recv(r,reinterpret_cast<char*>(chunk),std::min(remaining,sizeof(chunk)));
+    if(n<=0){ota_upload_abort("Upload connection lost or timed out");return error(r,"408 Request Timeout","{\"error\":\"upload_incomplete_current_firmware_retained\"}");}
+    if(!ota_upload_write(chunk,n))return error(r,"400 Bad Request","{\"error\":\"package_or_upload_rejected\"}");remaining-=n;
+  }
+  if(!ota_upload_finish())return error(r,"400 Bad Request","{\"error\":\"image_verification_failed_current_firmware_retained\"}");
+  return error(r,"200 OK","{\"state\":\"restarting\"}");
+}
 esp_err_t get_debug_nav(httpd_req_t *r){headers(r);httpd_resp_set_type(r,"application/javascript; charset=utf-8");return httpd_resp_send(r,kDebugNav,sizeof(kDebugNav)-1);}
 esp_err_t get_debug_status(httpd_req_t *r){char data[512];if(!debug_status(data,sizeof(data)))return error(r,"503 Service Unavailable","{\"error\":\"debug_unavailable\"}");httpd_resp_set_hdr(r,"X-Controller",auth(r)?"true":"false");return error(r,"200 OK",data);}
 esp_err_t get_debug_log(httpd_req_t *r){
@@ -177,7 +199,7 @@ void publish_web_status(const char *json, size_t length, uint32_t now, bool rove
   last_start_attempt = now;
   httpd_config_t config = HTTPD_DEFAULT_CONFIG();
   config.stack_size = 8192;
-  config.max_uri_handlers = 18;
+  config.max_uri_handlers = 22;
   config.max_open_sockets = 3;
   config.lru_purge_enable = true;
   config.recv_wait_timeout = 2;
@@ -185,6 +207,10 @@ void publish_web_status(const char *json, size_t length, uint32_t now, bool rove
   if (httpd_start(&server, &config) != ESP_OK) { server = nullptr; Serial.println("WEB: start failed"); return; }
   const httpd_uri_t routes[] = {
       {"/", HTTP_GET, get_page, nullptr},
+      {"/update-ui.js",HTTP_GET,get_update_ui,nullptr},
+      {"/api/v1/update",HTTP_GET,get_update,nullptr},
+      {"/api/v1/update",HTTP_POST,post_update,nullptr},
+      {"/api/v1/update/upload",HTTP_POST,upload_update,nullptr},
       {"/debug",HTTP_GET,get_debug_page,nullptr},
       {"/debug-nav.js",HTTP_GET,get_debug_nav,nullptr},
       {"/api/v1/debug",HTTP_GET,get_debug_status,nullptr},
@@ -209,3 +235,4 @@ void publish_web_status(const char *json, size_t length, uint32_t now, bool rove
   if (!registered) { httpd_stop(server); server = nullptr; Serial.println("WEB: routes failed"); return; }
   Serial.println("WEB: status and paired survey controls on port 80; /survey");
 }
+bool web_service_ready(){return server!=nullptr;}

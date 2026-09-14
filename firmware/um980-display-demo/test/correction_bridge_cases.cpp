@@ -64,5 +64,13 @@ int main(){
   base.enqueue(full.data(),full.size(),3000);assert(!base.next(old,4500));assert(base.queue().expired>0);
   base.fail();assert(base.active()&&base.fault());assert(!base.enqueue(ref.data(),ref.size(),5000));assert(!base.next(old,5000));
   base.stop();assert(!base.active());
+  // Production demultiplexer dispatches complete envelopes through packet().
+  base.begin(session,false);rover.begin(session,true);base.enqueue(ref.data(),ref.size(),6000);
+  Packet complete_packet;assert(base.next(complete_packet,6001));base.committed();
+  assert(rover.packet(complete_packet,6002));assert(rover.size()==ref.size());
+  rover.clear_pending();assert(!rover.packet(complete_packet,6003)); // Preserve replay high water.
+  base.enqueue(full.data(),full.size(),6004);base.clear_pending();assert(!base.next(complete_packet,6005));
+  assert(base.enqueue(ref.data(),ref.size(),6006));assert(base.next(complete_packet,6007));
+  assert(rover.packet(complete_packet,6008)); // TX clear preserves monotonically increasing sequence.
   std::printf("PASS: burst/reference retention, fairness, bounds, CRC, expiry/wrap, station/session isolation, replay, loss/corruption recovery and carried output age; queue=%zu bridge=%zu bytes\n",sizeof(q),sizeof(base));
 }

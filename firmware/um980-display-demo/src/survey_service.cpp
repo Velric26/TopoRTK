@@ -99,3 +99,5 @@ bool survey_diagnostic_acquire(){
   if(ok)diagnostic_locked=true;xSemaphoreGive(engine_gate);return ok;
 }
 void survey_diagnostic_release(){if(engine_gate&&xSemaphoreTake(engine_gate,portMAX_DELAY)==pdTRUE){diagnostic_locked=false;xSemaphoreGive(engine_gate);}}
+
+bool survey_service_ready(){return initialized;}

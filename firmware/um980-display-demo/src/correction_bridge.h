@@ -17,6 +17,7 @@ class Bridge {
     queued_.clear();station_.reset();sender_.begin(session,0);stream_.select(session,0);return true;
   }
   void stop(){session_=0;queued_.clear();station_.reset();received_=false;}
+  void clear_pending(){queued_.clear();sender_.begin(session_,0);stream_.receiver.discard_assembly();received_=false;}
   void fail(){fault_=true;queued_.clear();received_=false;}
   bool fault()const{return fault_;}
   bool active()const{return session_!=0;}
@@ -42,6 +43,11 @@ class Bridge {
   void committed(){sender_.committed();++envelopes;}
   bool byte(uint8_t value,uint32_t now){
     if(!active()||fault_||!rover_||!stream_.push(value,now))return false;
+    if(!station_.accept(stream_.receiver.data(),stream_.receiver.size())){++station_rejected;return false;}
+    last_received_=now;received_=true;++complete;return true;
+  }
+  bool packet(const Packet &p,uint32_t now){
+    if(!active()||fault_||!rover_||!stream_.receiver.accept(p,now))return false;
     if(!station_.accept(stream_.receiver.data(),stream_.receiver.size())){++station_rejected;return false;}
     last_received_=now;received_=true;++complete;return true;
   }

@@ -28,6 +28,8 @@ This applies to firmware, wiring, power, GNSS settings, RTCM, radio settings, st
 
 ### Debug checkpoint — 2026-09-13
 
+**2026-09-14 update:** 0.11.0 implements the Debug OTA workflow and paired update notices in source. Build/host/browser checks pass; USB installation and actual OTA/rollback acceptance are pending. SiK correction recovery requires a fresh Base session and Rover rejoin after an update. The user asked to finish the software step and stop; no unit was flashed. See the [operator guide](docs/ota-operator-guide.md) and [evidence](tests/2026-09-14-ota/README.md).
+
 Follow-up: the portable paired update-notice codec/state machines now pass corruption, replay/reorder, bounded retry/deadline and recovery tests. Transport/UI integration and actual OTA remain outstanding. See the [notice core evidence](tests/2026-09-13-update-notice/README.md). The user accepted completing OTA before the combined USB installation; no additional flash has been performed.
 
 The 0.10.5 source adds touchscreen-enabled **Debug**, a 15-minute user-idle timeout, a disabled-with-instructions web tab, and bounded passive communications capture. Both targets build and host/browser checks pass, but this increment is **not flashed or hardware accepted**; the deployed baseline remains 0.10.4. OTA and paired update notices remain planned, with upload disabled. See the [complete Debug/OTA plan](docs/debug-and-ota.md) and [validation record](tests/2026-09-13-debug/README.md). A combined USB installation after OTA preparation is a recommendation to reduce battery-holder access, not evidence of hardware validation.

@@ -14,6 +14,8 @@ bool correction_radio_active();
 bool correction_radio_linked(uint32_t now);
 bool correction_radio_submit(const uint8_t *frame,size_t size,uint32_t now);
 void correction_radio_stop();
+void correction_radio_clear_pending();
+bool correction_radio_needs_rejoin();
 // Implemented by main.cpp: copied into the bounded COM2 queue, never direct UART.
 bool correction_radio_input(const uint8_t *frame,size_t size,uint32_t at);
 void correction_output_reset();

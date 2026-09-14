@@ -1,0 +1,3 @@
+PASS: compiled image package size/target, embedded identity/version and streamed metadata check
+PASS: compiled image package size/target, embedded identity/version and streamed metadata check
+PASS: burst/reference retention, fairness, bounds, CRC, expiry/wrap, station/session isolation, replay, loss/corruption recovery and carried output age; queue=8340 bridge=10800 bytes

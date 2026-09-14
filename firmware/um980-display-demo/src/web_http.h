@@ -3,7 +3,8 @@
 #include <cstdint>
 
 constexpr size_t kWebStatusCapacity = 2048;
-constexpr const char *kWebUiVersion = "0.10.5";
+#define TOPORTK_FIRMWARE_VERSION "0.11.0"
+constexpr const char *kWebUiVersion = TOPORTK_FIRMWARE_VERSION;
 
 // Called from the main loop. The HTTP task only reads a copied snapshot.
 void publish_web_status(const char *json, size_t length, uint32_t now, bool rover);

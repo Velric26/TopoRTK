@@ -1,0 +1,3 @@
+PASS: update notice wire corruption, bounded retry/loss, role/session/attempt isolation, reorder/cancel tombstones, deadline and timer wrap, recovery quality gate (1000 fault runs)
+PASS: production two-peer HELLO/echo, preparation/update ACK, fresh reboot recovery, quality gate, recovery heartbeat continuity and UART envelope demultiplexing
+PASS: production OTA service, 19 admission/upload/ownership/failure/boot cases (hardware and SHA primitives doubled)

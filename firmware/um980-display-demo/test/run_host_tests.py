@@ -23,6 +23,16 @@ bool correction_radio_active(){return host_radio_active;}
 bool correction_radio_linked(uint32_t){return false;}
 bool correction_radio_submit(const uint8_t *,size_t,uint32_t){return true;}
 void correction_radio_stop(){host_radio_active=false;}
+void correction_radio_clear_pending(){}
+bool correction_radio_needs_rejoin(){return false;}
+void ota_boot_begin(){}
+void ota_service(uint32_t,bool,bool,bool){}
+bool host_ota_locked=false,host_ota_paused=false;
+bool ota_locked(){return host_ota_locked;}
+bool ota_paused(){return host_ota_paused;}
+bool survey_service_ready(){return true;}
+bool web_service_ready(){return true;}
+void peer_update_label(char *out,size_t){out[0]=0;}
 void diagnostic_begin() {}
 void diagnostic_service(uint32_t,bool,IPAddress,bool) {}
 bool diagnostic_busy() {return host_diagnostic_busy;}
@@ -60,4 +70,4 @@ for ppm in (root / '.pio').glob('ui-*.ppm'):
     png += chunk(b'IHDR', struct.pack('!2I5B', width, height, 8, 2, 0, 0, 0))
     png += chunk(b'IDAT', zlib.compress(rows)) + chunk(b'IEND', b'')
     ppm.with_suffix('.png').write_bytes(png)
-print('UI previews: .pio/ui-0.png through ui-4.png and ui-base-selection.png')
+print('UI previews: .pio/ui-0.png through ui-5.png and ui-base-selection.png')
