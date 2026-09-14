@@ -141,16 +141,44 @@ esp_err_t post_update(httpd_req_t *r){
   std::string raw;if(!body(r,raw)||raw.size()>768||!ota_request(raw.c_str(),bearer+7))return error(r,"409 Conflict","{\"error\":\"update_request_rejected_check_debug_target_and_state\"}");
   return error(r,"202 Accepted","{\"state\":\"queued\"}");
 }
+esp_err_t reject_upload(httpd_req_t *r,const char *status,const char *message){
+  // ESP_OK leaves ESP-IDF draining an unread request body. A failed upload
+  // must close its socket so status/control requests can be served promptly.
+  httpd_resp_set_hdr(r,"Connection","close");
+  error(r,status,message);
+  return ESP_FAIL;
+}
 esp_err_t upload_update(httpd_req_t *r){
-  if(!same_origin(r)||!auth(r))return error(r,"403 Forbidden","{\"error\":\"current_controller_required\"}");
+  if(!same_origin(r)||!auth(r))return reject_upload(r,"403 Forbidden","{\"error\":\"current_controller_required\"}");
+  const uint32_t started=millis();
   char bearer[48]={},type[48]={};httpd_req_get_hdr_value_str(r,"Authorization",bearer,sizeof(bearer));
-  if(httpd_req_get_hdr_value_str(r,"Content-Type",type,sizeof(type))!=ESP_OK||std::strcmp(type,"application/octet-stream")||!ota_upload_begin(bearer+7,r->content_len))return error(r,"409 Conflict","{\"error\":\"review_and_confirm_update_first\"}");
+  if(httpd_req_get_hdr_value_str(r,"Content-Type",type,sizeof(type))!=ESP_OK||std::strcmp(type,"application/octet-stream")||!ota_upload_begin(bearer+7,r->content_len))return reject_upload(r,"409 Conflict","{\"error\":\"review_and_confirm_update_first\"}");
   uint8_t chunk[2048];size_t remaining=r->content_len;
-  while(remaining){const int n=httpd_req_recv(r,reinterpret_cast<char*>(chunk),std::min(remaining,sizeof(chunk)));
-    if(n<=0){ota_upload_abort("Upload connection lost or timed out");return error(r,"408 Request Timeout","{\"error\":\"upload_incomplete_current_firmware_retained\"}");}
-    if(!ota_upload_write(chunk,n))return error(r,"400 Bad Request","{\"error\":\"package_or_upload_rejected\"}");remaining-=n;
+  uint32_t progress=millis();unsigned retries=0;
+  while(remaining){
+    const uint32_t now=millis();
+    if(now-started>=120000||now-progress>=12000){
+      ota_upload_abort(now-started>=120000?"Upload exceeded 120-second deadline":"Upload stalled for 12 seconds");
+      Serial.printf("OTA HTTP: timeout bytes=%u retries=%u elapsed_ms=%lu\n",unsigned(r->content_len-remaining),retries,static_cast<unsigned long>(now-started));
+      return reject_upload(r,"408 Request Timeout","{\"error\":\"upload_timed_out_current_firmware_retained\"}");
+    }
+    if(!survey_authorized(bearer+7,false)){
+      ota_upload_abort("Upload controller lost");
+      return reject_upload(r,"403 Forbidden","{\"error\":\"upload_controller_lost\"}");
+    }
+    const int n=httpd_req_recv(r,reinterpret_cast<char*>(chunk),std::min(remaining,sizeof(chunk)));
+    if(n==HTTPD_SOCK_ERR_TIMEOUT){++retries;continue;}
+    if(n<=0){
+      ota_upload_abort("Upload connection closed or receive error");
+      Serial.printf("OTA HTTP: receive=%d bytes=%u retries=%u elapsed_ms=%lu\n",n,unsigned(r->content_len-remaining),retries,static_cast<unsigned long>(millis()-started));
+      return reject_upload(r,"408 Request Timeout","{\"error\":\"upload_incomplete_current_firmware_retained\"}");
+    }
+    if(millis()-started>=120000){ota_upload_abort("Upload exceeded 120-second deadline");return reject_upload(r,"408 Request Timeout","{\"error\":\"upload_timed_out_current_firmware_retained\"}");}
+    if(!ota_upload_write(chunk,n))return reject_upload(r,"400 Bad Request","{\"error\":\"package_or_upload_rejected\"}");
+    remaining-=n;progress=millis();
   }
-  if(!ota_upload_finish())return error(r,"400 Bad Request","{\"error\":\"image_verification_failed_current_firmware_retained\"}");
+  if(!ota_upload_finish())return reject_upload(r,"400 Bad Request","{\"error\":\"image_verification_failed_current_firmware_retained\"}");
+  Serial.printf("OTA HTTP: verified bytes=%u retries=%u elapsed_ms=%lu\n",unsigned(r->content_len),retries,static_cast<unsigned long>(millis()-started));
   return error(r,"200 OK","{\"state\":\"restarting\"}");
 }
 esp_err_t get_debug_nav(httpd_req_t *r){headers(r);httpd_resp_set_type(r,"application/javascript; charset=utf-8");return httpd_resp_send(r,kDebugNav,sizeof(kDebugNav)-1);}

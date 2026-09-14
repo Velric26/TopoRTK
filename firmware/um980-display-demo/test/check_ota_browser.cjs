@@ -1,17 +1,17 @@
 const {chromium}=require('playwright'),fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
 const source=fs.readFileSync(path.join(__dirname,'../src/debug_ui.h'),'utf8'),html=source.split('R"HTML(')[1].split(')HTML"')[0];
 const js=fs.readFileSync(path.join(__dirname,'../src/ota_ui.h'),'utf8').split('R"JS(')[1].split(')JS"')[0];
-const out=path.resolve(__dirname,'../../../tests/2026-09-14-ota');fs.mkdirSync(out,{recursive:true});
+const out=path.resolve(process.env.TOPORTK_TEST_RECORD||path.join(__dirname,'../../../tests/2026-09-14-ota'));fs.mkdirSync(out,{recursive:true});
 (async()=>{const browser=await chromium.launch({channel:'msedge',headless:true});try{
  const page=await browser.newPage({viewport:{width:390,height:844}}),errors=[],posts=[];
  let owner=false,enabled=true,uptime=0,ack=false,boot=7,version='0.11.0',state='idle',pending=0;
- let uploaded=null;
+ let uploaded=null,failUpload=false,uploadCount=0;
  const file=Buffer.alloc(640);file.write('TPK1');file[4]=1;file[5]=2;file[6]=1;file.writeUInt32LE(512,8);file.write('0.11.1',48);
  page.on('pageerror',e=>errors.push(e.message));
  await page.route('**/*',async route=>{const r=route.request(),url=new URL(r.url());
   if(url.pathname==='/api/v1/update/upload'){
    assert.equal(state,'ready');assert.equal(r.headers().authorization,'Bearer '+'a'.repeat(32));
-   uploaded=r.postDataBuffer();state='restarting';pending=2;
+   uploaded=r.postDataBuffer();++uploadCount;if(failUpload){state='failed';return route.fulfill({status:408,json:{error:'upload_timed_out_current_firmware_retained'}});}state='restarting';pending=2;
    return route.fulfill({json:{state:'restarting'}});
   }
   if(r.method()==='POST'){
@@ -31,7 +31,7 @@ const out=path.resolve(__dirname,'../../../tests/2026-09-14-ota');fs.mkdirSync(o
   if(url.pathname==='/api/v1/diagnostic')return route.fulfill({json:{corrections:{transport:'sik'}}});
   if(url.pathname==='/api/v1/update'){
    if(pending&&!--pending){if(state==='pausing')state='ready';else{state='idle';boot=8;version='0.11.1';enabled=owner=false;}}
-   return route.fulfill({json:{version:1,state,unit:2,firmware:version,available:true,locked:!['idle','failed'].includes(state),boot_id:boot,boot:boot===8?'New firmware verified':'USB / normal boot',peer_acknowledged:ack,peer_status:'Base updating - corrections paused'}});
+   return route.fulfill({json:{version:1,state,unit:2,firmware:version,available:true,locked:!['idle','failed'].includes(state),boot_id:boot,boot:boot===8?'New firmware verified':'USB / normal boot',error:state==='failed'?'Upload stalled for 12 seconds':'',peer_acknowledged:ack,peer_status:'Base updating - corrections paused'}});
   }
   if(url.pathname==='/update-ui.js')return route.fulfill({body:js,contentType:'application/javascript'});
   return route.fulfill({body:html,contentType:'text/html'});
@@ -48,6 +48,13 @@ const out=path.resolve(__dirname,'../../../tests/2026-09-14-ota');fs.mkdirSync(o
  for(const width of [320,390,768,1280]){await page.setViewportSize({width,height:900});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.screenshot({path:path.join(out,'ota-review-'+width+'.png'),fullPage:true});}
  await page.locator('#confirmFirmware').click();await page.waitForFunction(()=>document.querySelector('#otaProgress').textContent.startsWith('Update complete'),null,{timeout:15000});
  assert.deepEqual(uploaded,file);assert.equal(posts.filter(p=>p.op==='start').length,1);assert(await page.locator('#firmwareFile').isDisabled());
- assert.deepEqual(errors,[]);fs.writeFileSync(path.join(out,'ota-browser.json'),JSON.stringify({result:'PASS',checks:['file selection has no mutation','wrong unit rejected','current-controller gate','explicit interruption confirmation','unconfirmed peer override','one binary upload after ready','new boot verification before success','Debug off after restart','responsive 320/390/768/1280']},null,2));
+ enabled=true;owner=false;state='idle';ack=true;failUpload=true;await page.reload();
+ await page.locator('#claim').click();await page.locator('#firmwareFile').setInputFiles({name:'rover.tpk',mimeType:'application/octet-stream',buffer:file});
+ await page.locator('#reviewFirmware').click();await page.waitForFunction(()=>document.querySelector('#otaProgress').textContent.includes('acknowledged preparation'));
+ await page.locator('#acceptInterruption').check();await page.locator('#confirmFirmware').click();
+ await page.waitForFunction(()=>document.querySelector('#otaProgress').textContent==='Upload stalled for 12 seconds',null,{timeout:10000});
+ assert.equal(uploadCount,2);assert.equal(boot,8);assert(await page.locator('#confirmFirmware').isDisabled());
+ assert(!await page.evaluate(()=>window.otaUploading));
+ assert.deepEqual(errors,[]);fs.writeFileSync(path.join(out,'ota-browser.json'),JSON.stringify({result:'PASS',checks:['file selection has no mutation','wrong unit rejected','current-controller gate','explicit interruption confirmation','unconfirmed peer override','one binary upload after ready','new boot verification before success','Debug off after restart','specific failure shown without automatic retry','responsive 320/390/768/1280']},null,2));
  console.log('PASS: OTA browser target/review/confirmation, unconfirmed-peer override, upload and new-boot verification');
  }finally{await browser.close()}})().catch(e=>{console.error(e);process.exitCode=1});

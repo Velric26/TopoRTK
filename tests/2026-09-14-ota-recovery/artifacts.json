@@ -1,0 +1,12 @@
+[
+  {
+    "unit": "unit_a",
+    "image_bytes": 1239840,
+    "sha256": "2cb14afe3bf01c2266c65770868760579ad312f30ae131bf6f71056a8cc914ac"
+  },
+  {
+    "unit": "unit_b",
+    "image_bytes": 1239840,
+    "sha256": "b1cff0e75c4d0b753e22577c17f531687c398b4b07a5bd11bfb94c213ae9fe1c"
+  }
+]

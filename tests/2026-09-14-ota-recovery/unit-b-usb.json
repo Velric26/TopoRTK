@@ -1,0 +1,11 @@
+{
+  "unit": "B",
+  "firmware": "0.11.1",
+  "boot": "USB / normal boot",
+  "debug_enabled": false,
+  "update_locked": false,
+  "update_paused": false,
+  "saved_state_unchanged": true,
+  "gnss_profile_verified": true,
+  "usb_hash_verified": true
+}

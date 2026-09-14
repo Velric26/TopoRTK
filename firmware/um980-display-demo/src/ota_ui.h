@@ -36,7 +36,7 @@ $('confirmFirmware').onclick=()=>action(async()=>{
  $('otaProgress').textContent='Pausing local operations and confirming the update notice…';
 });
 function upload(){
- armed=false;window.otaUploading=true;controls();
+ armed=false;window.otaUploading=true;window.pauseDebugRequests();controls();
  const xhr=new XMLHttpRequest();xhr.open('POST','/api/v1/update/upload');xhr.setRequestHeader('Content-Type','application/octet-stream');xhr.setRequestHeader('Authorization','Bearer '+token);xhr.timeout=130000;
  xhr.upload.onprogress=e=>{$('otaProgress').textContent='Uploading '+(e.lengthComputable?Math.floor(e.loaded/e.total*100)+'%':'firmware')+' · Keep power connected. Verification and reboot follow.';};
  xhr.onload=()=>{window.otaUploading=false;if(xhr.status===200){awaitingBoot=true;$('otaProgress').textContent='Image accepted. Waiting for a new boot and startup verification…';}else{$('otaProgress').textContent='Upload rejected. Reconnect and check update status before retrying.';}controls();};

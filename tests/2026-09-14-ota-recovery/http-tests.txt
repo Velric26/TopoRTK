@@ -1,0 +1,12 @@
+PASS: production HTTP upload transient
+PASS: production HTTP upload stall
+PASS: production HTTP upload disconnect
+PASS: production HTTP upload receive_error
+PASS: production HTTP upload deadline
+PASS: production HTTP upload takeover
+PASS: production HTTP upload origin
+PASS: production HTTP upload content_type
+PASS: production HTTP upload admission
+PASS: production HTTP upload write
+PASS: production HTTP upload finish
+PASS: production HTTP upload wrap

@@ -1,0 +1,15 @@
+{
+  "result": "PASS",
+  "checks": [
+    "file selection has no mutation",
+    "wrong unit rejected",
+    "current-controller gate",
+    "explicit interruption confirmation",
+    "unconfirmed peer override",
+    "one binary upload after ready",
+    "new boot verification before success",
+    "Debug off after restart",
+    "specific failure shown without automatic retry",
+    "responsive 320/390/768/1280"
+  ]
+}

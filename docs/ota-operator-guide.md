@@ -1,10 +1,12 @@
-# Debug OTA operator guide — 0.11.0 preview
+# Debug OTA operator guide — 0.11.1 preview
 
 **Both units installed with 0.11.0 by USB; first Wi-Fi OTA transfer failed safely.** Unit B's browser upload timed out after 37,336 of 1,238,768 bytes. Its boot ID remained unchanged, its update lock/pause cleared, and saved survey state was preserved. Unit A acknowledged preparation and displayed the Rover-updating notice. No successful OTA reboot or hardware rollback has yet been demonstrated. See the [USB evidence](../tests/2026-09-14-ota-usb/README.md) and [first OTA result](../tests/2026-09-14-ota-live/README.md).
 
+**Recovery increment:** Unit B now runs 0.11.1, installed by USB with write/startup verification and saved state preserved. Unit A remains 0.11.0. The new upload handler retries transient receives with a 12-second no-progress limit, retains the 120-second total limit, and closes failed requests without draining their remaining body. Debug browser requests are cancelled/paused during upload. Software checks pass; a new physical Debug enable on Unit B and a real Wi-Fi retry are still required. See [recovery evidence](../tests/2026-09-14-ota-recovery/README.md).
+
 ## First installation and later updates
 
-1. Install the completed 0.11.0 firmware/bootloader on both ESP32s by USB and verify the flashed image and startup. Both units are complete, with USB write hashes and startup verified. Keep USB access available for the first OTA and rollback checks.
+1. Install the appropriate firmware/bootloader on each ESP32 by USB and verify the flashed image and startup. Both units are complete, with USB write hashes and startup verified. Keep USB access available for the first OTA and rollback checks.
 2. On each instrument touchscreen, open **Setup → Debug → Enable Debug**. Debug is Off after restart and after 15 minutes without user activity. There is no HTTP enable command and no PIN. The current takeover owner may use private Debug/OTA actions.
 3. Connect through the existing local Wi-Fi or instrument hotspot and open **Debug** in the Survey interface. Use the displayed instrument address. The Base in Local Router mode does not gain a new independent phone hotspot from this feature; Direct Link's Base AP remains available. Network provisioning/topology is unchanged.
 4. Choose the `.tpk` package for **hardware Unit A or B**, independently of its current Base/Rover role. Select **Review package and notify peer**. This reserves the instrument and rejects active collection, queued survey mutations, receiver setup and diagnostics. Correction forwarding continues during review.
@@ -39,7 +41,7 @@ The old SiK session cannot safely carry restarted correction sequence counters. 
 
 The 128-byte TPK1 header specifies format, Unit A/B, hardware type, image size, embedded identity offset, SHA-256 digest, version and header CRC32. The complete image must match the reviewed header and its embedded 64-byte TopoRTK identity. Filename changes cannot change the target. This is integrity validation, not signed-firmware authentication.
 
-Only the inactive OTA slot is written, in bounded chunks. Transfer timeout is 120 seconds; receive timeout is two seconds. Missing/truncated/mismatched data, control loss, write failure or failed image verification abort without selecting the new boot image. The standard ESP-IDF image validation runs before boot selection; an NVS update receipt must also be read-back verified.
+Only the inactive OTA slot is written, in bounded chunks. Transfer timeout is 120 seconds. Individual two-second receive timeouts are retried, with a 12-second limit without progress. Disconnects and hard receive errors abort immediately; rejected uploads close their HTTP connection. Missing/truncated/mismatched data, control loss, write failure or failed image verification abort without selecting the new boot image. The standard ESP-IDF image validation runs before boot selection; an NVS update receipt must also be read-back verified.
 
 `verifyRollbackLater()` defers the framework's early image acceptance. A pending image starts a 30-second task watchdog and is accepted only after local display/configuration, survey service, HTTP service, NVS and image/receipt identity checks pass after at least ten seconds. Failed startup attempts rollback. No GNSS antenna fix, connected UM980, peer, Internet or SD card presence is required to accept otherwise healthy firmware. Actual bootloader rollback and watchdog behavior must still be proven on hardware; host doubles do not prove them.
 
