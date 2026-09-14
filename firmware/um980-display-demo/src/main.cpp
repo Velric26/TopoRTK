@@ -8,6 +8,9 @@
 #include <WiFiUdp.h>
 #include <Wire.h>
 
+#ifdef TOPORTK_ROLLBACK_TEST_HANG
+#include <esp_ota_ops.h>
+#endif
 #include <cmath>
 #include <algorithm>
 #include <cstdlib>
@@ -2770,7 +2773,17 @@ void ota_reset_corrections(){
   latest_horizontal_accuracy=HorizontalAccuracyData{};
 }
 void loop() {
+#ifdef TOPORTK_ROLLBACK_TEST_HANG
+  // Deliberate rollback-acceptance build: hold a pending-verify boot until the
+  // task watchdog fires, then let the bootloader fall back. Inert otherwise.
+  {esp_ota_img_states_t test_state;const esp_partition_t *test_running=esp_ota_get_running_partition();
+   if(esp_ota_get_state_partition(test_running,&test_state)==ESP_OK&&test_state==ESP_OTA_IMG_PENDING_VERIFY){for(;;){}}}
+#endif
+#ifdef TOPORTK_ROLLBACK_TEST_FAIL_HEALTH
+  ota_service(millis(),!is_base(),profile_running,false); // rollback test: never accept a pending boot
+#else
   ota_service(millis(),!is_base(),profile_running,display_ready&&!config_error&&survey_service_ready()&&web_service_ready());
+#endif
   if(!ota_locked())read_usb_console();
   if(!ota_paused())read_gnss();
   else for(unsigned budget=0;budget<2048&&gnss.available();++budget)gnss.read();

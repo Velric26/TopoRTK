@@ -1,0 +1,61 @@
+{
+  "started": "2026-09-14T20:13:10.185Z",
+  "testVersion": "0.11.5-rollback-test",
+  "stockVersion": "0.11.5",
+  "peer": [],
+  "phases": [
+    {
+      "at": 11223,
+      "boot_id": 1626459169,
+      "firmware": "0.11.5",
+      "boot": "Previous firmware restored (rollback)",
+      "state": "restarting"
+    },
+    {
+      "at": 20354,
+      "boot_id": 1136433548,
+      "firmware": "0.11.5-rollback-test",
+      "boot": "Checking new firmware",
+      "state": "idle"
+    },
+    {
+      "at": 50445,
+      "boot_id": 3537698951,
+      "firmware": "0.11.5",
+      "boot": "Previous firmware restored (rollback)",
+      "state": "idle"
+    }
+  ],
+  "beforeSurvey": {
+    "unit": "A",
+    "role": "BASE",
+    "active_job": "0282221a00efdc93a91e955cb115b98a",
+    "jobs": [
+      {
+        "id": "1aff9636beb949abbe934ee0d250aef3",
+        "name": "Bench test - persistence",
+        "revision": 0,
+        "points": 0
+      },
+      {
+        "id": "0282221a00efdc93a91e955cb115b98a",
+        "name": "Vallarta01",
+        "revision": 0,
+        "points": 0
+      }
+    ],
+    "records_used": 2,
+    "storage_ready": true
+  },
+  "oldBoot": 1626459169,
+  "oldFirmware": "0.11.5",
+  "peerAcknowledged": true,
+  "uploadAcceptedAt": "2026-09-14T20:13:21.348Z",
+  "final": {
+    "firmware": "0.11.5",
+    "boot": "Previous firmware restored (rollback)",
+    "state": "idle"
+  },
+  "debugAfter": true,
+  "peerStatus": "Base updating - corrections paused"
+}

@@ -6,7 +6,9 @@ Unit B successfully updated from 0.11.1 to 0.11.2 over local Wi-Fi with the actu
 
 ## Source increments — 0.11.3/0.11.4/0.11.5, 2026-09-14
 
-**0.11.5 (flash pending):** Debug is **On by default at startup** — an operator request. A manual disable persists only until the next restart; there is still no stored preference, no idle timer and no HTTP enable path. Capture remains RAM-only and empty at boot. All other Debug/OTA behavior is unchanged.
+**0.11.5 (deployed):** Debug is **On by default at startup** — an operator request. A manual disable persists only until the next restart; there is still no stored preference, no idle timer and no HTTP enable path. Capture remains RAM-only and empty at boot. All other Debug/OTA behavior is unchanged.
+
+**Rollback acceptance (2026-09-14):** deliberate fault-injection images proved on hardware that a pending boot which fails the health gate is marked invalid and rolled back by the bootloader, that a hung pending boot is recovered by the task watchdog, and that a raw-socket mid-upload disconnect retains the running firmware and records. See [rollback acceptance evidence](../tests/2026-09-14-rollback-acceptance/README.md). Peer recovery confirmation requires the Rover's GNSS quality gate, so indoors the peer shows "Update overdue" after an update — by design. Hotspot OTA remains untested.
 
 **0.11.3 (deployed):** The OTA transfer deadline was raised from 120 to 300 seconds after the real 118.6-second transfer left almost no margin; the 12-second no-progress stall limit is unchanged. Debug lost its 15-minute idle timer: it stays On until disabled on the instrument or web. The `POST /api/v1/debug` `activity` operation and the browser keep-alive/extend controls were removed with the timer; the controller's separate two-minute lease and all OTA guard deadlines are unchanged. **0.11.4 (deployed):** the dashboard's Correction Link and Link Signal cards merged into one BASE/ROVER LINK indicator. Both versions were verified on hardware by Wi-Fi OTA with acknowledged peer notices.
 

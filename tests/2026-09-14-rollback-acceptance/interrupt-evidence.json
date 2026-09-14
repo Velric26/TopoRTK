@@ -1,0 +1,73 @@
+{
+  "started": "2026-09-14T20:11:54.299Z",
+  "partialBytes": 65536,
+  "polls": [
+    {
+      "ms": 235,
+      "state": "failed",
+      "firmware": "0.11.5",
+      "boot": "Previous firmware restored (rollback)",
+      "received": 0
+    },
+    {
+      "ms": 470,
+      "state": "review",
+      "firmware": "0.11.5",
+      "boot": "Previous firmware restored (rollback)",
+      "received": 0
+    },
+    {
+      "ms": 627,
+      "state": "pausing",
+      "firmware": "0.11.5",
+      "boot": "Previous firmware restored (rollback)",
+      "received": 0
+    },
+    {
+      "ms": 4365,
+      "state": "ready",
+      "firmware": "0.11.5",
+      "boot": "Previous firmware restored (rollback)",
+      "received": 0
+    },
+    {
+      "ms": 34440,
+      "state": "failed",
+      "firmware": "0.11.5",
+      "boot": "Previous firmware restored (rollback)",
+      "received": 4308
+    }
+  ],
+  "beforeSurvey": {
+    "unit": "A",
+    "role": "BASE",
+    "active_job": "0282221a00efdc93a91e955cb115b98a",
+    "jobs": [
+      {
+        "id": "1aff9636beb949abbe934ee0d250aef3",
+        "name": "Bench test - persistence",
+        "revision": 0,
+        "points": 0
+      },
+      {
+        "id": "0282221a00efdc93a91e955cb115b98a",
+        "name": "Vallarta01",
+        "revision": 0,
+        "points": 0
+      }
+    ],
+    "records_used": 2,
+    "storage_ready": true
+  },
+  "oldBoot": 1626459169,
+  "oldFirmware": "0.11.5",
+  "oldBootText": "Previous firmware restored (rollback)",
+  "peerAcknowledged": true,
+  "raw": {
+    "timeout": true,
+    "reply": ""
+  },
+  "error": "Upload connection closed or receive error",
+  "received": 4308,
+  "total": 1239120
+}
