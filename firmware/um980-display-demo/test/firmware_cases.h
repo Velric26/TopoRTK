@@ -54,7 +54,7 @@ int main() {
   // Actual firmware queue and COM2 writer: no partial admission under pressure.
   {
     const auto before=host_now;device_config.role=DeviceRole::kRover;unit_profile_applied=true;
-    correction_output_reset();gnss.binary_output.clear();gnss.tx_free=0;
+    correction_output_reset();debug_enable_local(true);gnss.binary_output.clear();gnss.tx_free=0;
     auto reference=msm(1006,0),observation=msm(1074,1000);
     assert(!queue_correction(observation.data(),observation.size(),host_now));
     assert(queue_correction(reference.data(),reference.size(),host_now));service_correction_output();assert(gnss.binary_output.empty());
@@ -79,7 +79,7 @@ int main() {
     assert(correction_output_fault&&correction_health.arrival_age(host_now)==UINT32_MAX);
     assert(!queue_correction(reference.data(),reference.size(),host_now));gnss.short_limit=2048;
     correction_output_reset();unit_profile_applied=false;assert(!queue_correction(reference.data(),reference.size(),host_now));
-    host_now=before;gnss.binary_output.clear();
+    host_now=before;gnss.binary_output.clear();debug_enable_local(false);
     std::puts("PASS: production COM2 whole-frame admission, backpressure/expiry, carried age, exclusive route, profile gate and latched output fault");
   }
   // Five startup commands are scheduled individually; no invocation advances time.
@@ -298,7 +298,21 @@ int main() {
   assert(format_web_status(json,sizeof(json),host_now) > 0);
   assert(!std::strstr(json,rotated.c_str()) && Serial.output.find(rotated) == std::string::npos);
   std::puts("PASS: Rover AP persistence, corrupt/failed storage, rotation, touch confirmation, subnet isolation, no password in API/logs");
-  for (unsigned page=0; page<5; ++page) {
+  // Hardware-only enable, polling does not extend lease, user activity does.
+  assert(!debug_enabled());change_page(ScreenPage::kSettings);profile_running=true;
+  tap(260,400);assert(current_page==ScreenPage::kDebug);tap(140,268);assert(debug_enabled());
+  profile_running=false;const auto debug_start=host_now;char debug_json[8192];
+  debug_observe(debugmode::Channel::GnssRx,"$GPGGA,observed");assert(debug_logs(debug_json,sizeof(debug_json)));assert(std::strstr(debug_json,"GPGGA"));
+  for(unsigned i=0;i<10;++i){host_now=debug_start+i*80000;assert(debug_status(debug_json,sizeof(debug_json)));}
+  host_now=debug_start+899999;assert(debug_enabled());assert(debug_activity());
+  host_now+=899999;assert(debug_enabled());host_now+=1;debug_service();assert(!debug_enabled());assert(!debug_logs(debug_json,sizeof(debug_json)));
+  debug_enable_local(true);assert(debug_logs(debug_json,sizeof(debug_json)));assert(!std::strstr(debug_json,"GPGGA"));
+  tap(140,268);assert(!debug_enabled());host_now=debug_start;
+  debugmode::Session wrapped;wrapped.enable(0xfffffff0u);assert(wrapped.active(100));assert(!wrapped.active(uint32_t(0xfffffff0u+debugmode::idle_ms)));
+  debugmode::Log bounded;bounded.clear(0);for(unsigned i=0;i<1000;++i)bounded.push(debugmode::Channel::Event,"test",0);assert(bounded.size()==8&&bounded.throttled==992);
+  for(unsigned t=1000;t<10000;t+=1000)for(unsigned i=0;i<8;++i)bounded.push(debugmode::Channel::Event,"line",t);assert(bounded.size()==32&&bounded.overwritten>0);
+  std::puts("PASS: Debug physical touch, enable during receiver setup, 15-minute idle lease, polling isolation, activity renewal, expiry/clear, wrap, bounded capture and unchanged COM2 output");
+  for (unsigned page=0; page<6; ++page) {
     current_page=static_cast<ScreenPage>(page); pending_role=device_config.role;
     draw_static_screen(); draw_dynamic_screen();
     const auto draws=display->draws;

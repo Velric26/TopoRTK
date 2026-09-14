@@ -12,6 +12,8 @@ Record toolchain, framework, dependencies, board settings, and required host too
 
 ## Build and Flash
 
+**2026-09-13:** Debug 0.10.5 builds for Unit A and Unit B; it has not been flashed. The deployed baseline remains 0.10.4. OTA is not available yet: the next update workflow requires peer notices, guarded inactive-slot writing and verified boot rollback. See [Debug/OTA architecture and deployment order](debug-and-ota.md) and [build/test evidence](../tests/2026-09-13-debug/README.md).
+
 Document commands, cable/port requirements, recovery procedure, and how to confirm the flashed version.
 
 ## Architecture

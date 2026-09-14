@@ -2,10 +2,10 @@
 
 #include <cstdint>
 
-enum class ScreenPage : uint8_t { kMain, kGpsDetails, kWifiDetails, kSettings, kPhone };
+enum class ScreenPage : uint8_t { kMain, kGpsDetails, kWifiDetails, kSettings, kPhone, kDebug };
 enum class TouchAction : uint8_t {
   kNone, kHome, kGps, kLink, kSettings, kBase, kRover, kApply, kAuto, kDay, kNight,
-  kPhone, kShowKey, kNewKey
+  kPhone, kShowKey, kNewKey, kDebug, kDebugToggle
 };
 
 struct TouchRect {
@@ -26,6 +26,8 @@ constexpr TouchRect kNight{216, 320, 96, 48};
 constexpr TouchRect kPhone{8, 380, 304, 44};
 constexpr TouchRect kShowKey{8, 212, 148, 48};
 constexpr TouchRect kNewKey{164, 212, 148, 48};
+constexpr TouchRect kDebug{212,380,100,44};
+constexpr TouchRect kDebugToggle{8,244,304,56};
 }
 
 inline TouchAction touch_action(ScreenPage page, int16_t x, int16_t y) {
@@ -36,6 +38,8 @@ inline TouchAction touch_action(ScreenPage page, int16_t x, int16_t y) {
     if (layout::kShowKey.contains(x,y)) return TouchAction::kShowKey;
     if (layout::kNewKey.contains(x,y)) return TouchAction::kNewKey;
   }
+  if(page==ScreenPage::kDebug&&layout::kDebugToggle.contains(x,y))return TouchAction::kDebugToggle;
+  if(page==ScreenPage::kSettings&&layout::kDebug.contains(x,y))return TouchAction::kDebug;
   if (page != ScreenPage::kSettings) return TouchAction::kNone;
   if (layout::kBase.contains(x, y)) return TouchAction::kBase;
   if (layout::kRover.contains(x, y)) return TouchAction::kRover;

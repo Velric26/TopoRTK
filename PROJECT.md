@@ -23,6 +23,13 @@ The first objective is a prototype that can be tested alongside established surv
 
 This applies to firmware, wiring, power, GNSS settings, RTCM, radio settings, storage, user interfaces, and system integration.
 
+- Ask all known questions together up front. If further user input is required, ask and end the turn; do not stay active while waiting.
+- Pause implementation if the **five-hour** usage allowance reaches 10% remaining; update documentation, commit and push. Weekly usage is not this threshold.
+
+### Debug checkpoint — 2026-09-13
+
+The 0.10.5 source adds touchscreen-enabled **Debug**, a 15-minute user-idle timeout, a disabled-with-instructions web tab, and bounded passive communications capture. Both targets build and host/browser checks pass, but this increment is **not flashed or hardware accepted**; the deployed baseline remains 0.10.4. OTA and paired update notices remain planned, with upload disabled. See the [complete Debug/OTA plan](docs/debug-and-ota.md) and [validation record](tests/2026-09-13-debug/README.md). A combined USB installation after OTA preparation is a recommendation to reduce battery-holder access, not evidence of hardware validation.
+
 ### Field-interface rules
 
 - Keep the main display limited to correction-link state, required GNSS fix, link quality, horizontal uncertainty, and an actionable warning. Put GNSS and network diagnostics one swipe away.

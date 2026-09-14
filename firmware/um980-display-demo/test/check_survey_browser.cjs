@@ -4,12 +4,15 @@ const {chromium}=require('playwright');
 const fs=require('node:fs'),path=require('node:path'),http=require('node:http'),{spawn}=require('node:child_process'),readline=require('node:readline'),assert=require('node:assert/strict');
 const root=path.resolve(__dirname,'..'),output=path.resolve(root,'../..',process.env.TOPORTK_TEST_RECORD||'tests/2026-09-10-survey-workflow');fs.mkdirSync(output,{recursive:true});
 const html=fs.readFileSync(path.join(root,'src/survey_ui.h'),'utf8').split('R"SURVEY(')[1].split(')SURVEY"')[0];
+const debugNav=fs.readFileSync(path.join(root,'src/debug_ui.h'),'utf8').split('R"JS(')[1].split(')JS"')[0];
 const extras=fs.readFileSync(path.join(root,'src/survey_tools_ui.h'),'utf8').split('R"TOOLS(')[1].split(')TOOLS"')[0];
 const fixture=JSON.parse(fs.readFileSync(path.join(root,'test/test_survey.cpp'),'utf8').split('fixture=R"(')[1].split(')";')[0]);
 const engine=spawn(path.join(root,'.pio/test_survey.exe'),['--serve'],{cwd:root,stdio:['pipe','pipe','inherit']});let waiting=[],chain=Promise.resolve(),offline=false,controller=false,leaseToken='',claims=0;
 readline.createInterface({input:engine.stdout}).on('line',line=>waiting.shift()?.(JSON.parse(line)));
 function rpc(data){const request=chain.then(()=>new Promise(resolve=>{waiting.push(resolve);engine.stdin.write(JSON.stringify(data)+'\n')}));chain=request;return request}
 const server=http.createServer(async(req,res)=>{res.setHeader('Cache-Control','no-store');if(req.url==='/survey'){res.setHeader('Content-Type','text/html; charset=utf-8');return res.end(html)}res.setHeader('Content-Type','application/json');let raw='';for await(const chunk of req)raw+=chunk;const body=raw?JSON.parse(raw):{};if(offline){res.statusCode=503;return res.end('{"error":"offline"}')}
+if(req.url==='/debug-nav.js'){res.setHeader('Content-Type','application/javascript; charset=utf-8');return res.end(debugNav)}
+if(req.url==='/api/v1/debug')return res.end(JSON.stringify({version:1,enabled:false,boot_id:1,uptime_ms:Date.now()}));
 if(req.url==='/survey-tools.js'){res.setHeader('Content-Type','application/javascript; charset=utf-8');return res.end(extras)}
 if(req.url.startsWith('/api/v1/data?')){const query=Object.fromEntries(new URL(req.url,'http://localhost').searchParams);for(const key of ['offset','at'])if(key in query)query[key]=Number(query[key]);if('deleted'in query)query.deleted=query.deleted==='true';return res.end(JSON.stringify(await rpc({query})))}
 if(req.url==='/api/v1/control'){const base=(await rpc({})).role==='BASE';const accepted=/^[0-9a-f]{32}$/.test(body.client||'');if(accepted){controller=true;leaseToken='fixture-token-'+(++claims)}res.statusCode=accepted?200:403;return res.end(JSON.stringify(accepted?{token:leaseToken}:{error:'pairing_failed'}))}

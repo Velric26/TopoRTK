@@ -4,6 +4,12 @@
 
 ## Users and Field Workflow
 
+### Debug (0.10.5 source; hardware validation pending)
+
+Enable **Setup → Debug → Enable Debug** on the instrument touchscreen. Debug defaults Off after restart and expires after 15 minutes without user activity; passive polling does not renew it. The web Survey interface has a dedicated Debug tab on both roles, gray/disabled with enable instructions when unavailable. The current controller can view bounded GNSS and correction summaries, filter or pause the view, and download a snapshot without injecting receiver commands or diagnostic traffic. There is no PIN and no remote enable operation.
+
+The Debug page contains role-specific flashing warnings and the update/peer-status plan. Upload and actual peer update notices are **not implemented yet**. Passive monitoring never announces a paused link. See the [Debug and OTA design](debug-and-ota.md) and [host/browser validation](../tests/2026-09-13-debug/README.md).
+
 Describe job setup, base setup, rover connection, point collection, stakeout, checks, and export.
 
 ## Mobile Delivery and Connectivity Roadmap

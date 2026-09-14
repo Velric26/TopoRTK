@@ -21,6 +21,7 @@
 #include "correction_health.h"
 #include "correction_queue.h"
 #include "link_diagnostic.h"
+#include "debug_service.h"
 #include "wifi_credentials.h"
 
 #ifndef TOPORTK_DISPLAY_ROTATION
@@ -322,6 +323,7 @@ void service_correction_output(){
   // This reports UART buffer admission, not receiver acknowledgement.
   if(gnss.availableForWrite()<int(frame->size)){++correction_output_waits;return;}
   const size_t written=gnss.write(frame->data,frame->size);
+  debug_frame(debugmode::Channel::GnssTx,frame->data,written);
   if(written!=frame->size){++correction_output_faults;correction_output_fault=true;correction_health.reset();correction_output.clear();return;}
   ++correction_output_forwarded;rtcm_forwarded_bytes+=written;
   rtcm_last_message=correction::message_type(frame->data);rtcm_last_rx_ms=now;
@@ -565,6 +567,7 @@ bool send_rtcm_packet(const uint8_t *frame, size_t frame_length,
 
   if (!wifi_udp.beginPacket(wifi_peer, network::kUdpPort)) return false;
   const size_t written = wifi_udp.write(packet, header.packet_size);
+  debug_frame(debugmode::Channel::WifiTx,frame,frame_length);
   return written == header.packet_size && wifi_udp.endPacket() == 1;
 }
 
@@ -596,6 +599,7 @@ bool handle_wifi_rtcm_packet(uint8_t *packet, size_t packet_length) {
     return false;
   }
 
+  debug_frame(debugmode::Channel::WifiRx,frame,header.rtcm_length);
   if(!queue_correction(frame,header.rtcm_length,millis()))return false;
   ++rtcm_wifi_rx_frames;wifi_last_peer_ms=millis();return true;
 }
@@ -1641,7 +1645,8 @@ void draw_navigation() {
   display->fillRect(0, layout::kNavY, 320, 48, colors::kPanel);
   for (uint8_t index = 0; index < 4; ++index) {
     const bool selected = index == static_cast<uint8_t>(current_page) ||
-                          (current_page == ScreenPage::kPhone && index == 2);
+                          (current_page == ScreenPage::kPhone && index == 2) ||
+                          (current_page == ScreenPage::kDebug && index == 3);
     if (selected) display->fillRect(index * 80 + 8, layout::kNavY, 64, 3, colors::kAccent);
     draw_fitted_text(index * 80 + (80 - std::strlen(labels[index]) * 12) / 2,
                      layout::kNavY + 19, 72, labels[index], 2,
@@ -1682,9 +1687,29 @@ void draw_settings() {
   char signature[128] = {};
   std::snprintf(signature, sizeof(signature), "%s|%s", status, brightness);
   if (ui_region_changed(7, 382, signature)) {
-    display->fillRect(8, 380, 304, 46, colors::kBackground);
-    draw_fitted_text(12, 385, 296, status, 1, config_error || profile_failed ? colors::kWarning : colors::kMuted);
-    draw_fitted_text(12, 407, 296, brightness, 2, colors::kMuted);
+    display->fillRect(8, 380, 198, 46, colors::kBackground);
+    draw_fitted_text(12, 385, 188, status, 1, config_error || profile_failed ? colors::kWarning : colors::kMuted);
+    draw_fitted_text(12, 407, 188, brightness, 1, colors::kMuted);
+  }
+  draw_button(9,layout::kDebug,"DEBUG","",debug_enabled());
+}
+
+void draw_debug_settings(){
+  const bool enabled=debug_enabled();
+  draw_label_value(66,"DEBUG",enabled?"ON":"OFF");
+  if(ui_region_changed(14,104,enabled?"on":"off")){
+    display->fillRect(8,104,304,128,colors::kBackground);
+    draw_fitted_text(12,112,296,"Passive monitoring keeps surveying",1,colors::kMuted);
+    draw_fitted_text(12,132,296,"and corrections running normally.",1,colors::kMuted);
+    draw_fitted_text(12,168,296,"Open the Debug tab in the web UI.",1,RGB565_WHITE);
+    draw_fitted_text(12,194,296,"Off after 15 minutes without use.",1,colors::kMuted);
+    draw_fitted_text(12,214,296,"Always off after restarting.",1,colors::kMuted);
+  }
+  draw_button(10,layout::kDebugToggle,enabled?"DISABLE DEBUG":"ENABLE DEBUG","",enabled);
+  if(ui_region_changed(15,314,"debug-info")){
+    draw_fitted_text(12,320,296,"Firmware updates: planned separately.",1,colors::kWarning);
+    draw_fitted_text(12,344,296,"Enabling Debug does not pause a link.",1,colors::kMuted);
+    draw_fitted_text(12,388,296,"Logs are bounded and kept in RAM.",1,colors::kMuted);
   }
 }
 
@@ -1703,6 +1728,9 @@ void draw_header(uint32_t now) {
   } else if (current_page == ScreenPage::kSettings) {
     std::snprintf(title, sizeof(title), "Setup / %s", device_role_title());
     std::snprintf(subtitle, sizeof(subtitle), "ROLE AND DISPLAY PREFERENCES");
+  } else if(current_page==ScreenPage::kDebug){
+    std::snprintf(title,sizeof(title),"Debug / %s",device_role_title());
+    std::snprintf(subtitle,sizeof(subtitle),"PASSIVE COMMUNICATION MONITOR");
   } else if (current_page == ScreenPage::kPhone) {
     std::snprintf(title, sizeof(title), "Phone / %s", device_role_title());
     std::snprintf(subtitle, sizeof(subtitle), "LOCAL WEB UI %s",kWebUiVersion);
@@ -1719,6 +1747,7 @@ void draw_header(uint32_t now) {
     }
   }
 
+  if(debug_enabled())std::strncat(subtitle," | DEBUG",sizeof(subtitle)-std::strlen(subtitle)-1);
   char signature[128] = {};
   std::snprintf(signature, sizeof(signature), "%u|%s|%s|%c", header_color,
                 title, subtitle, board::kUnitLabel);
@@ -2083,6 +2112,8 @@ void draw_dynamic_screen() {
     draw_wifi_details(now);
   } else if (current_page == ScreenPage::kSettings) {
     draw_settings();
+  } else if(current_page==ScreenPage::kDebug){
+    draw_debug_settings();
   } else if (current_page == ScreenPage::kPhone) {
     draw_phone_connection(now);
   } else {
@@ -2123,6 +2154,8 @@ void finish_swipe() {
       change_page(static_cast<ScreenPage>(static_cast<uint8_t>(action) - 1));
       return;
     }
+    if(action==TouchAction::kDebug){change_page(ScreenPage::kDebug);return;}
+    if(action==TouchAction::kDebugToggle){debug_enable_local(!debug_enabled());draw_dynamic_screen();return;}
     if (profile_running) return;
     if (action == TouchAction::kPhone) change_page(ScreenPage::kPhone);
     else if (action == TouchAction::kShowKey) {
@@ -2196,6 +2229,7 @@ void service_swipe_navigation() {
 }
 
 void handle_line(char *line) {
+  debug_observe(debugmode::Channel::GnssRx,line);
   ++line_count;
   Serial.print("UM980> ");
   Serial.println(line);
@@ -2284,6 +2318,7 @@ void handle_line(char *line) {
 }
 
 void handle_complete_rtcm(const uint8_t *frame, size_t frame_length) {
+  debug_frame(debugmode::Channel::GnssRx,frame,frame_length);
   if(is_base()) capture_reference(frame,frame_length);
   ++rtcm_uart_frames;
   rtcm_last_message = rtcm_message_type(frame, frame_length);
@@ -2375,6 +2410,7 @@ void read_gnss() {
 }
 
 void send_command(const char *command) {
+  debug_observe(debugmode::Channel::GnssTx,command);
   Serial.print("ESP32> ");
   Serial.println(command);
   gnss.print(command);
@@ -2716,6 +2752,7 @@ void service_survey() {
 }
 
 void loop() {
+  debug_service();
   read_usb_console();
   read_gnss();
   service_gnss_startup();

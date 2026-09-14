@@ -5,6 +5,8 @@
 #include "survey_service.h"
 #include "link_diagnostic.h"
 #include "link_diagnostic_ui.h"
+#include "debug_service.h"
+#include "debug_ui.h"
 #include <Arduino.h>
 #include <esp_http_server.h>
 #include <esp_system.h>
@@ -128,6 +130,27 @@ esp_err_t post_diagnostic(httpd_req_t *r){
   std::string raw;if(!body(r,raw)||raw.size()>512||!diagnostic_request(raw.c_str()))return error(r,"409 Conflict","{\"error\":\"invalid_settings_or_diagnostic_queue_busy\"}");
   return error(r,"202 Accepted","{\"state\":\"queued\"}");
 }
+esp_err_t get_debug_page(httpd_req_t *r){headers(r);httpd_resp_set_type(r,"text/html; charset=utf-8");return httpd_resp_send(r,kDebugPage,sizeof(kDebugPage)-1);}
+esp_err_t get_debug_nav(httpd_req_t *r){headers(r);httpd_resp_set_type(r,"application/javascript; charset=utf-8");return httpd_resp_send(r,kDebugNav,sizeof(kDebugNav)-1);}
+esp_err_t get_debug_status(httpd_req_t *r){char data[512];if(!debug_status(data,sizeof(data)))return error(r,"503 Service Unavailable","{\"error\":\"debug_unavailable\"}");httpd_resp_set_hdr(r,"X-Controller",auth(r)?"true":"false");return error(r,"200 OK",data);}
+esp_err_t get_debug_log(httpd_req_t *r){
+  if(!auth(r))return error(r,"401 Unauthorized","{\"error\":\"claim_control_first\"}");
+  if(!debug_enabled())return error(r,"403 Forbidden","{\"error\":\"enable_debug_on_touchscreen\"}");
+  auto *data=new(std::nothrow) char[8192];if(!data)return error(r,"503 Service Unavailable","{\"error\":\"memory_unavailable\"}");
+  if(!debug_logs(data,8192)){delete[] data;return error(r,"503 Service Unavailable","{\"error\":\"debug_capture_unavailable\"}");}
+  const auto result=error(r,"200 OK",data);delete[] data;return result;
+}
+esp_err_t post_debug(httpd_req_t *r){
+  if(!same_origin(r))return error(r,"403 Forbidden","{\"error\":\"origin_rejected\"}");
+  if(!auth(r))return error(r,"401 Unauthorized","{\"error\":\"claim_control_first\"}");
+  std::string raw;StaticJsonDocument<128>d;
+  if(!body(r,raw)||raw.size()>128||deserializeJson(d,raw))return error(r,"400 Bad Request","{\"error\":\"invalid_request\"}");
+  const char *op=d["op"]|"";
+  if(!std::strcmp(op,"disable"))debug_disable();
+  else if(!std::strcmp(op,"activity")){if(!debug_activity())return error(r,"403 Forbidden","{\"error\":\"enable_debug_on_touchscreen\"}");}
+  else return error(r,"400 Bad Request","{\"error\":\"operation_not_available\"}");
+  return error(r,"200 OK","{\"state\":\"applied\"}");
+}
 esp_err_t rejected(httpd_req_t *request, httpd_err_code_t) {
   if (request->method != HTTP_GET) {
     httpd_resp_set_hdr(request, "Allow", "GET");
@@ -154,7 +177,7 @@ void publish_web_status(const char *json, size_t length, uint32_t now, bool rove
   last_start_attempt = now;
   httpd_config_t config = HTTPD_DEFAULT_CONFIG();
   config.stack_size = 8192;
-  config.max_uri_handlers = 13;
+  config.max_uri_handlers = 18;
   config.max_open_sockets = 3;
   config.lru_purge_enable = true;
   config.recv_wait_timeout = 2;
@@ -162,6 +185,11 @@ void publish_web_status(const char *json, size_t length, uint32_t now, bool rove
   if (httpd_start(&server, &config) != ESP_OK) { server = nullptr; Serial.println("WEB: start failed"); return; }
   const httpd_uri_t routes[] = {
       {"/", HTTP_GET, get_page, nullptr},
+      {"/debug",HTTP_GET,get_debug_page,nullptr},
+      {"/debug-nav.js",HTTP_GET,get_debug_nav,nullptr},
+      {"/api/v1/debug",HTTP_GET,get_debug_status,nullptr},
+      {"/api/v1/debug",HTTP_POST,post_debug,nullptr},
+      {"/api/v1/debug/log",HTTP_GET,get_debug_log,nullptr},
       {"/ui/v1/", HTTP_GET, get_page, nullptr},
       {"/api/v1/status", HTTP_GET, get_status, nullptr},
       {"/survey",HTTP_GET,get_survey_page,nullptr},

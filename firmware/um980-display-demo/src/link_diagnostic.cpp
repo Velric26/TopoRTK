@@ -1,4 +1,5 @@
 #include "link_diagnostic.h"
+#include "debug_service.h"
 #include "link_diagnostic_core.h"
 #include "correction_transport_selftest.h"
 #include "correction_pair_test.h"
@@ -220,12 +221,12 @@ void diagnostic_service(uint32_t now,bool rover,IPAddress peer,bool profile_busy
   if(live.active()){
     live.tick(now);
     for(unsigned budget=0;budget<2048&&radio.available();++budget){
-      if(live.byte(uint8_t(radio.read()),now)&&!correction_radio_input(live.data(),live.size(),now-live.known_age(now)))++live_output_rejected;
+      if(live.byte(uint8_t(radio.read()),now)){debug_frame(debugmode::Channel::RadioRx,live.data(),live.size());if(!correction_radio_input(live.data(),live.size(),now-live.known_age(now)))++live_output_rejected;}
     }
     correction::Packet packet;
     if(live.next(packet,now)){
       if(radio.availableForWrite()>=int(sizeof(packet))){
-        const size_t written=radio.write(packet.bytes,sizeof(packet));
+        const size_t written=radio.write(packet.bytes,sizeof(packet));debug_frame(debugmode::Channel::RadioTx,packet.bytes,written);
         if(written==sizeof(packet))live.committed();
         else {++live_short_writes;live.fail();correction_output_reset();std::strcpy(route_error,"Radio output fault; select a new session.");}
       }else ++live_tx_wait;
@@ -249,7 +250,7 @@ void diagnostic_service(uint32_t now,bool rover,IPAddress peer,bool profile_busy
     for(unsigned budget=0;budget<2048&&radio.available();++budget){pair_engine.byte(uint8_t(radio.read()),now);if(observing)++uart_work.rx_bytes;}
     correction::Packet packet;if(pair_engine.next(packet,now)){
       if(radio.availableForWrite()>=sizeof(packet)){
-        const size_t written=radio.write(packet.bytes,sizeof(packet));if(observing){uart_work.tx_bytes+=written;if(written!=sizeof(packet))++uart_work.short_writes;}
+        const size_t written=radio.write(packet.bytes,sizeof(packet));debug_frame(debugmode::Channel::RadioTx,packet.bytes,written);if(observing){uart_work.tx_bytes+=written;if(written!=sizeof(packet))++uart_work.short_writes;}
         if(written==sizeof(packet))pair_engine.committed(packet,now);
       }else if(observing)++uart_work.tx_wait;
     }

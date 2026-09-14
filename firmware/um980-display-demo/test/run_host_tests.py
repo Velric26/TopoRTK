@@ -13,6 +13,7 @@ import json
 root = Path(__file__).resolve().parents[1]
 source = (root / 'src/rover_ap.cpp').read_text(encoding='utf-8') + '\n' + (root / 'src/main.cpp').read_text(encoding='utf-8')
 hardware = r'(Arduino|Arduino_GFX_Library|FS|Preferences|SD_MMC|TCA9554|WiFi|WiFiUdp|Wire|esp_system)\.h'
+source += '\n' + (root / 'src/debug_service.cpp').read_text(encoding='utf-8')
 source = re.sub(r'^#include <' + hardware + r'>\n', '', source, flags=re.M)
 generated = root / '.pio/host_firmware.cpp'
 stubs = '''

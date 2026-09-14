@@ -12,6 +12,10 @@
 #include <string>
 #include <vector>
 
+#define portMUX_TYPE int
+#define portMUX_INITIALIZER_UNLOCKED 0
+#define portENTER_CRITICAL(x) ((void)(x))
+#define portEXIT_CRITICAL(x) ((void)(x))
 #define PROGMEM
 #include "font/glcdfont.h"
 #define RGB565_BLACK 0x0000
