@@ -1,16 +1,24 @@
 # Debug OTA operator guide — 0.11.0 preview
 
-**Software implemented; hardware acceptance pending. Neither instrument has been flashed with this increment.** Both connected units were read-only checked as A/Base and B/Rover, with no active collection. The deployed baseline remains 0.10.4. The user requested finishing the current software step and stopping before hardware deployment on 2026-09-14.
+**Partial USB installation; OTA hardware acceptance pending.** Unit A/Base is installed with 0.11.0: USB write verification, startup, saved survey state and Debug-Off gates passed. Unit B/Rover remains on 0.10.4. On 2026-09-14 the user requested stopping before any further flash. Neither unit has been updated over Wi-Fi yet. See the [installation evidence](../tests/2026-09-14-ota-usb/README.md).
 
 ## First installation and later updates
 
-1. Install the completed 0.11.0 firmware/bootloader on both ESP32s by USB and verify the flashed image and startup. This is still outstanding. Keep USB access available for the first OTA and rollback checks.
+1. Install the completed 0.11.0 firmware/bootloader on both ESP32s by USB and verify the flashed image and startup. Unit A is complete; Unit B is pending and currently paused at the user's request. Keep USB access available for the first OTA and rollback checks.
 2. On each instrument touchscreen, open **Setup → Debug → Enable Debug**. Debug is Off after restart and after 15 minutes without user activity. There is no HTTP enable command and no PIN. The current takeover owner may use private Debug/OTA actions.
 3. Connect through the existing local Wi-Fi or instrument hotspot and open **Debug** in the Survey interface. Use the displayed instrument address. The Base in Local Router mode does not gain a new independent phone hotspot from this feature; Direct Link's Base AP remains available. Network provisioning/topology is unchanged.
 4. Choose the `.tpk` package for **hardware Unit A or B**, independently of its current Base/Rover role. Select **Review package and notify peer**. This reserves the instrument and rejects active collection, queued survey mutations, receiver setup and diagnostics. Correction forwarding continues during review.
 5. Read the role-specific interruptions. Accept the interruption/power checkbox. If peer acknowledgement cannot be confirmed, explicitly choose whether to permit an unconfirmed notification. **Confirm interruption and install** pauses local processing and starts a separate Updating notice. Without the override, a missing final acknowledgement aborts before writing flash.
 6. Keep power connected. The browser shows transfer progress, then waits for a new boot and its startup verdict. HTTP/Debug polling pauses during the synchronous upload. A successful transfer alone is not reported as a successful update. If the connection is lost, reconnect and check the outcome before retrying.
 7. Debug returns Off after reboot. Enable it locally again if diagnostics are needed. For **SiK**, start a **fresh Base correction session**, then copy it to Rover. The saved old route is restored for peer-status communication only; correction traffic remains blocked until the new session is selected. This avoids resetting sequence/replay protection in the old session. Wi-Fi does not need this manual SiK rejoin.
+
+## Development backups and recovery
+
+A full 16 MB flash backup is **optional**, not a prerequisite for routine development updates. Prefer a small settings snapshot when USB is already available, and preserve the source/build configuration needed to rebuild. Do not perform a lengthy full read before every flash. Normal firmware uploads preserve settings and SD files.
+
+USB reflashing can recover firmware, but cannot reconstruct erased settings or survey data. The current USB snapshot reads 0x7000 bytes starting at 0x9000 (28,672 bytes covering NVS and OTA metadata); verify the partition layout before reusing those offsets with another build. This raw snapshot is not a portable settings export, and its OTA metadata must not be blindly restored over a different firmware layout. SD jobs/files require their own export or backup when needed. Full flash snapshots remain useful before partition changes or investigations that specifically need the old flash contents.
+
+Unit A and B full snapshots were already completed during this installation session. Unit B's small snapshot took 0.7 seconds; its full read finished just before cancellation. Snapshots and compiled packages stay private under ignored `.pio`, since they may contain credentials.
 
 ## What pauses
 

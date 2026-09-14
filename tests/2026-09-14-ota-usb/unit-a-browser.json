@@ -1,0 +1,12 @@
+{
+  "result": "PASS",
+  "unit": "A",
+  "checks": [
+    "live Survey Debug tab disabled",
+    "touchscreen enable instructions",
+    "live Debug page version 0.11.0",
+    "OTA idle",
+    "takeover and upload controls unavailable while Debug Off",
+    "no JavaScript errors"
+  ]
+}

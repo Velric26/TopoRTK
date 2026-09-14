@@ -2,7 +2,7 @@
 
 ## Current checkpoint — 0.11.0 software, 2026-09-14
 
-Peer transport integration, the guarded package uploader, role-specific confirmations, browser progress/new-boot verification, deferred boot acceptance and rollback handling are now implemented in source. Software checks and both firmware builds pass; **no unit has been flashed and hardware acceptance is pending**. The user requested finishing this software step and stopping. See the [operator guide and actual behavior](ota-operator-guide.md) and [validation evidence](../tests/2026-09-14-ota/README.md).
+Peer transport integration, the guarded package uploader, role-specific confirmations, browser progress/new-boot verification, deferred boot acceptance and rollback handling are now implemented in source. Software checks and both firmware builds pass. **Unit A has received 0.11.0 by USB; Unit B remains on 0.10.4. Actual OTA and rollback acceptance are pending.** Further flashing is paused at the user's request. Routine development updates use a small settings snapshot when practical; full flash backups are optional. See the [operator guide and actual behavior](ota-operator-guide.md), [software validation](../tests/2026-09-14-ota/README.md) and [USB installation evidence](../tests/2026-09-14-ota-usb/README.md).
 
 SiK restoration after OTA deliberately carries peer-status traffic only: corrections require a fresh Base session and Rover rejoin, so restarted counters cannot reuse the old session's replay window. This implements the explicit manual-rejoin option below; seamless session negotiation remains deferred. The earlier increment sections retain their historical checkpoints and the original design requirements.
 
