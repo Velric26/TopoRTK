@@ -359,6 +359,7 @@ bool select(Transport transport, bool rover, uint32_t now) {
   }
   clear_record("pending");
   operation.clear_interrupted();
+  operation.adopted(transport, confirmed.revision);
   selected_ = transport; storage_ok = true;
   pending = link_operation::Pending{};
   tx_wait = output_rejected = short_writes = 0;
@@ -555,6 +556,21 @@ void write_json(JsonObject d, uint32_t now) {
   d["transport"] = radio_active() ? "sik" : "wifi";
   d["session"] = session(); d["peer_connected"] = state.connected;
   d["pair_state"] = state.reason; d["boot"] = state.local_boot; d["peer_boot"] = state.peer_boot;
+  // Candidate staging and the operation record: the pieces a failed cutover is
+  // diagnosed from, without a serial console.
+  const auto candidate = staging.snapshot(now);
+  d["staging_active"] = staging_active;
+  d["staging_transport"] = staging_transport == Transport::Radio ? "sik" : "wifi";
+  d["staging_session"] = candidate.session;
+  d["staging_connected"] = candidate.connected;
+  d["staging_state"] = candidate.reason;
+  d["staging_peer_boot"] = candidate.peer_boot;
+  d["operation_active"] = op.active;
+  d["operation_tag"] = op.tag;
+  d["operation_transport"] = op.transport == Transport::Radio ? "sik" : "wifi";
+  d["operation_previous"] = op.previous == Transport::Radio ? "sik" : "wifi";
+  d["operation_coordinator"] = op.coordinator;
+  d["peer_address"] = address.toString();
   d["fault"] = live.fault(); d["station"] = live.station();
   d["operation_state"] = link_operation::state_text(op.state);
   d["operation_reason"] = link_operation::reason_text(op.reason);

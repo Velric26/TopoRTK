@@ -92,7 +92,9 @@ class Engine {
   bool forward(Kind kind, Transport transport, uint32_t tag, uint32_t revision, uint32_t now, Reason &reason);
   bool receive(const Message &message, uint32_t now);
   bool cancel(uint32_t tag, uint32_t now);
-  // After a local (recovery) selection the interrupted record is settled.
+  // After a local (recovery) selection the interrupted record is settled and the
+  // engine adopts that medium as the confirmed baseline.
+  void adopted(Transport transport, uint32_t revision);
   void clear_interrupted();
   void tick(const Inputs &inputs);
   Snapshot snapshot(uint32_t now) const;

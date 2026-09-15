@@ -149,6 +149,7 @@ void Engine::reserve(Kind kind, Transport transport, uint32_t tag, uint32_t revi
   state_ = State::Negotiating; reason_ = Reason::None; phase_ = Phase::Prepare;
   started_ = now; sent_ = 0;   // 0 = nothing transmitted yet: the first message goes out at once
   peer_ready_ = commit_received_ = false;
+  committed_ = committed_commit_pending_ = false;
   actions_.persist_pending = true; actions_.stage = true;
 }
 
@@ -183,6 +184,7 @@ bool Engine::forward(Kind kind, Transport transport, uint32_t tag, uint32_t revi
   tag_ = tag; revision_ = revision;   // carried as the expected revision; the answer assigns the real one
   state_ = State::Negotiating; reason_ = Reason::None; phase_ = Phase::Prepare;
   started_ = now; sent_ = 0; forwarding_ = true; commit_received_ = false;
+  committed_ = committed_commit_pending_ = false;
   actions_.stage = true;
   return true;
 }
@@ -239,26 +241,38 @@ bool Engine::receive(const Message &message, uint32_t now) {
         actions_.message.transport = message.transport; actions_.message.tag = message.tag; actions_.message.revision = message.revision;
         return false;
       };
-      if (state_ == State::Idle && message.revision <= confirmed_.revision) return deny();
-      if (busy() && message.tag != tag_) return deny();
+      // A retried prepare must never restart work this instrument already has:
+      // before commit it just re-announces readiness, afterwards it stays done.
+      // While a request is being forwarded this message is its answer, not a
+      // duplicate, so it is adopted below.
+      if (!forwarding_ && tag_ && message.tag == tag_) {
+        if (committed_ || state_ == State::Succeeded || state_ == State::Applying) {
+          if (!committed_ && (!sent_ || expired(now, sent_, retry_ms))) send(Ready, 0, now);
+          return true;
+        }
+        if (!sent_ || expired(now, sent_, retry_ms)) send(Ready, 0, now);
+        return true;
+      }
+      // One operation at a time: only an *unrelated* active operation (or an
+      // unrecoverable storage state) refuses; a settled record, an interrupted
+      // one, or the request this instrument is itself forwarding does not.
+      if ((busy() && !forwarding_) || state_ == State::RecoveryRequired) return deny();
+      if (message.revision <= confirmed_.revision) return deny();
       // Adopt the coordinator's assignment. This also completes a forwarded
       // request: the delegate stops asking and follows the coordinator.
       forwarding_ = false;
-      const bool same = message.tag == tag_ && message.revision == revision_ &&
-                        kind == kind_ && transport == target_;
       tag_ = message.tag; revision_ = message.revision; kind_ = kind; target_ = transport;
       previous_ = static_cast<Transport>(confirmed_.transport);
       state_ = State::Negotiating; reason_ = Reason::None; phase_ = Phase::Prepare;
       peer_ready_ = commit_received_ = false;
-      if (!same) {
-        pending_ = Pending{};
-        pending_.kind = uint8_t(kind); pending_.target = uint8_t(transport);
-        pending_.previous = uint8_t(previous_); pending_.tag = tag_; pending_.revision = revision_;
-        actions_.persist_pending = true;
-        // The negotiation window starts when this operation is adopted, never
-        // from a stale engine clock.
-        started_ = now;
-      }
+      committed_ = committed_commit_pending_ = false;   // never inherit a previous operation's commit
+      pending_ = Pending{};
+      pending_.kind = uint8_t(kind); pending_.target = uint8_t(transport);
+      pending_.previous = uint8_t(previous_); pending_.tag = tag_; pending_.revision = revision_;
+      actions_.persist_pending = true;
+      // The negotiation window starts when this operation is adopted, never
+      // from a stale engine clock.
+      started_ = now;
       sent_ = 0;
       actions_.stage = true;
       return true;
@@ -306,6 +320,17 @@ bool Engine::cancel(uint32_t tag, uint32_t now) {
   return true;
 }
 
+void Engine::adopted(Transport transport, uint32_t revision) {
+  // A local recovery selection is authoritative too: without this the engine
+  // would keep reporting a stale previous medium and stale revision baseline.
+  confirmed_.transport = uint8_t(transport);
+  confirmed_.revision = revision;
+  previous_ = target_ = transport;
+  settled_tag_ = tag_ = revision_ = 0;
+  kind_ = Kind::None; reason_ = Reason::None;
+  if (!busy()) state_ = State::Idle;
+}
+
 void Engine::clear_interrupted() {
   if (state_ != State::Interrupted) return;
   state_ = State::Idle; reason_ = Reason::None; kind_ = Kind::None;
@@ -338,8 +363,16 @@ void Engine::tick(const Inputs &inputs) {
     case State::Negotiating:
       if (expired(inputs.now, started_, negotiate_ms)) { settle(State::Failed, Reason::PeerUnreachable, inputs.now); return; }
       if (inputs.already_selected) {
-        // Nothing to cut over: the requested medium already carries production.
-        // The durable revision advances only when a selection actually commits.
+        if (!rover_) {
+          // The candidate medium already carries this instrument's production
+          // session, so there is nothing to prove: report the candidate ready
+          // and let the coordinator decide the cutover.
+          if (!sent_ || expired(inputs.now, sent_, retry_ms)) send(Ready, 0, inputs.now);
+          return;
+        }
+        // Coordinator: the requested medium is already proven, so the accepted
+        // operation completes without a cutover. The durable revision advances
+        // only when a selection actually commits.
         settle(State::Succeeded, Reason::Applied, inputs.now);
         return;
       }

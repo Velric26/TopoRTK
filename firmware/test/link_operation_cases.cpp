@@ -300,6 +300,30 @@ void delegate_forwarding() {
   assert(reply.size() == 1 && reply[0].kind == link_operation::Done && reply[0].code == link_operation::kDenied);
 }
 
+void local_selection_updates_the_baseline() {
+  Pair p;
+  Reason reason;
+  assert(p.rover.engine.request(Kind::Select, Transport::Radio, tag_of(0xdd), 0, now_ms, reason));
+  p.run(1200);
+  assert(p.rover.engine.snapshot(now_ms).state == State::Succeeded && p.rover.selected == Transport::Radio);
+  // A local recovery selection moves the confirmed medium outside the service;
+  // it must also become the engine's baseline for the next operation.
+  const uint32_t revision = p.rover.confirmed.revision;
+  // The service moves its own selected medium at the same time (that is what a
+  // local recovery selection does), then the engine adopts the new baseline.
+  p.rover.selected = Transport::WiFi;
+  p.rover.engine.adopted(Transport::WiFi, revision);
+  const auto adopted = p.rover.engine.snapshot(now_ms);
+  assert(p.rover.engine.selected() == Transport::WiFi);
+  assert(adopted.previous == Transport::WiFi && adopted.state == State::Idle && adopted.tag == 0);
+  assert(p.rover.engine.revision() == revision);
+  assert(p.rover.engine.request(Kind::Select, Transport::Radio, tag_of(0xee), revision, now_ms, reason));
+  assert(p.rover.engine.snapshot(now_ms).previous == Transport::WiFi);
+  p.run(1200);
+  assert(p.rover.engine.snapshot(now_ms).state == State::Succeeded);
+  assert(p.rover.selected == Transport::Radio && p.rover.confirmed.revision == revision + 1);
+}
+
 void codec_boundaries() {
   Message message;
   message.kind = link_operation::Prepare; message.code = uint8_t(Kind::Select);
@@ -357,6 +381,7 @@ int main() {
   denied_delegate_keeps_selection();
   restoration_and_recovery();
   persistence_failure_is_recovery_required();
+  local_selection_updates_the_baseline();
   reboot_reports_interrupted();
   delegate_forwarding();
   codec_boundaries();
