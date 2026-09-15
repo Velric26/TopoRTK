@@ -14,6 +14,13 @@ root = Path(__file__).resolve().parents[1]
 source = (root / 'src/rover_ap.cpp').read_text(encoding='utf-8') + '\n' + (root / 'src/main.cpp').read_text(encoding='utf-8')
 hardware = r'(Arduino|Arduino_GFX_Library|FS|Preferences|SD_MMC|TCA9554|WiFi|WiFiUdp|Wire|esp_system)\.h'
 source += '\n' + (root / 'src/debug_service.cpp').read_text(encoding='utf-8')
+# The settings and diagnostic-log owners join this translation unit rather than
+# a .pio/host_* translation unit: host_hardware.h gives each translation unit
+# its OWN SD_MMC and Preferences doubles, so the CSV files the log writes and the
+# config store the test fails on must live in the unit the test observes. On the
+# device the two are ordinary src/*.cpp translation units.
+source += '\n' + (root / 'src/device_settings.cpp').read_text(encoding='utf-8')
+source += '\n' + (root / 'src/diagnostic_log.cpp').read_text(encoding='utf-8')
 source = re.sub(r'^#include <' + hardware + r'>\n', '', source, flags=re.M)
 generated = root / '.pio/host_firmware.cpp'
 stubs = '''

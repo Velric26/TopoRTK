@@ -134,6 +134,17 @@ int main() {
   // correction service is handed the selected role it cannot read itself.
   receiver_service_begin();
   correction_service_begin();
+  device_settings_begin();
+  // A card that fails the mount reports the failure and leaves no session for
+  // the diagnostic rows; the R4 block further down mounts the one its CSV
+  // assertions read, exactly as a boot's own single attempt would.
+  SD_MMC.fail = true;
+  const size_t mount_report = Serial.output.size();
+  setup_sd_logging();
+  assert(Serial.output.find("SD: MOUNT FAIL", mount_report) != std::string::npos);
+  assert(!diagnostic_log::snapshot().ready && !diagnostic_log::snapshot().verified &&
+         diagnostic_log::snapshot().session[0] == '\0');
+  SD_MMC.fail = false;
   // Same production observer: metadata/replayed epochs cannot hide an outage.
   auto msm=[](unsigned type,uint32_t epoch){std::vector<uint8_t> b(32);b[0]=0xd3;b[2]=26;b[3]=type>>4;b[4]=(type&15)<<4;b[5]=7;
     b[6]=epoch>>22;b[7]=epoch>>14;b[8]=epoch>>6;b[9]=epoch<<2;const auto crc=crc24q(b.data(),29);b[29]=crc>>16;b[30]=crc>>8;b[31]=crc;return b;};
@@ -149,7 +160,7 @@ int main() {
   data=msm(1074,604799000);assert(!health.observe(data.data(),data.size(),30));
   // Actual firmware queue and COM2 writer: no partial admission under pressure.
   {
-    const auto before=host_now;gnss_service::set_config(device_config);
+    const auto before=host_now;gnss_service::set_config(device_settings::config());
     gnss_service::apply_unit_profile();        // the correction gate needs a verified profile
     complete_profile();
     wifi_last_peer_ms=host_now;
@@ -282,7 +293,7 @@ int main() {
   reply("$command,VERSION,response: OK");
   assert(receiver().version_ok);
   load_config();
-  setup_backlight(device_config.brightness, host_now);
+  setup_backlight(device_settings::config().brightness, host_now);
   assert(backlight_pwm_ready && ledcReadFreq(0) == 5000);
   // The backlight curve takes whatever clock it is handed; the receiver's own
   // clock is injected later through the same sentence path.
@@ -305,24 +316,20 @@ int main() {
   assert(automatic_brightness_target(host_now, brightness_time) < 255);
   assert(automatic_brightness_target(host_now + 3000, brightness_time) == 255); // Stale clock.
   brightness_time = GnssTimeData{};
-  brightness_mode = BrightnessMode::kNight;
-  for (int tick=0; tick<75; ++tick) { host_now += 20; service_brightness(host_now, brightness_mode, brightness_time); }
+  for (int tick=0; tick<75; ++tick) { host_now += 20; service_brightness(host_now, BrightnessMode::kNight, brightness_time); }
   assert(backlight_duty == board::kNightBacklightDuty && ledcRead(0) == board::kNightBacklightDuty);
-  brightness_mode = BrightnessMode::kDay;
-  host_now += 500; service_brightness(host_now, brightness_mode, brightness_time); // A busy loop must catch up, not move one step.
+  host_now += 500; service_brightness(host_now, BrightnessMode::kDay, brightness_time); // A busy loop must catch up, not move one step.
   assert(backlight_duty > 100 && backlight_duty < 255);
-  host_now += 1000; service_brightness(host_now, brightness_mode, brightness_time);
+  host_now += 1000; service_brightness(host_now, BrightnessMode::kDay, brightness_time);
   assert(backlight_duty == 255 && ledcRead(0) == 256);
-  brightness_mode = BrightnessMode::kNight;
-  setup_backlight(brightness_mode, host_now); // Saved Night starts dim, without a full-brightness flash.
+  setup_backlight(BrightnessMode::kNight, host_now); // A dim mode starts dim, without a full-brightness flash.
   assert(backlight_duty == board::kNightBacklightDuty && ledcRead(0) == board::kNightBacklightDuty);
-  brightness_mode = BrightnessMode::kAutomatic;
-  setup_backlight(brightness_mode, host_now);
+  setup_backlight(BrightnessMode::kAutomatic, host_now);
   assert(!is_base());
   // Failed NVS writes must leave role, Wi-Fi, and displayed brightness unchanged.
   preferences.fail = true;
   select_role(DeviceRole::kBase);
-  assert(!is_base() && config_error && !receiver().profile_running);
+  assert(!is_base() && device_settings::snapshot().error && !receiver().profile_running);
   preferences.fail = false;
   select_role(DeviceRole::kBase);
   assert(is_base() && receiver().profile_running && WiFi.selected_mode == WIFI_AP);
@@ -347,9 +354,14 @@ int main() {
   const auto writes = preferences.writes;
   select_brightness(BrightnessMode::kNight);
   assert(preferences.writes == writes);
-  device_config = DeviceConfig{};
+  // The reload reads the stored record, not this unit's boot default: the two
+  // saved values differ from the defaults, and the stored word is what decoded.
+  assert(DeviceConfig{}.role != DeviceRole::kBase ||
+         DeviceConfig{}.brightness != BrightnessMode::kNight);
+  assert(preferences.value == encode_config(device_settings::config()));
   load_config();
-  assert(is_base() && brightness_mode == BrightnessMode::kNight);
+  const SettingsSnapshot reloaded = device_settings::snapshot();
+  assert(is_base() && reloaded.config.brightness == BrightnessMode::kNight);
   wifi_peer_known = true;
   wifi_last_peer_ms = host_now;
   const auto role_frame = msm(1074, 1000);
@@ -382,12 +394,12 @@ int main() {
   assert(!is_base());
   tap(150,250);
   assert(is_base() && receiver().profile_running);
-  const auto brightness_before = brightness_mode;
+  const auto brightness_before = device_settings::config().brightness;
   tap(50,344);
-  assert(brightness_mode == brightness_before); // Locked while applying.
+  assert(device_settings::config().brightness == brightness_before); // Locked while applying.
   complete_profile();
   tap(50,344);
-  assert(brightness_mode == BrightnessMode::kAutomatic);
+  assert(device_settings::config().brightness == BrightnessMode::kAutomatic);
   tap(40,455);
   assert(current_page == ScreenPage::kMain);
   contact(160,100); contact(160,200); release();
@@ -421,7 +433,7 @@ int main() {
   assert(receiver().uart_seen&&receiver().last_rx_ms==host_now);
   assert(receiver().rtcm_last_rx_ms==host_now);
   char json[kWebStatusCapacity];
-  const auto config_before_web = encode_config(device_config);
+  const auto config_before_web = encode_config(device_settings::config());
   const auto commands_before_web = gnss.output;
   const auto writes_before_web = preferences.writes;
   assert(format_web_status(json, sizeof(json), host_now) > 0);
@@ -430,7 +442,7 @@ int main() {
   assert(std::strstr(json, "\"horizontal_uncertainty_m\":0.012000"));
   service_web_status();
   assert(published_web_rover && !published_web_status.empty());
-  assert(encode_config(device_config) == config_before_web && gnss.output == commands_before_web && preferences.writes == writes_before_web);
+  assert(encode_config(device_settings::config()) == config_before_web && gnss.output == commands_before_web && preferences.writes == writes_before_web);
   char too_small[16];
   assert(format_web_status(too_small, sizeof(too_small), host_now) == 0);
   const auto sample_now = host_now;
@@ -457,7 +469,8 @@ int main() {
   // R4 agreement: LCD frame, web JSON and CSV must agree on transport,
   // link state and signal availability in both radio and Wi-Fi modes.
   setup_sd_logging();
-  assert(sd_ready && sd_test_passed);
+  const DiagnosticSnapshot session = diagnostic_log::snapshot();
+  assert(session.ready && session.verified);
   feed_line(gga_fixture(4, 28, 0.5));
   feed_line(rmc_fixture());
   wifi_last_peer_ms = host_now;
@@ -465,7 +478,7 @@ int main() {
   const auto link_reference = msm(1006, 0);
   assert(gnss_service::write_frame(link_reference.data(),link_reference.size(),host_now)==link_reference.size());
   auto csv_field = [&](const char *file, unsigned column) {
-    const std::string path = std::string(sd_session_path) + "/" + file;
+    const std::string path = std::string(session.session) + "/" + file;
     const std::string &content = SD_MMC.files[path];
     const size_t begin = content.find_last_of('\n', content.size() - 2) + 1;
     const std::string last = content.substr(begin, content.find('\n', begin) - begin);
@@ -481,7 +494,7 @@ int main() {
   // Radio mode: transport is SiK, no RSSI is fabricated, LCD shows radio state.
   host_radio_active = true; host_radio_linked = true;
   host_now += 1000;
-  service_sd_logging(); sd_log_solution(host_now);
+  service_sd_logging();   // its own window writes the row the assertions read
   assert(format_web_status(json, sizeof(json), host_now) > 0);
   assert(std::strstr(json, "\"transport\":\"SiK RADIO\""));
   assert(std::strstr(json, "\"rssi_dbm\":null"));
@@ -497,7 +510,7 @@ int main() {
   host_radio_active = false; host_radio_linked = false;
   host_now += 1000; wifi_last_peer_ms = host_now;
   assert(gnss_service::write_frame(link_reference.data(),link_reference.size(),host_now)==link_reference.size());
-  service_sd_logging(); sd_log_solution(host_now);
+  service_sd_logging();   // its own window writes the row the assertions read
   assert(format_web_status(json, sizeof(json), host_now) > 0);
   assert(std::strstr(json, "\"rssi_dbm\":-48"));
   assert(std::strstr(json, "\"peer_age_ms\":0"));
@@ -519,14 +532,14 @@ int main() {
   host_now += 1100; service_rover_ap();
   assert(std::string(rover_ap_address()) == "172.22.42.1");
   WiFi.station_ip = IPAddress(192,168,4,2);
-  const auto saved_config = encode_config(device_config);
+  const auto saved_config = encode_config(device_settings::config());
   const auto receiver_commands = gnss.output;
   host_diagnostic_busy=true;
-  DeviceConfig blocked_config=device_config;
+  DeviceConfig blocked_config=device_settings::config();
   blocked_config.role=DeviceRole::kBase;
   assert(!select_config(blocked_config));
   assert(!system_ready(host_now));
-  assert(encode_config(device_config)==saved_config && gnss.output==receiver_commands);
+  assert(encode_config(device_settings::config())==saved_config && gnss.output==receiver_commands);
   host_diagnostic_busy=false;
   change_page(ScreenPage::kWifiDetails); tap(238,402); tap(238,402); // Phone is Link page 3.
   assert(current_page == ScreenPage::kWifiDetails && ui_detail_page() == 2 && phone_key_shown_ms == 0);
@@ -552,7 +565,7 @@ int main() {
   assert(display->pixels == hidden_phone);
   tap(235,236); tap(235,236);
   assert(original_key != rover_ap_password() && !phone_key_shown_ms && !phone_key_confirm_ms);
-  assert(encode_config(device_config) == saved_config && gnss.output == receiver_commands && WiFi.linked);
+  assert(encode_config(device_settings::config()) == saved_config && gnss.output == receiver_commands && WiFi.linked);
   const std::string rotated = rover_ap_password();
   storage.fail = true;
   assert(!rotate_rover_ap_password() && rotated == rover_ap_password() && rover_ap_ready());
@@ -789,5 +802,38 @@ int main() {
     assert(std::string(receiver().role) == "UNKNOWN");
     assert(gnss.output.size() > before_link_loss.size());  // the handshake restarts
     std::puts("PASS: receiver link loss re-arms the handshake and drops the profile");
+  }
+
+  // The base record is the settings owner's: the survey request is refused
+  // unless it is Base, idle and exactly one revision ahead, a store that cannot
+  // read its own write is not applied either, and an applied coordinate is what
+  // the receiver publishes and re-profiles from.
+  {
+    const survey::Position coordinate(19.4, -99.1, 2201.5);
+    assert(is_base() && !receiver().profile_running);
+    const uint32_t revision_before = device_settings::snapshot().base_revision;
+    assert(!device_settings::apply_base(coordinate, true, revision_before + 2));
+    const SettingsSnapshot skipped = device_settings::snapshot();
+    assert(skipped.base_failed && skipped.base_attempt_revision == revision_before + 2 &&
+           skipped.base_revision == revision_before);
+    base_preferences.fail = true;
+    assert(!device_settings::apply_base(coordinate, true, revision_before + 1));
+    base_preferences.fail = false;
+    assert(device_settings::snapshot().base_failed &&
+           device_settings::snapshot().base_revision == revision_before);
+    assert(receiver().profile_failed);    // a survey failure stops either role
+    assert(device_settings::apply_base(coordinate, true, revision_before + 1));
+    const SettingsSnapshot applied = device_settings::snapshot();
+    assert(!applied.base_failed && applied.base_fixed && applied.base_revision == revision_before + 1);
+    assert(std::string(gnss_service::active_profile_command(1)) ==
+           "MODE BASE 19.40000000000 -99.10000000000 2201.5000");
+    // The stored blob survives the load path the boot uses.
+    base_preferences.exists = true;       // the double only reports keys putUInt wrote
+    device_settings::load_base();
+    const SettingsSnapshot reloaded_base = device_settings::snapshot();
+    assert(!reloaded_base.base_failed && reloaded_base.base_revision == revision_before + 1 &&
+           reloaded_base.base_fixed && std::fabs(reloaded_base.base_latitude - 19.4) < 1e-9 &&
+           std::fabs(reloaded_base.base_height - 2201.5) < 1e-9);
+    std::puts("PASS: base record revision gate, store failure, applied coordinate and reload");
   }
 }

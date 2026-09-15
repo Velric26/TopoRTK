@@ -16,6 +16,8 @@
 #include <cstdlib>
 #include <cstring>
 #include "device_config.h"
+#include "device_settings.h"
+#include "diagnostic_log.h"
 #include "gnss_parser.h"
 #include "gnss_service.h"
 #include "ui_theme.h"
@@ -136,22 +138,13 @@ Arduino_GFX *display = new Arduino_ST7796(
     board::kWidth, board::kHeight);
 bool display_ready = false;
 bool touch_ready = false;
-BrightnessMode brightness_mode = BrightnessMode::kAutomatic;
-DeviceConfig device_config;
+// The two NVS stores the settings owner writes through. They stay separate
+// objects: Preferences::begin rebinds the namespace of the object it is called
+// on, and the device config and the base record live in different namespaces.
 Preferences preferences;
-bool preferences_ready = false;
-bool config_saved = false;
-bool config_error = false;
-struct BaseSettings {
-  uint32_t magic=0x54425331U,fixed=0,revision=0;
-  double latitude=0,longitude=0,height=0;
-  uint32_t checksum=0;
-};
-BaseSettings base_settings;
-bool base_settings_failed=false;
-uint32_t base_attempt_revision=0;
+Preferences base_preferences;
 
-bool is_base() { return device_config.role == DeviceRole::kBase; }
+bool is_base() { return device_settings::config().role == DeviceRole::kBase; }
 char usb_line[256] = {};
 size_t usb_length = 0;
 uint32_t last_screen_ms = 0;
@@ -192,17 +185,6 @@ CorrectionOutputStats correction_output_stats(){
   out.forwarded=s.forwarded;out.expired=s.expired;out.overflow=s.overflow;
   out.waiting=s.waiting;out.faults=s.faults;out.queued=s.queued;return out;
 }
-bool sd_ready = false;
-bool sd_test_passed = false;
-char sd_session_path[128] = {};
-bool sd_state_initialized = false;
-bool sd_last_uart_active = false;
-bool sd_last_linked = false;
-bool sd_last_rtcm_active = false;
-int sd_last_fix_quality = -1;
-char sd_last_role[8] = {};
-uint32_t last_sd_solution_ms = 0;
-
 void sd_log_event(const char *event, const char *detail);
 
 bool using_local_router() { return network_service::local_router(); }
@@ -218,63 +200,22 @@ bool on_station_subnet(IPAddress ip) { return network_service::on_station_subnet
 IPAddress station_broadcast() { return network_service::station_broadcast(); }
 
 
+// The settings boundary (R10a slice 4) owns the records, the applied
+// configuration and the reset consequences; these two are the root's boot
+// steps. The console line belongs to the root's UART0, and the touchscreen's
+// pending selection is screen state, not settings state.
 void load_config() {
-  device_config.role = TOPORTK_UNIT_ID == 1 ? DeviceRole::kBase : DeviceRole::kRover;
-  preferences_ready = preferences.begin("toportk", false);
-  config_error = !preferences_ready;
-  if (preferences_ready && preferences.isKey("config")) {
-    config_saved = decode_config(preferences.getUInt("config", 0), device_config);
-    config_error = !config_saved;
-  }
-  brightness_mode = device_config.brightness;
-  pending_role = device_config.role;
-  gnss_service::set_config(device_config);
+  device_settings::load();
+  ui_set_pending_role(device_settings::config().role);
+  const SettingsSnapshot settings = device_settings::snapshot();
   Serial.printf("CONFIG LOAD: %s role=%s brightness=%u rtcm=%s wifi=%s\n",
-                config_error ? "ERROR / DEFAULTS" : config_saved ? "SAVED" : "DEFAULTS",
-                is_base() ? "BASE" : "ROVER", static_cast<unsigned>(brightness_mode),
-                device_config.base_rtcm ? "ON" : "OFF", wifi_transport_label());
+                settings.error ? "ERROR / DEFAULTS" : settings.saved ? "SAVED" : "DEFAULTS",
+                settings.config.role == DeviceRole::kBase ? "BASE" : "ROVER",
+                static_cast<unsigned>(settings.config.brightness),
+                settings.config.base_rtcm ? "ON" : "OFF", wifi_transport_label());
 }
 
-// The receiver profile takes the applied coordinate; the settings owner reports
-// a validation failure instead: a boot load blocks Base alone (a Rover keeps
-// running), a survey application failure stops either role.
-void publish_base_coordinate() {
-  gnss_service::set_base_coordinate(base_settings.fixed != 0, base_settings.latitude,
-                                    base_settings.longitude, base_settings.height);
-}
-
-void load_base_settings() {
-  Preferences p;
-  if(!p.begin("topobase",false)){base_settings_failed=true;gnss_service::report_base_failure(false);return;}
-  if(p.isKey("settings")){
-    BaseSettings saved;
-    const bool ok=p.getBytes("settings",&saved,sizeof(saved))==sizeof(saved) && saved.magic==0x54425331U && saved.fixed<=1 &&
-      saved.checksum==survey::crc32(std::string(reinterpret_cast<const char *>(&saved),offsetof(BaseSettings,checksum))) &&
-      std::isfinite(saved.latitude)&&std::isfinite(saved.longitude)&&std::isfinite(saved.height)&&
-      saved.latitude>=-80 && saved.latitude<=84 && std::abs(saved.longitude)<=180 && saved.height>=-1000 && saved.height<=10000;
-    if(ok)base_settings=saved;else base_settings_failed=true;
-  }
-  p.end();
-  if(base_settings_failed)gnss_service::report_base_failure(false);
-  else publish_base_coordinate();
-}
-
-bool save_config(const DeviceConfig &requested) {
-  const uint32_t word = encode_config(requested);
-  if (config_saved && !config_error && word == encode_config(device_config)) return true;
-  if (!preferences_ready) preferences_ready = preferences.begin("toportk", false);
-  if (!preferences_ready || preferences.putUInt("config", word) != sizeof(word) ||
-      preferences.getUInt("config", 0) != word) {
-    config_error = true;
-    Serial.println("CONFIG SAVE: FAILED; selection was not applied");
-    sd_log_event("CONFIG_ERROR", "NVS_WRITE_FAILED");
-    return false;
-  }
-  config_saved = true;
-  config_error = false;
-  Serial.println("CONFIG SAVE: PASS");
-  return true;
-}
+void load_base_settings() { device_settings::load_base(); }
 
 
 uint32_t fnv1a(const uint8_t *bytes, size_t length) {
@@ -476,51 +417,50 @@ void start_wifi() {
   wifi_sequence_gaps = wifi_invalid_packets = 0;
   last_wifi_send_ms = 0;
   last_wifi_connect_attempt_ms = 0;
-  network_service::restart(device_config, board::kUnitLabel, millis());
+  network_service::restart(device_settings::config(), board::kUnitLabel, millis());
+}
+
+// Settings boundary (R10a slice 4). The records, the applied configuration and
+// the reset consequences live in device_settings.cpp; what stays here is the
+// two NVS objects it stores through and the facts and actions owned by the
+// receiver, the link and the UI that this root installs. The console, the
+// touchscreen and the survey glue keep their calls through these wrappers.
+bool settings_profile_running() { return gnss_service::snapshot().profile_running; }
+bool settings_profile_failed() { return gnss_service::snapshot().profile_failed; }
+void settings_receiver_config(const DeviceConfig &config) { gnss_service::set_config(config); }
+void settings_receiver_base_coordinate(bool fixed, double latitude, double longitude, double height) {
+  gnss_service::set_base_coordinate(fixed, latitude, longitude, height);
+}
+void settings_receiver_apply_profile() { gnss_service::apply_unit_profile(); }
+void settings_receiver_base_failure(bool blocks_any_role) {
+  gnss_service::report_base_failure(blocks_any_role);
+}
+void settings_link_restart() { start_wifi(); }
+void settings_brightness_step_reset(uint32_t now_ms) { ui_reset_brightness_step(now_ms); }
+void settings_correction_reset() { correction_service::reset(); }
+void settings_receiver_profile_reset() { gnss_service::reset_for_config_change(); }
+void settings_log_event(const char *event, const char *detail) { sd_log_event(event, detail); }
+
+const SettingsHooks kSettingsHooks{
+    diagnostic_busy, ota_locked, settings_profile_running, settings_profile_failed,
+    using_local_router, settings_receiver_config, settings_receiver_base_coordinate,
+    settings_receiver_apply_profile, settings_receiver_base_failure,
+    settings_link_restart, settings_brightness_step_reset, settings_correction_reset,
+    settings_receiver_profile_reset, settings_log_event};
+
+void device_settings_begin() {
+  device_settings::begin(preferences, base_preferences, kSettingsHooks);
 }
 
 bool select_config(const DeviceConfig &requested) {
-  const GnssSnapshot receiver = gnss_service::snapshot();
-  if(diagnostic_busy()||ota_locked())return false;
-  if (receiver.profile_running) return false;
-  if (!save_config(requested)) return false;
-  const bool role_changed = requested.role != device_config.role;
-  const bool profile_changed = role_changed || requested.base_rtcm != device_config.base_rtcm;
-  const bool wifi_changed = requested.wifi_mode != device_config.wifi_mode;
-  device_config = requested;
-  gnss_service::set_config(device_config);
-  if (brightness_mode != requested.brightness) ui_reset_brightness_step(millis());
-  brightness_mode = requested.brightness;
-  if (role_changed || wifi_changed) start_wifi();
-  if (wifi_changed) {
-    sd_log_event("WIFI_MODE", using_local_router() ? "LOCAL_ROUTER" : "DIRECT_LINK");
-  }
-  if (profile_changed || receiver.profile_failed) {
-    correction_service::reset();
-    gnss_service::reset_for_config_change();
-    sd_log_event("CONFIG_SELECTED", is_base() ? "BASE_TEST" : "ROVER_SURVEY");
-  }
-  return true;
+  return device_settings::apply(requested, millis());
 }
 
-void select_role(DeviceRole role) {
-  DeviceConfig requested = device_config;
-  requested.role = role;
-  requested.base_rtcm = true;
-  select_config(requested);
-}
+void select_role(DeviceRole role) { device_settings::set_role(role, millis()); }
 
-void select_brightness(BrightnessMode mode) {
-  DeviceConfig requested = device_config;
-  requested.brightness = mode;
-  select_config(requested);
-}
+void select_brightness(BrightnessMode mode) { device_settings::set_brightness(mode, millis()); }
 
-void select_wifi_mode(WiFiMode mode) {
-  DeviceConfig requested = device_config;
-  requested.wifi_mode = mode;
-  select_config(requested);
-}
+void select_wifi_mode(WiFiMode mode) { device_settings::set_wifi_mode(mode, millis()); }
 
 void receive_wifi_packets() {
   while (true) {
@@ -746,7 +686,7 @@ instrument_status::Inputs status_inputs(uint32_t now) {
   in.wifi_peer_report_valid = wifi_peer_known;
   in.wifi_peer_report_dbm = wifi_peer_rssi_dbm;
   in.solution = solution_inputs();
-  in.base_rtcm_output = device_config.base_rtcm;
+  in.base_rtcm_output = device_settings::config().base_rtcm;
   in.uart_seen = receiver.uart_seen;
   in.last_rx_ms = receiver.last_rx_ms;
   in.version_ok = receiver.version_ok;
@@ -760,7 +700,7 @@ instrument_status::Inputs status_inputs(uint32_t now) {
   in.time_received_ms = receiver.time.received_ms;
   in.device_available = !diagnostic_busy() && !ota_locked();
   in.ota_paused = ota_paused();
-  in.config_error = config_error;
+  in.config_error = device_settings::snapshot().error;
   in.profile_failed = receiver.profile_failed;
   return in;
 }
@@ -820,217 +760,77 @@ const char *device_role_title() {
 }
 
 const char *brightness_mode_label() {
-  if (brightness_mode == BrightnessMode::kDay) return "DAY";
-  if (brightness_mode == BrightnessMode::kNight) return "NIGHT";
+  const BrightnessMode mode = device_settings::config().brightness;
+  if (mode == BrightnessMode::kDay) return "DAY";
+  if (mode == BrightnessMode::kNight) return "NIGHT";
   return fresh_gnss_time(millis()) ? "AUTO" : "AUTO NO GPS";
 }
 
 
-bool sd_append_text(const char *path, const char *text) {
-  if (!sd_ready || path == nullptr || text == nullptr) return false;
-  if(!survey_sd_lock())return false;
-  struct Unlock {~Unlock(){survey_sd_unlock();}} unlock;
-  File file = SD_MMC.open(path, FILE_APPEND);
-  if (!file) return false;
-  const size_t written = file.print(text);
-  file.flush();
-  file.close();
-  return written == std::strlen(text);
+// Diagnostic logging boundary (R10a slice 4). The CSV session, the mount
+// readback test, the session directory and the bounded best-effort appends live
+// in diagnostic_log.cpp; what stays here is the one snapshot per call and the
+// accuracy text the root owns. The loop keeps the same gated call in the same
+// position, and the root is the only reader of receiver and link state.
+LogTime log_time(uint32_t now_ms) {
+  LogTime stamp;
+  stamp.now_ms = now_ms;
+  stamp.utc = gnss_service::snapshot().time;
+  return stamp;
 }
 
-void sd_log_event(const char *event, const char *detail) {
-  if (!sd_ready || sd_session_path[0] == '\0') return;
-  char path[160] = {};
-  std::snprintf(path, sizeof(path), "%s/events.csv", sd_session_path);
-  const GnssTimeData time = gnss_service::snapshot().time;
-  char utc[24] = "---";
-  if (time.valid) {
-    std::snprintf(utc, sizeof(utc), "%04u-%02u-%02uT%02u:%02u:%02uZ",
-                  time.year, time.month, time.day, time.hour, time.minute,
-                  time.second);
-  }
-  char line[256] = {};
-  std::snprintf(line, sizeof(line), "%lu,%c,%s,%s,%s\n",
-                static_cast<unsigned long>(millis()), board::kUnitLabel, utc,
-                event == nullptr ? "UNKNOWN" : event,
-                detail == nullptr ? "" : detail);
-  sd_append_text(path, line);
-}
-
-void sd_log_config(const char *profile, const char *notes) {
-  if (!sd_ready || !sd_test_passed || sd_session_path[0] == '\0') return;
-  char path[160] = {};
-  std::snprintf(path, sizeof(path), "%s/config.csv", sd_session_path);
-  char line[256] = {};
-  std::snprintf(line, sizeof(line), "%lu,%c,%s,%s\n",
-                static_cast<unsigned long>(millis()), board::kUnitLabel,
-                profile == nullptr ? "UNKNOWN" : profile,
-                notes == nullptr ? "" : notes);
-  sd_append_text(path, line);
-  sd_log_event("CONFIG_PROFILE", profile == nullptr ? "UNKNOWN" : profile);
-}
-
-void sd_log_solution(uint32_t now) {
+DiagnosticInputs sd_log_inputs(uint32_t now) {
   const GnssSnapshot gnss_state = gnss_service::snapshot();
-  if (!sd_ready || !sd_test_passed || sd_session_path[0] == '\0' ||
-      !gnss_state.gga.received || now - gnss_state.gga_ms > 3000) {
-    return;
-  }
-  char path[160] = {};
-  std::snprintf(path, sizeof(path), "%s/solution.csv", sd_session_path);
-  char hacc[24] = {};
-  format_horizontal_accuracy(hacc, sizeof(hacc), now);
-  const long rtcm_age = gnss_state.rtcm_last_rx_ms == 0
-                            ? -1L
-                            : static_cast<long>(now - gnss_state.rtcm_last_rx_ms);
   const auto link = status_snapshot(now);
-  char rssi[8] = "";
-  if (link.signal.valid) {
-    std::snprintf(rssi, sizeof(rssi), "%d", link.signal.rssi_dbm);
-  }
-  const char *transport_label = link.transport == instrument_status::Transport::Radio ? "SIK"
-                                : link.transport == instrument_status::Transport::WiFi ? "WIFI" : "-";
-  char line[320] = {};
-  std::snprintf(line, sizeof(line),
-                "%lu,%s,%s,%s,%.8f,%.8f,%.3f,%d,%.2f,%s,%ld,%s,%lu,%lu,%lu,%lu,%lu,%lu,%s\n",
-                static_cast<unsigned long>(now), gnss_state.time.valid
-                                                  ? gnss_state.gga.utc
-                                                  : "---",
-                gnss_state.time.valid ? "VALID" : "TIME_WAIT",
-                fix_label(gnss_state.gga.quality), gnss_state.gga.latitude,
-                gnss_state.gga.longitude, gnss_state.gga.altitude,
-                gnss_state.gga.satellites, gnss_state.gga.hdop, hacc, rtcm_age, rssi,
-                static_cast<unsigned long>(gnss_state.rtcm_frames),
-                static_cast<unsigned long>(rtcm_wifi_tx_frames),
-                static_cast<unsigned long>(rtcm_wifi_rx_frames),
-                static_cast<unsigned long>(correction_service::snapshot().forwarded_bytes),
-                static_cast<unsigned long>(wifi_sequence_gaps),
-                static_cast<unsigned long>(wifi_invalid_packets),
-                transport_label);
-  sd_append_text(path, line);
+  DiagnosticInputs in;
+  in.time.now_ms = now;
+  in.time.utc = gnss_state.time;
+  in.base = is_base();
+  in.uart_active = gnss_state.uart_seen && now - gnss_state.last_rx_ms < 3000;
+  in.fix_quality = gnss_state.gga.received ? gnss_state.gga.quality : -1;
+  in.fix_text = fix_label(in.fix_quality);
+  in.role = gnss_state.role;
+  in.link_connected = link.link_connected;  // Transport-aware: radio or Wi-Fi.
+  in.rtcm_active = in.base
+                       ? gnss_state.rtcm_frames > 0
+                       : gnss_state.rtcm_last_rx_ms > 0 && now - gnss_state.rtcm_last_rx_ms <= 3000;
+  in.solution_fresh = gnss_state.gga.received && now - gnss_state.gga_ms <= 3000;
+  std::strncpy(in.gga_utc, gnss_state.gga.utc, sizeof(in.gga_utc) - 1);
+  in.latitude = gnss_state.gga.latitude;
+  in.longitude = gnss_state.gga.longitude;
+  in.altitude = gnss_state.gga.altitude;
+  in.satellites = gnss_state.gga.satellites;
+  in.hdop = gnss_state.gga.hdop;
+  in.rtcm_age_ms = gnss_state.rtcm_last_rx_ms == 0
+                       ? -1L
+                       : static_cast<long>(now - gnss_state.rtcm_last_rx_ms);
+  in.rssi_valid = link.signal.valid;
+  in.rssi_dbm = link.signal.rssi_dbm;
+  in.transport = link.transport == instrument_status::Transport::Radio ? "SIK"
+                 : link.transport == instrument_status::Transport::WiFi ? "WIFI"
+                                                                        : "-";
+  in.rtcm_uart_frames = gnss_state.rtcm_frames;
+  in.rtcm_wifi_tx_frames = rtcm_wifi_tx_frames;
+  in.rtcm_wifi_rx_frames = rtcm_wifi_rx_frames;
+  in.forwarded_bytes = correction_service::snapshot().forwarded_bytes;
+  in.sequence_gaps = wifi_sequence_gaps;
+  in.invalid_packets = wifi_invalid_packets;
+  return in;
 }
+
+const DiagnosticHooks kDiagnosticHooks{format_horizontal_accuracy};
 
 void setup_sd_logging() {
-  SD_MMC.setPins(board::kSdClock, board::kSdCommand, board::kSdData0);
-  if (!SD_MMC.begin("/sdcard", true, false)) {
-    Serial.println("SD: MOUNT FAIL");
-    return;
-  }
-  sd_ready = true;
-  Serial.printf("SD: MOUNT PASS card=%llu MB free=%llu MB\n",
-                static_cast<unsigned long long>(SD_MMC.cardSize() / (1024ULL * 1024ULL)),
-                static_cast<unsigned long long>((SD_MMC.totalBytes() - SD_MMC.usedBytes()) /
-                                                (1024ULL * 1024ULL)));
-
-  SD_MMC.mkdir("/TOPO-RTK");
-  char unit_path[48] = {};
-  std::snprintf(unit_path, sizeof(unit_path), "/TOPO-RTK/UNIT-%c", board::kUnitLabel);
-  SD_MMC.mkdir(unit_path);
-  char sessions_path[80] = {};
-  std::snprintf(sessions_path, sizeof(sessions_path), "%s/SESSIONS", unit_path);
-  SD_MMC.mkdir(sessions_path);
-  // Repeated boot timing must not collide with an existing diagnostic session.
-  for(unsigned attempt=0;attempt<1000;++attempt){
-    std::snprintf(sd_session_path,sizeof(sd_session_path),"%s/BOOT-%lu-%u",sessions_path,static_cast<unsigned long>(millis()),attempt);
-    if(!SD_MMC.exists(sd_session_path))break;
-  }
-  if (!SD_MMC.mkdir(sd_session_path)) {
-    Serial.printf("SD: SESSION DIR FAIL %s\n", sd_session_path);
-    sd_ready = false;
-    return;
-  }
-
-  const char *test_path = "/TOPO-RTK/SD-READBACK-TEST.TXT";
-  File test = SD_MMC.open(test_path, FILE_WRITE);
-  if (!test) {
-    Serial.println("SD: TEST WRITE FAIL");
-    sd_ready = false;
-    return;
-  }
-  const char *test_text = "TopoRTK SD readback test v1\n";
-  const size_t test_written = test.print(test_text);
-  test.flush();
-  test.close();
-  File readback = SD_MMC.open(test_path, FILE_READ);
-  char readback_text[64] = {};
-  const size_t read_count = readback ? readback.readBytes(readback_text,
-                                                           sizeof(readback_text) - 1)
-                                     : 0;
-  if (readback) readback.close();
-  sd_test_passed = test_written == std::strlen(test_text) &&
-                   std::strncmp(readback_text, test_text, std::strlen(test_text)) == 0 &&
-                   read_count == std::strlen(test_text);
-  Serial.printf("SD: READBACK %s\n", sd_test_passed ? "PASS" : "FAIL");
-  if (!sd_test_passed) return;
-
-  char path[160] = {};
-  std::snprintf(path, sizeof(path), "%s/events.csv", sd_session_path);
-  sd_append_text(path, "uptime_ms,unit,utc,event,detail\n");
-  std::snprintf(path, sizeof(path), "%s/solution.csv", sd_session_path);
-  sd_append_text(path,
-                 "uptime_ms,utc_time,utc_status,fix,latitude,longitude,altitude_m,satellites,hdop,h_acc,rtcm_age_ms,link_rssi_dbm,rtcm_uart_frames,rtcm_wifi_tx_frames,rtcm_wifi_rx_frames,rtcm_forwarded_bytes,wifi_sequence_gaps,wifi_invalid_packets,link_transport\n");
-  std::snprintf(path, sizeof(path), "%s/config.csv", sd_session_path);
-  sd_append_text(path, "uptime_ms,unit,profile,notes\n");
-  char session_path[160] = {};
-  std::snprintf(session_path, sizeof(session_path), "%s/session.json", sd_session_path);
-  File session = SD_MMC.open(session_path, FILE_WRITE);
-  if (session) {
-    session.printf("{\"unit\":\"%c\",\"boot_uptime_ms\":%lu,\"card_bytes\":%llu}\n",
-                   board::kUnitLabel, static_cast<unsigned long>(millis()),
-                   static_cast<unsigned long long>(SD_MMC.cardSize()));
-    session.flush();
-    session.close();
-  }
-  sd_log_event("BOOT", "SD_READY|READBACK_PASS");
+  const SdPort port{board::kSdClock, board::kSdCommand, board::kSdData0,
+                    board::kUnitLabel};
+  diagnostic_log::begin(port, kDiagnosticHooks, log_time(millis()));
 }
 
-void service_sd_logging() {
-  const uint32_t now = millis();
-  const GnssSnapshot gnss_state = gnss_service::snapshot();
-  const bool uart_active = gnss_state.uart_seen && now - gnss_state.last_rx_ms < 3000;
-  const int quality = gnss_state.gga.received ? gnss_state.gga.quality : -1;
-  const bool linked = correction_link_connected(now); // Transport-aware: radio or Wi-Fi.
-  const bool rtcm_active = is_base()
-                               ? gnss_state.rtcm_frames > 0
-                               : gnss_state.rtcm_last_rx_ms > 0 && now - gnss_state.rtcm_last_rx_ms <= 3000;
-  if (!sd_state_initialized) {
-    sd_state_initialized = true;
-    sd_last_uart_active = uart_active;
-    sd_last_linked = linked;
-    sd_last_rtcm_active = rtcm_active;
-    sd_last_fix_quality = quality;
-    std::strncpy(sd_last_role, gnss_state.role, sizeof(sd_last_role) - 1);
-    sd_log_event("STATE", "INITIAL");
-  } else {
-    if (uart_active != sd_last_uart_active) {
-      sd_last_uart_active = uart_active;
-      sd_log_event("UART", uart_active ? "RECEIVING" : "OFFLINE");
-    }
-    if (linked != sd_last_linked) {
-      sd_last_linked = linked;
-      sd_log_event("LINK", linked ? "CONNECTED" : "DISCONNECTED");
-    }
-    if (rtcm_active != sd_last_rtcm_active) {
-      sd_last_rtcm_active = rtcm_active;
-      sd_log_event("RTCM", rtcm_active ? "ACTIVE" : "INACTIVE");
-    }
-    if (quality != sd_last_fix_quality) {
-      sd_last_fix_quality = quality;
-      sd_log_event("GNSS_FIX", fix_label(quality));
-    }
-    if (std::strcmp(sd_last_role, gnss_state.role) != 0) {
-      std::strncpy(sd_last_role, gnss_state.role, sizeof(sd_last_role) - 1);
-      sd_log_event("ROLE", gnss_state.role);
-    }
-  }
-  if (now - last_sd_solution_ms >= 1000) {
-    last_sd_solution_ms = now;
-    sd_log_solution(now);
-  }
+void service_sd_logging() { diagnostic_log::service(sd_log_inputs(millis())); }
+
+void sd_log_event(const char *event, const char *detail) {
+  diagnostic_log::event(event, detail, log_time(millis()));
 }
-
-
-
 
 // The warning policy lives in instrument_status; the peer_update notice text is
 // the only input the composition root adds beyond the status inputs.
@@ -1230,30 +1030,31 @@ void ui_build_frame(UiFrame &f, uint32_t now) {
   }
 
   if (current_page == ScreenPage::kSettings) {
-    f.active_role = device_config.role;
+    const SettingsSnapshot settings = device_settings::snapshot();
+    f.active_role = settings.config.role;
     f.profile_running = gnss_state.profile_running;
     f.profile_failed = gnss_state.profile_failed;
     f.profile_applied = gnss_state.profile_applied;
-    f.config_error = config_error;
-    f.config_saved = config_saved;
-    f.brightness_mode = brightness_mode;
+    f.config_error = settings.error;
+    f.config_saved = settings.saved;
+    f.brightness_mode = settings.config.brightness;
     const bool base_selected = pending_role == DeviceRole::kBase;
-    const bool needs_apply = pending_role != device_config.role || config_error || !config_saved || gnss_state.profile_failed;
+    const bool needs_apply = pending_role != settings.config.role || settings.error || !settings.saved || gnss_state.profile_failed;
     if (gnss_state.profile_running) std::strcpy(f.apply_label, "APPLYING...");
     else if (gnss_state.profile_failed) std::strcpy(f.apply_label, "RETRY SETUP");
     else if (needs_apply) std::strcpy(f.apply_label, base_selected ? "USE BASE" : "USE ROVER");
     else if (gnss_state.profile_applied) std::strcpy(f.apply_label, is_base() ? "BASE ACTIVE" : "ROVER ACTIVE");
     else std::strcpy(f.apply_label, "WAITING FOR GNSS");
     const char *mode_label = brightness_mode_label();
-    if (config_error) std::strcpy(f.settings_status, "SAVE FAILED");
+    if (settings.error) std::strcpy(f.settings_status, "SAVE FAILED");
     else if (gnss_state.profile_failed) std::strcpy(f.settings_status, "SETUP FAILED");
     else if (gnss_state.profile_running) std::strcpy(f.settings_status, "CONFIGURING...");
-    else if (pending_role != device_config.role) std::strcpy(f.settings_status, "TAP USE TO SAVE");
-    else if (config_saved) std::strcpy(f.settings_status, "SAVED");
+    else if (pending_role != settings.config.role) std::strcpy(f.settings_status, "TAP USE TO SAVE");
+    else if (settings.saved) std::strcpy(f.settings_status, "SAVED");
     else std::strcpy(f.settings_status, "DEFAULTS");
-    f.status_warning = config_error || gnss_state.profile_failed;
+    f.status_warning = settings.error || gnss_state.profile_failed;
     if (!backlight_pwm_ready) std::strcpy(f.brightness_line, "PWM ERROR");
-    else if (brightness_mode == BrightnessMode::kAutomatic && !fresh_gnss_time(millis()))
+    else if (settings.config.brightness == BrightnessMode::kAutomatic && !fresh_gnss_time(millis()))
       std::strcpy(f.brightness_line, "AUTO NO GPS");
     else
       std::snprintf(f.brightness_line, sizeof(f.brightness_line), "%s %u%%", mode_label,
@@ -1334,7 +1135,7 @@ void draw_dynamic_screen() {
 }
 
 void change_page(ScreenPage page) {
-  const bool changed = ui_change_page(page, device_config.role);
+  const bool changed = ui_change_page(page, device_settings::config().role);
   // A refusal belongs to the visit that produced it, not to the next one.
   if (changed) link_ui_error[0] = 0;
   if (changed && display_ready) {
@@ -1441,9 +1242,10 @@ void handle_ui_gesture(const UiGesture &gesture) {
   if (action == TouchAction::kBase) pending_role = DeviceRole::kBase;
   else if (action == TouchAction::kRover) pending_role = DeviceRole::kRover;
   else if (action == TouchAction::kApply) {
-    DeviceConfig requested = device_config;
+    const DeviceConfig applied = device_settings::config();
+    DeviceConfig requested = applied;
     requested.role = pending_role;
-    if (requested.role != device_config.role) requested.base_rtcm = true;
+    if (requested.role != applied.role) requested.base_rtcm = true;
     select_config(requested);
   } else if (action == TouchAction::kAuto) select_brightness(BrightnessMode::kAutomatic);
   else if (action == TouchAction::kDay) select_brightness(BrightnessMode::kDay);
@@ -1552,7 +1354,7 @@ void receiver_log_event(const char *event, const char *detail) {
 }
 
 void receiver_log_config(const char *profile, const char *notes) {
-  sd_log_config(profile, notes);
+  diagnostic_log::config(profile, notes, log_time(millis()));
 }
 
 void receiver_reset() { correction_service::reset(); }
@@ -1561,7 +1363,7 @@ void receiver_forward_frame(const uint8_t *frame, size_t length,
                             uint16_t message_type) {
   const bool base = is_base();
   const bool admitted = base && gnss_service::snapshot().profile_applied &&
-                        device_config.base_rtcm && !diagnostic_busy() && !ota_paused();
+                        device_settings::config().base_rtcm && !diagnostic_busy() && !ota_paused();
   if (admitted) {
     if (link_service::radio_active()) link_service::radio_submit(frame, length, millis());
     else if (send_rtcm_packet(frame, length, message_type)) ++rtcm_wifi_tx_frames;
@@ -1621,10 +1423,11 @@ void handle_usb_command(const char *command) {
   } else if (std::strcmp(command, "role?") == 0) {
     gnss_service::query_role();
   } else if (std::strcmp(command, "config?") == 0) {
+    const SettingsSnapshot settings = device_settings::snapshot();
     Serial.printf("CONFIG: role=%s brightness=%u rtcm=%s wifi=%s storage=%s profile=%s\n",
-                  is_base() ? "BASE" : "ROVER", static_cast<unsigned>(brightness_mode),
-                  device_config.base_rtcm ? "ON" : "OFF", wifi_transport_label(),
-                  config_error ? "ERROR" : config_saved ? "SAVED" : "DEFAULTS",
+                  is_base() ? "BASE" : "ROVER", static_cast<unsigned>(settings.config.brightness),
+                  settings.config.base_rtcm ? "ON" : "OFF", wifi_transport_label(),
+                  settings.error ? "ERROR" : settings.saved ? "SAVED" : "DEFAULTS",
                   gnss_state.profile_applied ? "VERIFIED" : gnss_state.profile_failed ? "FAILED" : "WAITING");
   } else if (std::strcmp(command,"phone?") == 0) {
     Serial.printf("PHONE WIFI: %s SSID=%s IP=%s clients=%u UI=%s error=%s\n",
@@ -1702,7 +1505,7 @@ void handle_usb_command(const char *command) {
     if (!is_base()) {
       Serial.println("CONSOLE> rejected; select base role first");
     } else {
-      DeviceConfig requested = device_config;
+      DeviceConfig requested = device_settings::config();
       requested.base_rtcm = true;
       select_config(requested);
     }
@@ -1710,7 +1513,7 @@ void handle_usb_command(const char *command) {
     if (!is_base()) {
       Serial.println("CONSOLE> rejected; select base role first");
     } else {
-      DeviceConfig requested = device_config;
+      DeviceConfig requested = device_settings::config();
       requested.base_rtcm = false;
       select_config(requested);
     }
@@ -1766,7 +1569,7 @@ void setup() {
 
   display_ready = expander_ready && display->begin();
   Serial.printf("ST7796: %s\n", display_ready ? "PASS" : "FAIL");
-  setup_backlight(device_config.brightness, millis());
+  setup_backlight(device_settings::config().brightness, millis());
 
   if (display_ready) {
     draw_static_screen();
@@ -1778,7 +1581,8 @@ void setup() {
   print_console_help();
   start_wifi();
   setup_sd_logging();
-  survey_begin(sd_ready && sd_test_passed);
+  const DiagnosticSnapshot log = diagnostic_log::snapshot();
+  survey_begin(log.ready && log.verified);
   diagnostic_begin();
   link_service::begin(!is_base(),millis());
   Serial.println("BOOT COMPLETE");
@@ -1786,7 +1590,7 @@ void setup() {
 
 void service_survey();
 void loop() {
-  ota_service(millis(),!is_base(),gnss_service::snapshot().profile_running,display_ready&&!config_error&&survey_service_ready()&&web_service_ready());
+  ota_service(millis(),!is_base(),gnss_service::snapshot().profile_running,display_ready&&!device_settings::snapshot().error&&survey_service_ready()&&web_service_ready());
   if(!ota_locked())read_usb_console();
   if(!ota_paused())gnss_service::service_input(millis());
   else gnss_service::discard_input(2048);
@@ -1796,7 +1600,7 @@ void loop() {
   correction_service::service_output(millis());
   service_survey();
   service_swipe_navigation();
-  service_brightness(millis(), brightness_mode, gnss_service::snapshot().time);
+  service_brightness(millis(), device_settings::config().brightness, gnss_service::snapshot().time);
   if(!ota_paused())service_sd_logging();
   service_web_status();
   {
@@ -1815,26 +1619,16 @@ void loop() {
 void service_survey() {
   survey::BaseRequest request;
   if(survey_take_base(request)) {
-    base_attempt_revision=request.revision;
-    base_settings_failed=true;
-    bool applied=false;
-    if(is_base() && !gnss_service::snapshot().profile_running && request.revision==base_settings.revision+1) {
-      BaseSettings next{};next.fixed=request.fixed?1:0;next.revision=request.revision;
-      next.latitude=request.position.latitude;next.longitude=request.position.longitude;next.height=request.position.height;
-      next.checksum=survey::crc32(std::string(reinterpret_cast<const char *>(&next),offsetof(BaseSettings,checksum)));
-      Preferences p;BaseSettings check{};
-      if(p.begin("topobase",false)) {
-        const bool saved=p.putBytes("settings",&next,sizeof(next))==sizeof(next) && p.getBytes("settings",&check,sizeof(check))==sizeof(check) && std::memcmp(&next,&check,sizeof(next))==0;
-        p.end();if(saved){base_settings=next;base_settings_failed=false;applied=true;publish_base_coordinate();gnss_service::apply_unit_profile();}
-      }
-    }
-    if(!applied)gnss_service::report_base_failure(true);
+    // The settings owner records the coordinate and tells the receiver owner
+    // either way; the survey glue only reports what the receiver published.
+    device_settings::apply_base(request.position,request.fixed,request.revision);
   }
   const uint32_t now=millis();survey::Fix f;f.now=now;f.rover=!is_base();
   const GnssSnapshot gnss_state=gnss_service::snapshot();
+  const SettingsSnapshot settings=device_settings::snapshot();
   f.unit=board::kUnitLabel;f.boot_id=web_boot_id();f.reset_reason=esp_reset_reason();f.free_heap=ESP.getFreeHeap();f.min_heap=ESP.getMinFreeHeap();f.free_psram=ESP.getFreePsram();
-  f.profile_ok=gnss_state.profile_applied&&!gnss_state.profile_failed&&!diagnostic_busy()&&!ota_paused();f.base_apply_pending=gnss_state.profile_running;f.base_apply_failed=base_settings_failed||gnss_state.profile_failed;f.base_revision=base_settings.revision;
-  f.base_attempt_revision=base_attempt_revision;f.base_fixed=base_settings.fixed;f.base_setting={base_settings.latitude,base_settings.longitude,base_settings.height};
+  f.profile_ok=gnss_state.profile_applied&&!gnss_state.profile_failed&&!diagnostic_busy()&&!ota_paused();f.base_apply_pending=gnss_state.profile_running;f.base_apply_failed=settings.base_failed||gnss_state.profile_failed;f.base_revision=settings.base_revision;
+  f.base_attempt_revision=settings.base_attempt_revision;f.base_fixed=settings.base_fixed;f.base_setting={settings.base_latitude,settings.base_longitude,settings.base_height};
   f.position=gnss_state.accuracy.position;f.position_valid=gnss_state.accuracy.position_valid;
   f.received=gnss_state.accuracy.received_ms;f.epoch=gnss_state.accuracy.epoch;
   f.fixed=gnss_state.accuracy.rtk_fixed && gnss_state.gga.received && gnss_state.gga.quality==4 && now-gnss_state.gga_ms<1500;
