@@ -39,20 +39,36 @@ Acceptance run against the deployed image (both roles, over the real HTTP API):
 | Radio candidate without live radios | `failed/peer_unreachable`, both units stayed on Wi-Fi, revisions unchanged, pair still `connected` — a pre-cutover target failure leaves the previous link selected and never reports success |
 | Post-run health | A `BASE` 2 records/2 jobs, B `ROVER` 0 records, collection idle, diagnostics not busy, pair `connected` |
 
-**Radio hardware finding:** the radio *candidate* cannot be proven on the bench at the moment, and the counters localize it to Unit A's SiK module. With both units on Wi-Fi and both radios powered by the bench switch, Unit B's radio answers `UART responds as SiK` (`RFD SiK 2.0 on HM-TRP`) while Unit A reports `No SiK identity response`, and during a cutover attempt the new counters show Unit A receiving **zero** radio control frames (`radio_ctl_rx 0`, `operation_rx 0`, `control_rx` only from Wi-Fi) while Unit B also receives nothing on radio (`radio_ctl_rx 0`). A local Radio selection on these same radios did pair earlier in the session (session `3673110729`), so the recovery step is a radio power cycle, and if that does not restore the identity response, a check of Unit A's UART2 TX/RX crossing and common ground. The radios' configuration (baud, air rate, power, ECC) was not touched and no antenna was disconnected. The post-commit **restoration** path (cutover applied, target unusable, previous medium restored) is covered by the portable suite's fault injection rather than on hardware, because it requires a working candidate medium.
+## Pair-wide cutover on hardware (both directions, 2026-09-15)
+
+After the bench switch and a radio power cycle restored the SiK link, the full pair-wide cutover runs end-to-end. Each row is one `POST /api/v1/settings` `link.select` accepted at 202 and then polled by its own operation id:
+
+| Requested | Issued on | Outcome | Revision | Result on both units |
+|---|---|---|---|---|
+| Wi-Fi → Radio | Rover (coordinator) | `succeeded/applied`, `committed true`, `previous_transport wifi` | 0 → 1 | both `sik`, session `3224978904` (the proven candidate adopted as production) |
+| Radio → Wi-Fi | Base (forwarded to the coordinator) | `succeeded/applied`, `committed true`, `previous_transport sik` | 3 → 4 | both `wifi`, session `3512594722` |
+| Wi-Fi → Radio | Rover | `succeeded/applied`, `committed true` | 4 → 5 | both `sik`, session `2830885222` |
+| Radio → Wi-Fi | Rover | `succeeded/applied`, `committed true` | 5 → 6 | both `wifi` (units left on the confirmed Wi-Fi selection) |
+
+The proven candidate session becomes the production session, so the cutover costs no second handshake; each cutover rotates the session (fresh replay window) and advances the durable revision on **both** instruments. A request issued on the Base is forwarded to the Rover coordinator and reports the same outcome there.
+
+## Radio note (resolved)
+
+The candidate failed for a while because the bench supply switch was off; after it was turned on, Unit A's SiK module still answered nothing while Unit B's answered `RFD SiK 2.0 on HM-TRP`, and neither ESP32 received a single radio byte (`radio_ctl_rx 0`, `discarded_bytes 0`). A **power cycle of the radios** restored both, after which every cutover above succeeded. The counters added during diagnosis remain in the diagnostics JSON (`control_rx`, `operation_rx`, `staging_rx`, `radio_control_rx`, `radio_decode_errors`, `radio_discarded_bytes`).
 
 ## Defects found and fixed by this hardware run (all with regressions)
 
-The deployment and the first hardware attempts exposed four real defects in the new service, each fixed with a portable test:
+The deployment and the hardware attempts exposed five real defects in the new service, each fixed with a portable test:
 
 1. **Stale admission clock** — an accepted operation used the engine's last tick time, so a request admitted before the first tick (or on a freshly started engine) expired immediately. `request`/`forward` now take the caller's `now`.
 2. **Commit retries reset an applied operation** — the coordinator's 500 ms `Commit` repeats restarted the delegate's apply phase; a retransmitted commit is now idempotent (and re-announces `Done`).
 3. **A retried prepare re-adopted a finished operation** — and, separately, a delegate kept the previous operation's `committed` flag, so a new commit looked like a retransmission. Adopting an operation now always resets that state, a prepare for the operation already in progress only re-announces readiness, and an unrelated active operation still refuses it. A request the instrument is itself forwarding is recognised as its own answer rather than as a conflict.
 4. **Stale baseline after a local recovery selection** — a local `select()` updated the durable record but not the operation engine, so `previous_transport` (and the revision baseline) could be wrong afterwards. The engine now adopts the locally selected medium.
+5. **Stale learned peer address stranded the Wi-Fi candidate** — after a Wi-Fi→Radio cutover, operation messages on Wi-Fi were unicast to the previously learned address, which can be stale, so the peer never saw the prepare and the candidate timed out. Discovery traffic (operations and pair bootstrap) is now broadcast on the medium in use; notices and correction data remain unicast to the proven peer.
 
-A delegate that is already on the requested medium also reports its candidate satisfied instead of settling silently, which is what a mixed pair does when only one side is on the target.
+A delegate that is already on the requested medium also reports its candidate satisfied instead of settling silently, which is what a mixed pair does when only one side is on the target; and the settings snapshot reports an operation `id` only for a request this instrument issued (a peer-initiated operation is correlated by `tag` and `revision` instead of showing a stale id).
 
 ## Outstanding
 
-- Radio cutover and post-commit restoration on hardware (needs Unit A's SiK radio answering).
+- Post-commit **restoration** on hardware (cutover applied, target unusable, previous medium restored) is covered by the portable suite's fault injection; provoking it on the bench needs a deliberate mid-cutover radio/Wi-Fi outage and is deferred to the next hardware window.
 - The Settings **page** that consumes this API is R8; R7 (canonical `web/` assets and the deterministic embedder) precedes it and needs no hardware.

@@ -43,7 +43,7 @@ struct QueuedRequest {
 };
 QueuedRequest queued;
 char operation_id[33] = {};
-bool operation_id_peer = false;
+uint32_t operation_id_tag = 0;   // tag the reported id belongs to (0 = peer-initiated)
 
 struct View {
   uint32_t revision = 0, tag = 0;
@@ -192,7 +192,7 @@ void route_control(const correction::Packet &packet, uint32_t now, IPAddress fro
   if (staging_active && staging.receive(packet, now)) { ++staging_rx; return; }
   control(packet, now, from);
 }
-bool transmit(const correction::Packet &packet, Transport transport, IPAddress from = IPAddress()) {
+bool transmit(const correction::Packet &packet, Transport transport, bool discovery = false) {
   if (transport == Transport::Radio) {
     if (radio_reserved_) return false;
     const int written = radio_transport::send(packet.bytes, sizeof(packet));
@@ -204,8 +204,11 @@ bool transmit(const correction::Packet &packet, Transport transport, IPAddress f
     }
     return true;
   }
-  IPAddress to = from;
-  if (!uint32_t(to)) to = address;
+  // Discovery (operations and pair bootstrap) is broadcast: a stale learned
+  // peer address must never strand a candidate on the other medium. Notices and
+  // correction data stay unicast to the proven peer.
+  IPAddress to;
+  if (!discovery) to = address;
   if (!uint32_t(to)) to = destination();
   if (!uint32_t(to)) return false;
   return wifi_transport::send(wifi_transport::Channel::Peer, to, packet.bytes, sizeof(packet));
@@ -286,7 +289,7 @@ void apply_actions(uint32_t now) {
     link_operation::Message message = actions.message;
     message.boot = web_boot_id();
     link_operation::encode(packet, TOPORTK_UNIT_ID, rover_, message);
-    transmit(packet, static_cast<Transport>(message.transport));
+    transmit(packet, static_cast<Transport>(message.transport), true);
   }
 }
 void drain_queue(uint32_t now) {
@@ -297,7 +300,7 @@ void drain_queue(uint32_t now) {
   portEXIT_CRITICAL(&guard);
   if (!request.valid) return;
   std::memcpy(operation_id, request.id, sizeof(operation_id));
-  operation_id_peer = false;
+  operation_id_tag = request.tag;
   link_operation::Reason reason = link_operation::Reason::None;
   bool accepted = false;
   if (request.cancel) {
@@ -429,12 +432,12 @@ void service(uint32_t now, bool rover, bool radio_reserved) {
   // bootstrap, peer notice, then production data on the selected medium.
   correction::Packet packet;
   if (staging_active && staging.next(packet, now)) {
-    if (transmit(packet, staging_transport)) staging.committed(packet, now);
+    if (transmit(packet, staging_transport, true)) staging.committed(packet, now);
     return;
   }
   const bool bootstrap = pair.next(packet, now);
   if (bootstrap) {
-    if (transmit(packet, selected_)) { pair.committed(packet, now); synchronize(now); }
+    if (transmit(packet, selected_, true)) { pair.committed(packet, now); synchronize(now); }
     return;
   }
   if (!connected(now)) return;
@@ -516,7 +519,10 @@ void service_settings(uint32_t now, bool corrections_fresh) {
   if (op.state == link_operation::State::Idle) document["operation"] = nullptr;
   else {
     auto entry = document.createNestedObject("operation");
-    entry["id"] = operation_id[0] ? operation_id : "";
+    // The reported id is the client id of the request this instrument issued;
+    // an operation initiated by the peer is correlated by tag and revision
+    // instead of showing a stale id.
+    entry["id"] = (op.tag && op.tag == operation_id_tag) ? operation_id : "";
     entry["tag"] = op.tag;
     entry["kind"] = link_operation::kind_text(op.kind);
     entry["transport"] = transport_text(op.transport);
