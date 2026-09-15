@@ -400,6 +400,8 @@ Prefer Astra for bounded protocol/ownership design and review, Sol for fixed sub
 
 **Implementation review (2026-09-15):** the deployed R5 implementation was reviewed against steps 1–6 above, including the later R6/R9 changes that consume it. Findings, off-target reproductions, priorities, test-coverage limits and the isolated-medium hardware matrix still required for sign-off are recorded in [R06-R — R5 implementation review and remediation](r06-r.md). That review proposes repairs; it implements none of them, and it neither closes R5 nor replaces R6.
 
+**Remediation (2026-09-15):** F01–F04, F06, F07 and the acceptance-discovered F08 are repaired with regression cases and an offline integration set that passes; the review document's status table records what is fixed and the [remediation record](../tests/2026-09-15-r06r/README.md) carries the evidence and the on-hold items. F05 (removing the manual advanced-diagnostic matching) remains open and is the next implementation step.
+
 #### R7–R8 — Maintainable Settings over the service
 
 1. Migrate status/survey/Points/diagnostic/Debug/OTA HTML and JS into canonical `web/` sources/manifest. Preserve public URLs, survey/OTA behavior, read-only access and latest-takeover behavior. **Done 2026-09-15 (`0.11.18-arch-r7`):** seven sources extracted byte-identically, `web/assets.json` maps each to its MIME and URLs, and `tools/embed_web_assets.py` generates the flash arrays and route table; the embedded UI headers are deleted. The client/navigation consolidation in step 2 remains.

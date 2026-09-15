@@ -16,7 +16,10 @@ class Bridge {
     submitted=envelopes=complete=station_rejected=0;
     queued_.clear();station_.reset();sender_.begin(session,0);stream_.select(session,0);return true;
   }
-  void stop(){session_=0;queued_.clear();station_.reset();received_=false;}
+  // Teardown is a session boundary: a fault latched by the session being torn
+  // down must never inhibit the next one. A fault inside an unchanged session
+  // is not cleared here, only by fail()/begin().
+  void stop(){session_=0;queued_.clear();station_.reset();received_=false;fault_=false;}
   void clear_pending(){queued_.clear();sender_.begin(session_,0);stream_.receiver.discard_assembly();received_=false;}
   void fail(){fault_=true;queued_.clear();received_=false;}
   bool fault()const{return fault_;}

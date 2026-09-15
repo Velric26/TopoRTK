@@ -19,13 +19,17 @@ uint32_t phone_key_confirm_ms = 0;
 
 namespace {
 uint8_t detail_page_index = 0;
+// Link-mode confirmation (R6b): the armed button and its ten-second window.
+TouchAction link_confirm_action_ = TouchAction::kNone;
+uint32_t link_confirm_ms_ = 0;
+constexpr uint32_t kLinkConfirmWindowMs = 10000;
 }
 
 uint8_t ui_detail_page() { return detail_page_index; }
 
 void ui_cycle_detail_page(int8_t delta) {
-  // Link has three pages (rows, counters, phone); GPS flips between two.
-  const int pages = current_page == ScreenPage::kWifiDetails ? 3 : 2;
+  // Link has four pages (rows, counters, phone, link mode); GPS flips between two.
+  const int pages = current_page == ScreenPage::kWifiDetails ? 4 : 2;
   int next = static_cast<int>(detail_page_index) + delta;
   next %= pages;
   if (next < 0) next += pages;
@@ -70,8 +74,25 @@ bool ui_key_confirm_active(uint32_t now) {
 
 void ui_arm_key_confirm(uint32_t now) { phone_key_confirm_ms = now; }
 
+bool ui_link_confirm_active(uint32_t now) {
+  return link_confirm_ms_ && now - link_confirm_ms_ < kLinkConfirmWindowMs;
+}
+
+TouchAction ui_link_confirm_action() { return link_confirm_action_; }
+
+void ui_arm_link_confirm(TouchAction action, uint32_t now) {
+  link_confirm_action_ = action;
+  link_confirm_ms_ = now;
+}
+
+void ui_clear_link_confirm() {
+  link_confirm_action_ = TouchAction::kNone;
+  link_confirm_ms_ = 0;
+}
+
 void ui_clear_key_state() {
   phone_key_shown_ms = phone_key_confirm_ms = 0;
+  ui_clear_link_confirm();
   ui_reset_region_cache();
 }
 
@@ -149,6 +170,41 @@ void draw_gps_details(const UiFrame &f) {
 
 void draw_phone_connection(const UiFrame &f);
 
+// Fourth Link page (R6b): the medium selector that calls the same pair-operation
+// service as the web Settings page. One tap arms, a second confirms; the recovery
+// button exists only when the pair cannot confirm a normal selection.
+void draw_link_mode(const UiFrame &f) {
+  draw_detail_row(current_page, 0, 58, "SELECTED", f.link_selected_line);
+  draw_detail_row(current_page, 1, 110, "PAIR", f.link_peer_line);
+  const bool confirm = ui_link_confirm_active(f.now);
+  const bool radio_confirm = confirm && ui_link_confirm_action() == TouchAction::kLinkRadio;
+  const bool wifi_confirm = confirm && ui_link_confirm_action() == TouchAction::kLinkWifi;
+  const bool recover_confirm = confirm && ui_link_confirm_action() == TouchAction::kLinkRecover;
+  char signature[192] = {};
+  std::snprintf(signature, sizeof(signature), "%u|%s|%u|%u|%u", confirm,
+                f.link_operation_line, f.link_recover_available, f.link_switch_busy,
+                f.link_radio_selected);
+  if (ui_region_changed(current_page, 16, 166, signature)) {
+    display->fillRect(8, 166, 304, 44, colors::kBackground);
+    draw_wrapped(12, 168, 296, f.link_operation_line, 2, colors::kPrimary);
+  }
+  draw_button(current_page, 13, layout::kLinkRadio,
+              radio_confirm ? "CONFIRM RADIO" : "USE RADIO", "",
+              f.link_radio_selected && !radio_confirm,
+              radio_confirm || !f.link_switch_busy);
+  draw_button(current_page, 14, layout::kLinkWifi,
+              wifi_confirm ? "CONFIRM WI-FI" : "USE WI-FI", "",
+              f.link_wifi_selected && !wifi_confirm,
+              wifi_confirm || !f.link_switch_busy);
+  draw_button(current_page, 15, layout::kLinkRecover,
+              recover_confirm ? "CONFIRM APPLY" : "APPLY LOCAL", "FOR RECOVERY", false,
+              f.link_recover_available && (recover_confirm || !f.link_switch_busy));
+  if (ui_region_changed(current_page, 17, 344, f.link_mode_hint)) {
+    display->fillRect(8, 344, 304, 80, colors::kBackground);
+    draw_wrapped(12, 348, 296, f.link_mode_hint, 3, colors::kSecondary);
+  }
+}
+
 void draw_wifi_details(const UiFrame &f) {
   static const char *const labels[10] = {"MODE", "SSID", "IP",   "LINK",
                                          "RSSI", "PEER", "PKTS", "NET",
@@ -156,7 +212,9 @@ void draw_wifi_details(const UiFrame &f) {
   const char *const values[10] = {f.wifi_mode, f.wifi_ssid, f.wifi_ip,   f.wifi_link,
                                   f.wifi_rssi, f.wifi_peer, f.wifi_pkts, f.wifi_net,
                                   f.wifi_rtcm, f.wifi_data};
-  if (detail_page_index == 2) {
+  if (detail_page_index == 3) {
+    draw_link_mode(f);  // Link mode is the fourth Link page.
+  } else if (detail_page_index == 2) {
     draw_phone_connection(f);  // Phone content is the third Link page.
   } else if (detail_page_index == 0) {
     for (uint8_t row = 0; row < 6; ++row) {

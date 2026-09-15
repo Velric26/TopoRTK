@@ -81,6 +81,8 @@ class HardwareSerial : public HostPrint {
 };
 extern HardwareSerial Serial;
 static int esp_reset_reason(){return 1;}
+// Deterministic non-repeating source, so request ids and nonces differ per call.
+static uint32_t esp_random(){static uint32_t state=0x5eed1234u;state=state*1664525u+1013904223u+(state>>13);return state;}
 struct HostESP {unsigned getFreeHeap(){return 100000;}unsigned getMinFreeHeap(){return 90000;}unsigned getFreePsram(){return 8000000;}};
 static HostESP ESP;
 class Preferences {

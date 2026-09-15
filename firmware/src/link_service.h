@@ -33,6 +33,21 @@ bool select(Transport transport, bool rover, uint32_t now);
 bool request_operation(link_operation::Kind kind, Transport transport, const char *id,
                        uint32_t revision, link_operation::Reason &reason, uint8_t profile = 0);
 bool cancel_operation(const char *id, link_operation::Reason &reason);
+// On-instrument view of the same record the Settings snapshot publishes, for the
+// touchscreen Link-mode page (R6b). No JSON document and no allocation.
+struct OperationView {
+  const char *state = "idle";
+  const char *reason = "";
+  const char *transport = "wifi";
+  bool active = false;
+  bool storage_ok = true;
+  uint32_t remaining_ms = 0;
+  uint32_t revision = 0;
+};
+OperationView operation_view(uint32_t now);
+// The durable selection revision a switch request must carry (the value the
+// Settings page reads as `revision`).
+uint32_t revision();
 // Published settings snapshot: written on the main loop, read by the HTTP task.
 void service_settings(uint32_t now, bool corrections_fresh);
 bool settings_snapshot(char *out, size_t capacity);

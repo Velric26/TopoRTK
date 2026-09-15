@@ -65,6 +65,16 @@ struct UiFrame {
   bool phone_is_base = false;
   bool phone_local_router = false;
   char phone_url[48] = {};
+  // Link mode on the fourth Link detail page (R6b). The root formats every
+  // value; the page only renders and asks the root for the confirm state.
+  bool link_radio_selected = false;
+  bool link_wifi_selected = false;
+  bool link_switch_busy = false;
+  bool link_recover_available = false;
+  char link_selected_line[48] = {};
+  char link_peer_line[64] = {};
+  char link_operation_line[80] = {};
+  char link_mode_hint[96] = {};
 };
 
 extern ScreenPage current_page;
@@ -82,6 +92,13 @@ void ui_toggle_key_reveal(uint32_t now);
 bool ui_key_confirm_active(uint32_t now);
 void ui_arm_key_confirm(uint32_t now);
 void ui_clear_key_state();
+// Link-mode selection confirmation (R6b): one tap arms the chosen action for ten
+// seconds, a second tap of the same button applies it. The composition root owns
+// what "apply" means; this module only tracks which button is armed.
+bool ui_link_confirm_active(uint32_t now);
+TouchAction ui_link_confirm_action();
+void ui_arm_link_confirm(TouchAction action, uint32_t now);
+void ui_clear_link_confirm();
 
 void ui_draw_static(const UiFrame &frame);
 void ui_draw_dynamic(const UiFrame &frame);

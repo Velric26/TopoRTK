@@ -5,7 +5,9 @@
 enum class ScreenPage : uint8_t { kMain, kGpsDetails, kWifiDetails, kSettings, kDebug };
 enum class TouchAction : uint8_t {
   kNone, kHome, kGps, kLink, kSettings, kBase, kRover, kApply, kAuto, kDay, kNight,
-  kShowKey, kNewKey, kDebug, kDebugToggle, kDetailPrev, kDetailNext
+  kShowKey, kNewKey, kDebug, kDebugToggle, kDetailPrev, kDetailNext,
+  // Link-mode page (R6b): pair-wide medium selection, never a session code.
+  kLinkRadio, kLinkWifi, kLinkRecover
 };
 
 struct TouchRect {
@@ -25,6 +27,11 @@ constexpr TouchRect kDay{112, 320, 96, 48};
 constexpr TouchRect kNight{216, 320, 96, 48};
 constexpr TouchRect kShowKey{8, 212, 148, 48};
 constexpr TouchRect kNewKey{164, 212, 148, 48};
+// Link mode (fourth Link page): pick the medium, then confirm; the recovery
+// button is only offered when pair confirmation cannot be obtained.
+constexpr TouchRect kLinkRadio{8, 212, 148, 48};
+constexpr TouchRect kLinkWifi{164, 212, 148, 48};
+constexpr TouchRect kLinkRecover{8, 288, 304, 48};
 constexpr TouchRect kDebug{212,380,100,44};
 constexpr TouchRect kDebugToggle{8,244,304,56};
 // GPS: one full-width button flips between its two detail pages.
@@ -47,6 +54,11 @@ inline TouchAction touch_action(ScreenPage page, uint8_t detail_page, int16_t x,
     if (detail_page == 2) {
       if (layout::kShowKey.contains(x,y)) return TouchAction::kShowKey;
       if (layout::kNewKey.contains(x,y)) return TouchAction::kNewKey;
+    }
+    if (detail_page == 3) {
+      if (layout::kLinkRadio.contains(x,y)) return TouchAction::kLinkRadio;
+      if (layout::kLinkWifi.contains(x,y)) return TouchAction::kLinkWifi;
+      if (layout::kLinkRecover.contains(x,y)) return TouchAction::kLinkRecover;
     }
   }
   if(page==ScreenPage::kDebug&&layout::kDebugToggle.contains(x,y))return TouchAction::kDebugToggle;

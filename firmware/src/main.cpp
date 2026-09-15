@@ -1199,6 +1199,27 @@ const char *current_fix_label(uint32_t now) {
 UiFrame ui_frame;
 
 // Status policy stays here (instrument_status owns it from R4); the frame
+// Touchscreen Link-mode helpers (R6b): the page issues the same pair operation
+// the web Settings page does, so it needs the same 32-hex request id shape and a
+// place to keep the last refusal. The counter guarantees a fresh tag over a boot.
+char link_ui_error[96] = {};
+pair_session::Transport link_recovery_target = pair_session::Transport::Radio;
+
+void to_upper_ascii(char *text) {
+  for (char *p = text; *p; ++p) {
+    if (*p >= 'a' && *p <= 'z') *p = static_cast<char>(*p - 32);
+  }
+}
+
+void make_link_request_id(char out[33]) {
+  static uint32_t sequence = 0;
+  const uint32_t a = esp_random(), b = esp_random(), c = esp_random();
+  const uint32_t d = esp_random() ^ ++sequence ^ web_boot_id();
+  std::snprintf(out, 33, "%08lx%08lx%08lx%08lx", static_cast<unsigned long>(a),
+                static_cast<unsigned long>(b), static_cast<unsigned long>(c),
+                static_cast<unsigned long>(d));
+}
+
 // carries ready-to-draw strings so the screen module holds no receiver state.
 void ui_build_frame(UiFrame &f, uint32_t now) {
   f.now = now;
@@ -1393,6 +1414,56 @@ void ui_build_frame(UiFrame &f, uint32_t now) {
       std::snprintf(f.phone_url, sizeof(f.phone_url), "http://%s", rover_ap_address());
     }
   }
+  if (current_page == ScreenPage::kWifiDetails && ui_detail_page() == 3) {
+    const auto pair = link_service::snapshot(now);
+    const auto operation = link_service::operation_view(now);
+    const bool radio_selected = pair.transport == pair_session::Transport::Radio;
+    std::snprintf(f.link_selected_line, sizeof(f.link_selected_line), "%s%s",
+                  radio_selected ? "RADIO" : "WI-FI",
+                  operation.storage_ok ? "" : " · RECORD UNVERIFIED");
+    if (pair.connected) {
+      std::snprintf(f.link_peer_line, sizeof(f.link_peer_line), "CONNECTED · SESSION %lu",
+                    static_cast<unsigned long>(pair.session));
+    } else {
+      char reason[40] = {};
+      std::snprintf(reason, sizeof(reason), "%s", pair.reason);
+      for (char *c = reason; *c; ++c) {
+        if (*c == '_') *c = ' ';
+      }
+      to_upper_ascii(reason);
+      std::snprintf(f.link_peer_line, sizeof(f.link_peer_line), "NO PEER · %s", reason);
+    }
+    if (operation.active) {
+      std::snprintf(f.link_operation_line, sizeof(f.link_operation_line),
+                    "%s TO %s · %lu S LEFT", operation.state, operation.transport,
+                    static_cast<unsigned long>((operation.remaining_ms + 999) / 1000));
+    } else if (std::strcmp(operation.state, "idle") != 0) {
+      std::snprintf(f.link_operation_line, sizeof(f.link_operation_line), "LAST %s · %s",
+                    operation.state, operation.reason);
+    } else {
+      std::strcpy(f.link_operation_line, "NONE YET");
+    }
+    to_upper_ascii(f.link_operation_line);
+    f.link_radio_selected = radio_selected;
+    f.link_wifi_selected = !radio_selected;
+    f.link_switch_busy = operation.active || diagnostic_busy() || ota_locked() ||
+                         ota_paused() || profile_running;
+    // The recovery escape hatch exists only when pair confirmation is not
+    // available; a normal switch goes through the coordinator on its own medium.
+    f.link_recover_available = !operation.storage_ok ||
+                               !std::strcmp(operation.state, "recovery_required");
+    if (link_ui_error[0]) {
+      std::snprintf(f.link_mode_hint, sizeof(f.link_mode_hint), "%s", link_ui_error);
+    } else if (f.link_recover_available) {
+      std::strcpy(f.link_mode_hint,
+                  "PAIR NOT CONFIRMED. SET THE SAME LINK ON BOTH UNITS, OR APPLY LOCALLY.");
+    } else if (f.link_switch_busy) {
+      std::strcpy(f.link_mode_hint, "A TEST OR UPDATE OWNS THE LINK. WAIT FOR IT TO FINISH.");
+    } else {
+      std::strcpy(f.link_mode_hint,
+                  "ONE TAP ARMS, A SECOND CONFIRMS THE PAIR-WIDE SWITCH.");
+    }
+  }
 }
 
 void draw_static_screen() {
@@ -1407,7 +1478,10 @@ void draw_dynamic_screen() {
 }
 
 void change_page(ScreenPage page) {
-  if (ui_change_page(page, device_config.role) && display_ready) {
+  const bool changed = ui_change_page(page, device_config.role);
+  // A refusal belongs to the visit that produced it, not to the next one.
+  if (changed) link_ui_error[0] = 0;
+  if (changed && display_ready) {
     draw_static_screen();
     draw_dynamic_screen();
   }
@@ -1461,6 +1535,51 @@ void handle_ui_gesture(const UiGesture &gesture) {
       ui_clear_key_state();
     } else {
       ui_arm_key_confirm(millis());
+    }
+  }
+  if (action == TouchAction::kLinkRadio || action == TouchAction::kLinkWifi) {
+    // The touchscreen asks the pair service for the same switch the web page
+    // does: one tap arms, the same tap confirms, and the coordinator owns the
+    // cutover. No session code and no second bootstrap path exist here.
+    const auto transport = action == TouchAction::kLinkRadio
+                               ? pair_session::Transport::Radio
+                               : pair_session::Transport::WiFi;
+    link_recovery_target = transport;
+    if (ui_link_confirm_active(millis()) && ui_link_confirm_action() == action) {
+      char id[33] = {};
+      make_link_request_id(id);
+      link_operation::Reason reason = link_operation::Reason::None;
+      if (link_service::request_operation(link_operation::Kind::Select, transport, id,
+                                          link_service::revision(), reason)) {
+        link_ui_error[0] = 0;
+      } else {
+        std::snprintf(link_ui_error, sizeof(link_ui_error), "NOT ACCEPTED: %s",
+                      link_operation::reason_text(reason));
+        to_upper_ascii(link_ui_error);
+      }
+      ui_clear_link_confirm();
+    } else {
+      link_ui_error[0] = 0;
+      ui_arm_link_confirm(action, millis());
+    }
+  } else if (action == TouchAction::kLinkRecover) {
+    // Recovery only: a local selection for a pair that cannot confirm itself.
+    // The button renders disabled otherwise, so refuse the tap as well.
+    const auto operation = link_service::operation_view(millis());
+    const bool available = !operation.storage_ok ||
+                           !std::strcmp(operation.state, "recovery_required");
+    if (!available) {
+      std::strcpy(link_ui_error, "LOCAL APPLY NEEDS AN UNCONFIRMED PAIR.");
+    } else if (ui_link_confirm_active(millis()) &&
+               ui_link_confirm_action() == TouchAction::kLinkRecover) {
+      if (link_service::select(link_recovery_target, !is_base(), millis())) {
+        link_ui_error[0] = 0;
+      } else {
+        std::strcpy(link_ui_error, "LOCAL APPLY REFUSED. USE THE WEB SETTINGS PAGE.");
+      }
+      ui_clear_link_confirm();
+    } else {
+      ui_arm_link_confirm(TouchAction::kLinkRecover, millis());
     }
   }
   if (action == TouchAction::kBase) pending_role = DeviceRole::kBase;

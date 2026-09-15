@@ -32,7 +32,8 @@ link_operation::Confirmed confirmed{};
 link_operation::Pending pending{};
 IPAddress address;
 uint32_t tx_wait = 0, output_rejected = 0, short_writes = 0;
-uint32_t control_rx = 0, operation_rx = 0, staging_rx = 0, radio_rx = 0, wifi_rx = 0;
+uint32_t control_rx = 0, operation_rx = 0, staging_rx = 0, radio_rx = 0;
+uint32_t cross_medium_dropped = 0;
 const char *fault = "";
 
 // Cross-task handoff: the HTTP task fills one bounded request; the main loop
@@ -86,28 +87,62 @@ bool clear_record(const char *key) {
   p.end();
   return removed;
 }
+// The R5 key stored the whole preference in one record. The new record is
+// constructed and sealed here, then written with the checked write+readback, so
+// both owners read the same medium from the first operation; an unwritable or
+// unverifiable migration stays indeterminate instead of exposing a baseline.
+bool migrate_legacy(const Preference &legacy) {
+  link_operation::Confirmed record;
+  record.transport = legacy.transport;
+  record.revision = 0;   // the legacy format carried no revision
+  link_operation::seal(record);
+  if (!write_record("confirmed", record)) return false;
+  confirmed = record;
+  return true;
+}
+// A key that is present but unreadable, of the wrong length or CRC-invalid is
+// corruption, not absence: only a missing key may take a default. Every
+// validation result is accumulated, so a later good record can never hide an
+// earlier bad one.
 bool load_records() {
-  Preferences p;
-  if (!p.begin("topolink", false)) return false;
   bool ok = true;
-  size_t size = sizeof(confirmed);
-  if (p.getBytes("confirmed", &confirmed, size) == size) {
-    ok = link_operation::valid(confirmed);
-    if (!ok) confirmed = link_operation::Confirmed{};
-  } else {
-    confirmed = link_operation::Confirmed{};
-    size = sizeof(Preference);
-    Preference legacy{};
-    if (p.getBytes("selection", &legacy, size) == size && valid(legacy)) confirmed.transport = legacy.transport;
+  bool migrate = false;
+  Preference legacy{};
+  {
+    Preferences p;
+    if (!p.begin("topolink", false)) return false;
+    size_t size = p.getBytesLength("confirmed");
+    if (!size) {
+      confirmed = link_operation::Confirmed{};
+      // A corrupt legacy record is corruption: only a device that never stored
+      // a preference keeps the historical Wi-Fi default.
+      size = p.getBytesLength("selection");
+      if (size) {
+        const bool read = size == sizeof(legacy) &&
+                          p.getBytes("selection", &legacy, sizeof(legacy)) == sizeof(legacy) && valid(legacy);
+        ok = ok && read;
+        migrate = read;
+      }
+    } else {
+      const bool read = size == sizeof(confirmed) &&
+                        p.getBytes("confirmed", &confirmed, sizeof(confirmed)) == sizeof(confirmed) &&
+                        link_operation::valid(confirmed);
+      ok = ok && read;
+      if (!read) confirmed = link_operation::Confirmed{};
+    }
+    size = p.getBytesLength("pending");
+    if (!size) {
+      pending = link_operation::Pending{};
+    } else {
+      const bool read = size == sizeof(pending) &&
+                        p.getBytes("pending", &pending, sizeof(pending)) == sizeof(pending) &&
+                        link_operation::valid(pending);
+      ok = ok && read;
+      if (!read) pending = link_operation::Pending{};
+    }
+    p.end();
   }
-  size = sizeof(pending);
-  if (p.getBytes("pending", &pending, size) == size) {
-    ok = link_operation::valid(pending);
-    if (!ok) pending = link_operation::Pending{};
-  } else {
-    pending = link_operation::Pending{};
-  }
-  p.end();
+  if (migrate && !migrate_legacy(legacy)) ok = false;
   return ok;
 }
 bool persist_confirmed() {
@@ -183,10 +218,26 @@ void control(const correction::Packet &packet, uint32_t now, IPAddress from = IP
     peer_update_receive(packet, now);
   }
 }
-// Routes one control envelope: pair operations first, then the candidate
-// staging engine, then the selected production link.
-void route_control(const correction::Packet &packet, uint32_t now, IPAddress from = IPAddress()) {
+// Routes one control envelope, bound to the adapter that received it. A
+// correctly formed envelope relayed from the other medium is never evidence: it
+// may only act on the medium it physically arrived on, so no cross-medium
+// exchange can prove a pair, advance a candidate or carry an operation.
+void route_control(const correction::Packet &packet, uint32_t now, IPAddress from, Transport ingress) {
   ++control_rx;
+  if (!peer_wire::control(packet)) {
+    // A recognized future outer version is a version mismatch, not silence, but
+    // only the selected medium can evidence it.
+    if (ingress == selected_ && peer_wire::incompatible(packet)) pair.incompatible(now);
+    return;
+  }
+  // A PLC1 body declares its own medium; the session-bound notice and legacy
+  // TPH1 families carry no such field and belong to the selected medium. An
+  // unselected listener proves nothing either way.
+  const bool declared = !std::memcmp(packet.bytes + 12, "PLC1", 4);
+  if (declared ? packet.bytes[21] != uint8_t(ingress) : ingress != selected_) {
+    ++cross_medium_dropped;
+    return;
+  }
   link_operation::Message message;
   if (link_operation::decode(packet, message)) {
     ++operation_rx;
@@ -359,7 +410,9 @@ pair_session::Snapshot snapshot(uint32_t now) {
   if (!storage_ok || op.state == link_operation::State::RecoveryRequired) {
     state.connected = state.established = false;
     state.reason = "recovery_required";
-  } else if (live.fault()) {
+  } else if (selected_ == Transport::Radio && live.fault()) {
+    // A radio output fault is scoped to the radio link it was latched on: it
+    // never inhibits a proven Wi-Fi pair, and teardown clears it.
     state.connected = false;
     state.reason = "radio_output_fault";
   }
@@ -418,7 +471,7 @@ void service(uint32_t now, bool rover, bool radio_reserved) {
     correction::Packet packet; IPAddress from;
     const int size = wifi_transport::receive(wifi_transport::Channel::Peer, packet.bytes, sizeof(packet), from);
     if (!size) break;
-    if (storage_ok && size == int(sizeof(packet)) && upstream(from)) route_control(packet, now, from);
+    if (storage_ok && size == int(sizeof(packet)) && upstream(from)) route_control(packet, now, from, Transport::WiFi);
   }
   live.tick(now);
   if (!radio_reserved) {
@@ -428,8 +481,10 @@ void service(uint32_t now, bool rover, bool radio_reserved) {
       const auto &packet = frame.packet;
       if (peer_wire::control(packet)) {
         ++radio_rx;
-        if (!std::memcmp(packet.bytes + 12, "TPH1", 4)) pair.incompatible(now);
-        else route_control(packet, now);
+        // TPH1 is a legacy control family: it only evidences a mismatch on the
+        // medium actually carrying production, never on an unselected listener.
+        if (selected_ == Transport::Radio && !std::memcmp(packet.bytes + 12, "TPH1", 4)) pair.incompatible(now);
+        else route_control(packet, now, IPAddress(), Transport::Radio);
       } else if (!test_running(now) && selected_ == Transport::Radio && connected(now) && !ota_paused() && live.packet(packet, now)) {
         debug_frame(debugmode::Channel::RadioRx, live.data(), live.size());
         if (!correction_link_input(live.data(), live.size(), now - live.known_age(now))) ++output_rejected;
@@ -535,6 +590,21 @@ bool request_operation(link_operation::Kind kind, Transport transport, const cha
   return true;
 }
 
+OperationView operation_view(uint32_t now) {
+  OperationView out;
+  const auto op = operation.snapshot(now);
+  out.state = link_operation::state_text(op.state);
+  out.reason = link_operation::reason_text(op.reason);
+  out.transport = transport_text(op.transport);
+  out.active = op.active;
+  out.storage_ok = storage_ok;
+  out.remaining_ms = op.active ? op.phase_remaining_ms : 0;
+  out.revision = operation.revision();
+  return out;
+}
+
+uint32_t revision() { return operation.revision(); }
+
 bool cancel_operation(const char *id, link_operation::Reason &reason) {
   const uint32_t tag = link_operation::tag_from_hex(id);
   if (!tag) { reason = link_operation::Reason::Conflict; return false; }
@@ -620,6 +690,9 @@ void write_json(JsonObject d, uint32_t now) {
   const auto state = snapshot(now);
   const auto op = operation.snapshot(now);
   d["transport"] = radio_active() ? "sik" : "wifi";
+  // The reservation the link owner is honoring, so acceptance can observe the
+  // handoff rather than infer it from a silent absence of radio traffic.
+  d["radio_reserved"] = radio_reserved_;
   d["session"] = session(); d["peer_connected"] = state.connected;
   d["pair_state"] = state.reason; d["boot"] = state.local_boot; d["peer_boot"] = state.peer_boot;
   // Candidate staging and the operation record: the pieces a failed cutover is
@@ -643,6 +716,7 @@ void write_json(JsonObject d, uint32_t now) {
   d["operation_rx"] = operation_rx;
   d["staging_rx"] = staging_rx;
   d["radio_control_rx"] = radio_rx;
+  d["cross_medium_dropped"] = cross_medium_dropped;
   d["radio_decode_errors"] = radio_transport::decode_stats().rtcm_errors + radio_transport::decode_stats().pair_errors;
   d["radio_discarded_bytes"] = radio_transport::decode_stats().discarded_bytes;
   d["fault"] = live.fault(); d["station"] = live.station();

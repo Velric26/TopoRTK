@@ -44,6 +44,12 @@ void assert_clean_page(const char *preview_path = nullptr) {
   const auto navigated_pixels = display->pixels;
   draw_static_screen();
   draw_dynamic_screen();
+  if (display->pixels != navigated_pixels) {
+    std::fprintf(stderr, "RENDER MISMATCH at %s (page %u, detail %u)\n",
+                 preview_path ? preview_path : "(none)",
+                 static_cast<unsigned>(current_page), ui_detail_page());
+    std::fflush(stderr);
+  }
   assert(display->pixels == navigated_pixels);
   const auto draws = display->draws;
   draw_dynamic_screen();
@@ -414,6 +420,63 @@ int main() {
   assert(format_web_status(json,sizeof(json),host_now) > 0);
   assert(!std::strstr(json,rotated.c_str()) && Serial.output.find(rotated) == std::string::npos);
   std::puts("PASS: Rover AP persistence, corrupt/failed storage, rotation, touch confirmation, subnet isolation, no password in API/logs");
+  // Touchscreen Link-mode selector (R6b): the page issues the same pair-wide
+  // request as the web Settings page, with one-tap arming, an explicit confirm
+  // and a recovery escape hatch that stays gated to an unconfirmed pair.
+  change_page(ScreenPage::kWifiDetails);
+  tap(238, 402); tap(238, 402); tap(238, 402);  // rows -> counters -> phone -> link mode
+  assert(ui_detail_page() == 3);
+  assert(touch_action(ScreenPage::kWifiDetails, 3, 80, 236) == TouchAction::kLinkRadio);
+  assert(touch_action(ScreenPage::kWifiDetails, 3, 238, 236) == TouchAction::kLinkWifi);
+  assert(touch_action(ScreenPage::kWifiDetails, 3, 160, 312) == TouchAction::kLinkRecover);
+  assert_clean_page(".pio/ui-link-3.ppm");
+  host_link_requests = host_link_selections = 0;
+  host_link_refuse = host_link_select_refuse = false;
+  host_link_revision_value = 7;
+  host_operation_state = "idle";
+  host_operation_active = false;
+  host_operation_storage_ok = true;
+  ui_build_frame(ui_frame, host_now);
+  assert(std::string(ui_frame.link_operation_line) == "NONE YET");
+  assert(std::string(ui_frame.link_selected_line).find("WI-FI") == 0);
+  tap(80, 236);  // Arm the radio switch; nothing is sent yet.
+  assert(ui_link_confirm_active(host_now) && ui_link_confirm_action() == TouchAction::kLinkRadio);
+  assert(host_link_requests == 0);
+  assert_clean_page(".pio/ui-link-3-confirm.ppm");
+  tap(80, 236);  // Confirm: the coordinator receives the request.
+  assert(!ui_link_confirm_active(host_now));
+  assert(host_link_requests == 1 && host_link_transport == 1 && host_link_revision == 7);
+  assert(std::strlen(host_link_id) == 32);
+  for (size_t i = 0; i < 32; ++i)
+    assert((host_link_id[i] >= '0' && host_link_id[i] <= '9') ||
+           (host_link_id[i] >= 'a' && host_link_id[i] <= 'f'));
+  // A refusal is reported instead of pretending the switch started.
+  host_link_refuse = true;
+  tap(238, 236); tap(238, 236);
+  ui_build_frame(ui_frame, host_now);
+  assert(host_link_requests == 2);
+  assert(std::string(ui_frame.link_mode_hint).find("NOT ACCEPTED") != std::string::npos);
+  host_link_refuse = false;
+  // An armed tap expires on its own, exactly like the key confirmation.
+  tap(80, 236);
+  assert(ui_link_confirm_active(host_now));
+  host_now += 10001;
+  ui_build_frame(ui_frame, host_now);
+  assert(!ui_link_confirm_active(host_now));
+  // Apply-locally is refused while the pair record is healthy...
+  host_operation_storage_ok = true;
+  tap(160, 312); tap(160, 312);
+  assert(host_link_selections == 0);
+  // ...and offered for a pair that cannot confirm a normal selection.
+  host_operation_storage_ok = false;
+  ui_build_frame(ui_frame, host_now);
+  assert(ui_frame.link_recover_available);
+  tap(160, 312); tap(160, 312);
+  assert(host_link_selections == 1);
+  host_operation_storage_ok = true;
+  change_page(ScreenPage::kMain);
+  assert(!ui_link_confirm_active(host_now));
+  std::puts("PASS: touchscreen Link mode, pair-wide request shape, refusal copy, armed-tap expiry and gated local recovery");
   // Debug is enabled by default at boot; the touchscreen toggle turns it off
   // and on, including during receiver setup, and the session persists over time.
   assert(debug_enabled());change_page(ScreenPage::kSettings);profile_running=true;
@@ -450,7 +513,7 @@ int main() {
   change_page(ScreenPage::kWifiDetails);
   // Exercise all six directed transitions, including wraparound. The old
   // standalone Phone preview could not detect rows painted over key controls.
-  const uint8_t link_pages[] = {1, 2, 0, 2, 1, 0};
+  const uint8_t link_pages[] = {1, 2, 3, 2, 1, 0};
   for (unsigned step=0; step<6; ++step) {
     tap(step < 3 ? 238 : 82,402);
     assert(ui_detail_page() == link_pages[step]);

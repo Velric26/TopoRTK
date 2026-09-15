@@ -360,6 +360,9 @@ void Engine::adopted(Transport transport, uint32_t revision) {
   previous_ = target_ = transport;
   settled_tag_ = tag_ = revision_ = 0;
   kind_ = Kind::None; reason_ = Reason::None;
+  // The local selection settles the retained operation record too, so nothing
+  // rewrites a stale pending entry after recovery.
+  pending_ = Pending{};
   if (!busy()) state_ = State::Idle;
 }
 
@@ -382,8 +385,11 @@ void Engine::send(uint8_t kind, uint8_t code, uint32_t now) {
 void Engine::settle(State state, Reason reason, uint32_t now) {
   state_ = state; reason_ = reason; phase_ = Phase::None; advance_ = now;
   settled_tag_ = tag_; settled_kind_ = kind_; settled_target_ = target_;
-  if (state == State::RecoveryRequired) return;   // durable pending record stays authoritative
-  actions_.clear_pending = true; actions_.unstage = true;
+  // The staging reservation is released on every outcome, including
+  // recovery_required: the prescribed local recovery must stay reachable, and
+  // only the durable pending record is what remains authoritative there.
+  actions_.unstage = true;
+  if (state != State::RecoveryRequired) actions_.clear_pending = true;
 }
 
 void Engine::tick(const Inputs &inputs) {

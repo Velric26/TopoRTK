@@ -32,6 +32,9 @@ struct Node {
   uint32_t test_since = 0;
   uint32_t staged_at = 0;
   Transport selected = Transport::WiFi;
+  // Mirrors link_service: the survey/diagnostic reservation the staging phase
+  // takes and the unstage action releases.
+  bool reserved = false;
   std::vector<Sent> history;
 
   void begin(bool is_rover, const link_operation::Pending *durable = nullptr) {
@@ -78,6 +81,7 @@ struct Node {
       if (!persist_ok) storage_ok = false;
     }
     if (actions.stage) {
+      reserved = true;
       if (engine.snapshot(now).transport != selected) {
         staging_active = true; staging_ready = false; staged_at = now;
       }
@@ -91,7 +95,7 @@ struct Node {
       production = restore_usable;
       engine.restore_result(restore_usable);
     }
-    if (actions.unstage) { staging_active = false; staging_ready = false; }
+    if (actions.unstage) { staging_active = false; staging_ready = false; reserved = false; }
     if (actions.clear_pending) pending = link_operation::Pending{};
     if (actions.send) {
       correction::Packet packet;
@@ -259,6 +263,16 @@ void restoration_and_recovery() {
     assert(state.state == State::RecoveryRequired);
     assert(state.reason == Reason::RestoreFailed);
     assert(p.rover.pending.tag == tag_of(0x99));
+    // The reservation must be gone so the operator's local recovery can run at
+    // all, while the record that documents the interrupted cutover is retained.
+    assert(!p.rover.staging_active && !p.rover.reserved);
+    // Local recovery then settles both: the engine returns to a usable baseline
+    // and the retained record is consumed.
+    p.rover.engine.adopted(Transport::WiFi, p.rover.confirmed.revision);
+    assert(p.rover.engine.snapshot(now_ms).state == State::Idle);
+    assert(!p.rover.engine.pending().tag);
+    assert(p.rover.engine.request(Kind::Select, Transport::Radio, tag_of(0x9a), p.rover.confirmed.revision,
+                                  now_ms, reason));
   }
 }
 

@@ -1,0 +1,53 @@
+PASS both units on the remediation build | 0.11.31-arch-r06r / 0.11.31-arch-r06r
+PASS initial pair state | A=wifi B=wifi session=701239758
+PASS radio stream starts unowned | A=False B=False
+PASS SiK quick test admitted and settled | status=202 state=failed reason=test_unavailable pair_pass=False received=12
+PASS UART2 handed back after the terminal exchange | A=False B=False
+PASS Radio cutover after the test settles | status=202 state=succeeded reason=applied
+PASS both units carry a live Radio session after it | A=sik B=sik pair=True/True session=2510635312 reserved=False
+PASS restored to Wi-Fi with the pair intact | state=succeeded A=wifi B=wifi session=1365535357
+{
+  "result": "PASS",
+  "cases": [
+    {
+      "name": "both units on the remediation build",
+      "pass": true,
+      "detail": "0.11.31-arch-r06r / 0.11.31-arch-r06r"
+    },
+    {
+      "name": "initial pair state",
+      "pass": true,
+      "detail": "A=wifi B=wifi session=701239758"
+    },
+    {
+      "name": "radio stream starts unowned",
+      "pass": true,
+      "detail": "A=False B=False"
+    },
+    {
+      "name": "SiK quick test admitted and settled",
+      "pass": true,
+      "detail": "status=202 state=failed reason=test_unavailable pair_pass=False received=12"
+    },
+    {
+      "name": "UART2 handed back after the terminal exchange",
+      "pass": true,
+      "detail": "A=False B=False"
+    },
+    {
+      "name": "Radio cutover after the test settles",
+      "pass": true,
+      "detail": "status=202 state=succeeded reason=applied"
+    },
+    {
+      "name": "both units carry a live Radio session after it",
+      "pass": true,
+      "detail": "A=sik B=sik pair=True/True session=2510635312 reserved=False"
+    },
+    {
+      "name": "restored to Wi-Fi with the pair intact",
+      "pass": true,
+      "detail": "state=succeeded A=wifi B=wifi session=1365535357"
+    }
+  ]
+}

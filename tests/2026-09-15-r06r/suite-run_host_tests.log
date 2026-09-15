@@ -1,0 +1,24 @@
+ok: RTM1 back-to-back first
+ok: RTC1 back-to-back second
+ok: three families back-to-back, counters clean
+ok: nested RTC1/RTDG inside RTM1 payload isolated
+ok: marker-like payload bytes never split a frame
+ok: valid RTM1 after garbage prefix
+ok: unknown prefixes accounted, stream resynchronizes
+ok: bad-CRC RTM1 resync preserves the following RTDG frame
+ok: good RTC1 after two corrupt envelopes
+ok: per-family bad-CRC accounting through consecutive resyncs
+ok: body-invalid RTM1 delivered whole
+ok: body validation deferred to consumers
+ok: RTC1 fragmented across three feeds
+ok: fragmented envelope retained across calls
+PASS: radio framing cases
+PASS: production COM2 whole-frame admission, backpressure/expiry, carried age, exclusive route, profile gate and latched output fault
+PASS: observation freshness, repeated epochs, metadata outage, receiver age/station, corruption, week/timer wrap, nonblocking handshake
+PASS: BESTNAV epoch, ellipsoidal height, correction age/base ID, invalid data and saved fixed-base command
+PASS: Rover AP persistence, corrupt/failed storage, rotation, touch confirmation, subnet isolation, no password in API/logs
+PASS: touchscreen Link mode, pair-wide request shape, refusal copy, armed-tap expiry and gated local recovery
+PASS: Debug default-on at boot, touchscreen toggle during receiver setup, persistent session over time, disable clears capture, bounded capture and unchanged COM2 output
+PASS: production profile, NVS failures/reload, reset grace, touch actions/cancellation, UI bounds and repaint cache
+PASS: JSON snapshots, unavailable values, bounded response, read-only state generation
+UI previews: .pio/ui-0.png through ui-4.png, ui-link-*.png and ui-base-selection.png

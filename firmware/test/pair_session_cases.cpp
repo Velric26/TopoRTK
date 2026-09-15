@@ -217,6 +217,89 @@ void replayed_hello_cannot_rotate_session(){
   p.run(12000);p.connected();
   assert(p.base.snapshot(p.now).session!=initial.session);
 }
+void dead_boot_candidate_releases_early(){
+  Pair p;p.begin();
+  const uint32_t grace=3000,limit=6000;
+  // Capture an untargeted Hello from a Rover boot that never came back, and
+  // admit it to the idle Base before the live peer starts.
+  Engine dead;dead.begin(2,true,Transport::Radio,77,p.now,random_word);
+  Packet stale;assert(dead.next(stale,p.now));
+  assert(stale.bytes[17]==1&&!correction::u32(stale.bytes+28)&&!correction::u32(stale.bytes+36));
+  assert(p.base.receive(stale,p.now));
+  assert(!p.base.snapshot(p.now).established);
+  Packet bound;assert(p.base.next(bound,p.now));
+  assert(bound.bytes[17]==2&&correction::u32(bound.bytes+28)==77);
+  // The live Rover (boot 202) starts now. Its untargeted Hellos are refused while
+  // the dead boot still holds its chance, then it takes the slot; the dead boot
+  // must not consume a whole further negotiation window.
+  const uint32_t start=p.now;
+  uint32_t elapsed=UINT32_MAX;
+  while(true){
+    if(p.base.snapshot(p.now).connected&&p.rover.snapshot(p.now).connected){elapsed=uint32_t(p.now-start);break;}
+    assert(uint32_t(p.now-start)<limit);
+    p.step();
+  }
+  std::printf("dead-boot Hello: pairing completed in %u ms (bound %u ms, grace %u ms)\n",elapsed,limit,grace);
+  assert(elapsed<=limit);
+  p.connected();
+}
+void candidate_slot_respects_the_chance_window(){
+  const uint32_t t0=5000;
+  Engine base;base.begin(1,false,Transport::Radio,101,t0,random_word);
+  Packet discovery;assert(base.next(discovery,t0));
+  assert(discovery.bytes[17]==1&&!correction::u32(discovery.bytes+28)&&!correction::u32(discovery.bytes+36));
+  Engine dead;dead.begin(2,true,Transport::Radio,77,t0,random_word);
+  Packet old;assert(dead.next(old,t0));
+  assert(base.receive(old,t0));
+  Engine rival;rival.begin(2,true,Transport::Radio,88,t0,random_word);
+  Packet fresh;assert(rival.next(fresh,t0));
+  // A solicited reply keeps the boot/token binding it was solicited by, so even
+  // a live rival cannot jump the queue with one; only untargeted discovery does.
+  Packet solicited=fresh;
+  correction::put32(solicited.bytes+28,101);
+  correction::put32(solicited.bytes+36,correction::u32(discovery.bytes+32));
+  correction::seal(solicited);
+  assert(!base.receive(solicited,t0+3000));
+  // Before the occupant's chance expires, a different boot is refused, and a
+  // replayed copy of the occupant's own Hello does not renew that chance.
+  assert(!base.receive(fresh,t0+2999));
+  assert(base.receive(old,t0+2999));
+  assert(!base.receive(fresh,t0+2999));
+  // At the boundary the live rival takes the slot and the Base proves to it.
+  assert(base.receive(fresh,t0+3000));
+  Packet proof;assert(base.next(proof,t0+3000));
+  assert(proof.bytes[17]==2&&correction::u32(proof.bytes+28)==88&&correction::u32(proof.bytes+36)==correction::u32(fresh.bytes+32));
+  // A slot no live peer claims still expires at the 20-second negotiation cap,
+  // after which the Base resumes its own untargeted discovery.
+  Engine cap;cap.begin(1,false,Transport::Radio,101,t0,random_word);
+  assert(cap.receive(old,t0));
+  Packet held;assert(cap.next(held,t0));
+  assert(held.bytes[17]==2&&correction::u32(held.bytes+28)==77);
+  assert(!std::strcmp(cap.snapshot(t0+19999).reason,"negotiating"));
+  assert(!std::strcmp(cap.snapshot(t0+20000).reason,"peer_unreachable"));
+  cap.tick(t0+20000);
+  Packet resumed;assert(cap.next(resumed,t0+20000));
+  assert(resumed.bytes[17]==1&&!correction::u32(resumed.bytes+28)&&!correction::u32(resumed.bytes+36));
+}
+void reclaim_never_rotates_a_proven_session(){
+  Pair p;p.begin();p.run(8000);p.connected();
+  const auto before=p.base.snapshot(p.now);
+  // Competing untargeted Hellos from boot after boot, each past the chance
+  // window of its predecessor: the proven identity, generation, peer boot and
+  // connectivity never move, and no foreign candidate can reach establishment.
+  for(unsigned boot:{77u,88u,99u}){
+    Engine dead;dead.begin(2,true,Transport::Radio,boot,p.now,random_word);
+    Packet old;assert(dead.next(old,p.now));
+    for(unsigned i=0;i<3;++i){
+      assert(p.base.receive(old,p.now));
+      p.run(3000);
+      const auto after=p.base.snapshot(p.now);
+      assert(after.session==before.session&&after.generation==before.generation);
+      assert(after.peer_boot==before.peer_boot&&after.established&&after.connected);
+    }
+  }
+  p.connected();
+}
 void wraparound(){
   Pair p;p.now=UINT32_MAX-2500;p.begin();p.run(10000);p.connected();
   const auto generation=p.base.snapshot(p.now).generation;
@@ -228,6 +311,8 @@ void wraparound(){
 }
 int main(){
   startup_orders();loss_and_backpressure();codec_boundaries();explicit_errors();
-  outage_and_replay();restarts_and_old_candidates();replayed_hello_cannot_rotate_session();wraparound();
-  std::puts("PASS: production pair startup, lossy proof, strict codec, replay, reboot, role, outage and clock-wrap invariants");
+  outage_and_replay();restarts_and_old_candidates();replayed_hello_cannot_rotate_session();
+  dead_boot_candidate_releases_early();candidate_slot_respects_the_chance_window();
+  reclaim_never_rotates_a_proven_session();wraparound();
+  std::puts("PASS: production pair startup, lossy proof, strict codec, replay, reboot, role, outage, clock-wrap and bounded-candidate invariants");
 }

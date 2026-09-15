@@ -50,6 +50,41 @@ bool refuse_quick(const char *medium,const char *why){
 }
 char self_report[1536]="null",self_error[80]={};
 bool any_engine_busy(){return engine.busy()||pair_engine.busy();}
+// UART2 ownership is explicit and bounded, never inferred from the engines'
+// retained run ids. A run armed on SiK -- the probe, the paired SiK quick test,
+// an advanced packet test on SiK -- owns the stream while it is in flight and
+// through the terminal result exchange that follows, because the peer's own
+// verdict can still arrive on UART2 after this instrument's engine is done.
+// kExchangeMs caps that exchange, so a peer that never reports cannot hold the
+// stream; the engines keep their run ids and their verdict either way, since
+// link_service settles the operation from diagnostic_quick_test_ready(). Wi-Fi
+// runs never own UART2.
+constexpr uint32_t kExchangeMs=5000;
+bool radio_owned=false;   // this turn's ownership: gates the stream, both engine blocks and the published busy state
+uint32_t exchange_run=0;  // run whose terminal exchange this layer is serving
+uint32_t exchange_at=0;   // millis that run's terminal state was first observed
+// Run id of the medium the last start took, 0 when that medium is not SiK.
+uint32_t radio_run_id(){return transport?(paired?pair_engine.run:engine.config.run):0;}
+bool radio_in_flight(){return probe_phase||(transport&&any_engine_busy());}
+// The run's verdict is complete exactly when diagnostic_quick_test_ready() says
+// so: the peer's own report arrived, or the run failed without one. That is what
+// the link owner settles its operation from, so the stream is handed back as
+// soon as it holds or kExchangeMs has passed since the terminal state was seen.
+bool exchange_open(uint32_t now){return exchange_at&&now-exchange_at<kExchangeMs&&!diagnostic_quick_test_ready(now);}
+// True while this layer owns UART2 for the turn: in flight, or inside the
+// bounded terminal result exchange.
+bool radio_owner(uint32_t now){return radio_in_flight()||exchange_open(now);}
+// Opens, holds and releases the one bounded exchange window. It belongs to one
+// run, opens at that run's first terminal turn and closes when the link owner's
+// verdict is complete or kExchangeMs has elapsed since; a run whose window has
+// closed never opens another, and a run in flight owns the stream outright.
+void maintain_radio_ownership(uint32_t now){
+  const uint32_t run=radio_run_id();
+  if(!run){exchange_run=exchange_at=0;return;}
+  if(radio_in_flight()){exchange_at=0;return;}
+  if(run!=exchange_run){exchange_run=run;exchange_at=diagnostic_quick_test_ready(now)?0:now;return;}
+  if(exchange_at&&!exchange_open(now))exchange_at=0;
+}
 const char *medium_name(uint8_t medium){return medium?"sik":"wifi";}
 // The engines refuse a repeated run id, so the generated id skips the target
 // engine's current one and the other engine's, which keeps a stale slot from
@@ -181,7 +216,11 @@ void run_transport_selftest(){
   p.end();
 }
 void publish(uint32_t now){
-  DynamicJsonDocument d(10240);result_json(d.to<JsonObject>());d["busy"]=test_busy();d["persisted"]=persisted;
+  DynamicJsonDocument d(10240);result_json(d.to<JsonObject>());
+  // radio_owned is the handoff an acceptance run watches: true while this layer
+  // holds UART2, which is exactly the run in flight or its bounded terminal
+  // result exchange, and the same value already given to link_service.
+  d["busy"]=test_busy()||radio_owned;d["radio_owned"]=radio_owned;d["persisted"]=persisted;
   d["radio_probe"]=probe_phase?"checking":probe_size?(std::strstr(probe_text,"SiK ")?"UART responds as SiK":"No SiK identity response; check power, baud and crossed TX/RX"):"not checked";
   d["radio_probe_response"]=probe_text;
   if(probe_phase){d["state"]="probing";d["busy"]=true;}
@@ -193,7 +232,7 @@ void publish(uint32_t now){
   link_service::write_json(corrections,now);
   if(route_error[0])corrections["error"]=route_error;
   static char out[kDiagnosticCapacity];size_t n=serializeJson(d,out,sizeof(out));
-  if(!d.overflowed()&&n<sizeof(out)-1){portENTER_CRITICAL(&guard);std::memcpy(cached,out,n+1);cached_busy=test_busy()||probe_phase;portEXIT_CRITICAL(&guard);}published=now;
+  if(!d.overflowed()&&n<sizeof(out)-1){portENTER_CRITICAL(&guard);std::memcpy(cached,out,n+1);cached_busy=test_busy()||radio_owned;portEXIT_CRITICAL(&guard);}published=now;
 }
 }
 void diagnostic_begin(){
@@ -354,8 +393,10 @@ void diagnostic_service(uint32_t now,bool rover,IPAddress peer,bool profile_busy
       }
     }
   }
-  const bool radio_reserved=probe_phase||(paired&&pair_engine.run)||(!paired&&transport&&engine.config.run);
-  link_service::service(now,rover,radio_reserved);
+  // One ownership value per turn: the same predicate gates the stream argument,
+  // this layer's own UART2 reads and writes, and the published busy state.
+  radio_owned=radio_owner(now);
+  link_service::service(now,rover,radio_owned);
   if(paired&&pair_engine.busy()&&pair_engine.node!=(rover?1:0))pair_engine.abort(now,"role_changed");
   if(!paired&&engine.busy()&&engine.node!=(rover?1:0))engine.abort(now,"role_changed");
   if(engine.state==linktest::Idle)engine.node=rover?1:0;
@@ -367,7 +408,7 @@ void diagnostic_service(uint32_t now,bool rover,IPAddress peer,bool profile_busy
     if(probe_phase==3&&elapsed>=4200){radio_transport::send(reinterpret_cast<const uint8_t*>("ATO\r"),4);probe_phase=4;}
     if(probe_phase==4&&elapsed>=4800){probe_phase=0;if(!probe_size){std::strcpy(probe_text,"no response");probe_size=11;}survey_diagnostic_release();locked=false;}
   }
-  if(paired&&!probe_phase){
+  if(radio_owned&&paired){
     const bool observing=pair_engine.busy();
     if(observing)radio_transport::observe_tick(now);
     pair_engine.tick(now);
@@ -386,7 +427,9 @@ void diagnostic_service(uint32_t now,bool rover,IPAddress peer,bool profile_busy
     if(!pair_engine.busy())stop_uart_observation();
   }
   if(!paired&&engine.config.run&&!probe_phase){
-    if(transport&&radio_transport::started()){
+    // UART2 is read only while this layer owns it; the diagnostics socket is the
+    // Wi-Fi gate and says nothing about UART2.
+    if(transport&&radio_owned&&radio_transport::started()){
       const uint32_t before=radio_transport::decode_stats().diagnostic_errors+radio_transport::decode_stats().discarded_bytes;
       radio_transport::Frame frame;
       size_t budget=2048;
@@ -410,7 +453,7 @@ void diagnostic_service(uint32_t now,bool rover,IPAddress peer,bool profile_busy
     linktest::Packet packet;
     if(engine.next(packet,now)){
       bool sent=false;
-      if(transport){sent=radio_transport::send(reinterpret_cast<const uint8_t*>(&packet),sizeof(packet))==int(sizeof(packet));}
+      if(transport){if(radio_owned)sent=radio_transport::send(reinterpret_cast<const uint8_t*>(&packet),sizeof(packet))==int(sizeof(packet));}
       else if(uint32_t(peer))sent=wifi_transport::send(wifi_transport::Channel::Diagnostics,peer,reinterpret_cast<const uint8_t*>(&packet),sizeof(packet));
       if(sent)engine.transmitted(packet,now);
     }
@@ -422,8 +465,14 @@ void diagnostic_service(uint32_t now,bool rover,IPAddress peer,bool profile_busy
     if(locked){survey_diagnostic_release();locked=false;}
     quick_locked=false;
   }
+  // The bounded terminal result exchange, after the result settle: UART2 stays
+  // this layer's only until the link owner's verdict is complete (the peer's own
+  // report arrived, or the run failed without one) or kExchangeMs has elapsed.
+  // The engines and their run ids are left as they are, because the link owner
+  // still settles its operation from diagnostic_quick_test_ready().
+  maintain_radio_ownership(now);
   if((paired?pair_engine.state==correctiontest::Done:engine.state==linktest::Done)&&peer_received()&&!persisted_peer)save_result();
-  portENTER_CRITICAL(&guard);cached_busy=test_busy()||probe_phase;portEXIT_CRITICAL(&guard);
+  portENTER_CRITICAL(&guard);cached_busy=test_busy()||radio_owned;portEXIT_CRITICAL(&guard);
   if(now-published>=200)publish(now);
 }
 // The quick test is the existing engine for that medium, armed on the canonical

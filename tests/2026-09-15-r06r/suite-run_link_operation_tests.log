@@ -1,0 +1,8 @@
+PASS: a Test runs on both instruments without adopting the tested medium
+PASS: a failed Test reports failure and leaves the selection alone
+PASS: a Test with no peer verdict fails instead of passing
+PASS: testing the already-selected medium runs instead of settling early
+PASS: a test that could not start reports test_unavailable
+PASS: the engine enforces the profile bounds it carries
+PASS: cancelling a Test stops both peers and keeps the selection
+PASS: production link-operation admission, staleness, cancellation, restoration, recovery, reboot and wire boundaries

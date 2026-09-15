@@ -2,7 +2,7 @@
 
 namespace pair_session {
 namespace {
-constexpr uint32_t freshness_ms=4000, negotiation_ms=20000;
+constexpr uint32_t freshness_ms=4000, negotiation_ms=20000, candidate_grace_ms=3000;
 enum Kind : uint8_t { Hello=1, Proof=2, Offer=3, Accept=4, Confirm=5, Heartbeat=6 };
 struct Message {
   uint8_t kind=0, from=0, to=0, role=0, transport=0;
@@ -121,12 +121,21 @@ bool Engine::receive(const correction::Packet &packet,uint32_t now){
       if(m.target!=boot_||m.echo!=discovery_)return false;
     }
     if(candidate_.stage!=Stage::None&&candidate_.stage!=Stage::Confirm){
-      // An unproven candidate may follow the newest solicitation of that boot.
-      if(m.boot==candidate_.boot&&candidate_.stage==Stage::Challenge&&m.challenge!=candidate_.peer){
-        candidate_.peer=m.challenge;candidate_.local=nonce();candidate_.started=now;candidate_.transmitted=false;
-        return true;
+      // A different boot reclaims an occupied slot only once the occupant has
+      // had its chance to answer: one dead-boot Hello must not hold it for the
+      // whole negotiation window. Untargeted only - a solicited reply keeps its
+      // boot/token binding - and only the unproved candidate is replaced, so
+      // established identities are never displaced by discovery traffic.
+      const bool reclaim=!m.target&&!m.echo&&m.boot!=candidate_.boot
+        &&uint32_t(now-candidate_.started)>=candidate_grace_ms;
+      if(!reclaim){
+        // An unproven candidate may follow the newest solicitation of that boot.
+        if(m.boot==candidate_.boot&&candidate_.stage==Stage::Challenge&&m.challenge!=candidate_.peer){
+          candidate_.peer=m.challenge;candidate_.local=nonce();candidate_.started=now;candidate_.transmitted=false;
+          return true;
+        }
+        return m.boot==candidate_.boot&&m.challenge==candidate_.peer;
       }
-      return m.boot==candidate_.boot&&m.challenge==candidate_.peer;
     }
     candidate_=Candidate{};candidate_.stage=Stage::Challenge;candidate_.boot=m.boot;
     candidate_.peer=m.challenge;candidate_.local=nonce();candidate_.started=now;

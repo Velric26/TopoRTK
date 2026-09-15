@@ -20,6 +20,14 @@ stubs = '''
 bool host_diagnostic_busy=false;
 bool host_radio_active=false;
 bool host_radio_linked=false;
+const char *host_pair_reason="peer_unreachable";
+uint32_t host_link_requests=0,host_link_revision=0,host_link_revision_value=0,host_link_selections=0;
+uint8_t host_link_transport=0;
+char host_link_id[33]={};
+bool host_link_refuse=false,host_link_select_refuse=false;
+const char *host_operation_state="idle",*host_operation_reason="",*host_operation_transport="wifi";
+bool host_operation_active=false,host_operation_storage_ok=true;
+uint32_t host_operation_remaining_ms=0;
 namespace link_service {
 bool radio_active(){return host_radio_active;}
 pair_session::Snapshot snapshot(uint32_t now){
@@ -28,7 +36,7 @@ pair_session::Snapshot snapshot(uint32_t now){
   s.local_boot=web_boot_id();s.peer_boot=0x98765432;s.session=7777777;s.established=true;
   s.peer_age_ms=wifi_last_peer_ms?now-wifi_last_peer_ms:UINT32_MAX;
   s.connected=host_radio_active?host_radio_linked:(wifi_last_peer_ms&&now-wifi_last_peer_ms<4000);
-  s.reason=s.connected?"connected":"peer_unreachable";return s;
+  s.reason=s.connected?"connected":host_pair_reason;return s;
 }
 bool connected(uint32_t now){return snapshot(now).connected;}
 bool radio_submit(const uint8_t *,size_t,uint32_t){return true;}
@@ -38,9 +46,24 @@ IPAddress wifi_peer(){return IPAddress(192,168,4,1);}
 void note_incompatible(uint32_t){}
 void service_settings(uint32_t,bool){}
 bool settings_snapshot(char *,size_t){return false;}
-bool request_operation(link_operation::Kind,Transport,const char *,uint32_t,link_operation::Reason &){return false;}
+// The touchscreen Link-mode page consumes the same published record as the web
+// Settings page, so the double records exactly what the page asked for (R6b).
+uint32_t revision(){return host_link_revision_value;}
+OperationView operation_view(uint32_t){
+  OperationView out;
+  out.state=host_operation_state;out.reason=host_operation_reason;
+  out.transport=host_operation_transport;out.active=host_operation_active;
+  out.storage_ok=host_operation_storage_ok;out.remaining_ms=host_operation_remaining_ms;
+  out.revision=host_link_revision_value;return out;
+}
+bool request_operation(link_operation::Kind,Transport transport,const char *id,uint32_t revision,link_operation::Reason &reason,uint8_t){
+  ++host_link_requests;host_link_transport=uint8_t(transport);host_link_revision=revision;
+  std::snprintf(host_link_id,sizeof(host_link_id),"%s",id?id:"");
+  if(host_link_refuse){reason=link_operation::Reason::Busy;return false;}
+  return true;
+}
 bool cancel_operation(const char *,link_operation::Reason &){return false;}
-bool select(Transport,bool,uint32_t){return true;}
+bool select(Transport,bool,uint32_t){++host_link_selections;return !host_link_select_refuse;}
 }
 void ota_boot_begin(){}
 void ota_service(uint32_t,bool,bool,bool){}
@@ -78,7 +101,8 @@ subprocess.run(['g++', '-std=c++11', '-DTOPORTK_UNIT_ID=2', '-DTOPORTK_DISPLAY_R
                 '-Itest', '-Isrc', '-I.pio/libdeps/unit_b/GFX Library for Arduino/src',
                 '-I.pio/libdeps/unit_a/ArduinoJson/src', 'test/host_hardware.cpp',
                 'src/survey_engine.cpp', 'src/gnss_parser.cpp',
-                'src/touch_input.cpp', '.pio/host_ui_display.cpp', '.pio/host_ui_screens.cpp',
+                'src/touch_input.cpp', 'src/link_operation.cpp',
+                '.pio/host_ui_display.cpp', '.pio/host_ui_screens.cpp',
                 '.pio/host_wifi_transport.cpp', '.pio/host_network_service.cpp',
                 str(generated), '-o', '.pio/test_firmware.exe'], cwd=root, check=True)
 subprocess.run([str(root / '.pio/test_firmware.exe')], cwd=root, check=True)

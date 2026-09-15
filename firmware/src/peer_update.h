@@ -38,4 +38,13 @@ inline bool control(const correction::Packet &p){
   for(unsigned i=52;i<252;++i)if(p.bytes[i])return false;
   return true;
 }
+// The same envelope admission as control(), for an outer version this build
+// recognizes but does not implement: a companion speaking the newer protocol
+// is actionable evidence, never unknown traffic to drop silently.
+inline bool incompatible(const correction::Packet &p){
+  if(!correction::wire_valid(p)||p.bytes[4]!=2||p.bytes[5]!=3)return false;
+  for(unsigned i=6;i<8;++i)if(p.bytes[i])return false;
+  for(unsigned i=52;i<252;++i)if(p.bytes[i])return false;
+  return true;
+}
 } // namespace peer_wire

@@ -1,0 +1,35 @@
+missing_record_keeps_wifi_default: transport=wifi pair_state=negotiating
+PASS missing_record_keeps_wifi_default
+legacy_radio_migration: migrated_transport=1 migrated_valid=1 transport=sik operation_previous=sik
+PASS legacy_radio_migration
+invalid_record(confirmed,corrupt): stored=16 pair_state=recovery_required transport=wifi
+PASS invalid_record
+invalid_record(confirmed,truncated): stored=15 pair_state=recovery_required transport=wifi
+PASS invalid_record
+invalid_record(confirmed,oversized): stored=24 pair_state=recovery_required transport=wifi
+PASS invalid_record
+invalid_record(selection,corrupt): stored=12 pair_state=recovery_required transport=wifi
+PASS invalid_record
+invalid_record(selection,truncated): stored=11 pair_state=recovery_required transport=wifi
+PASS invalid_record
+invalid_record(selection,oversized): stored=20 pair_state=recovery_required transport=wifi
+PASS invalid_record
+invalid_record(pending,corrupt): stored=24 pair_state=recovery_required transport=sik
+PASS invalid_record
+invalid_record(pending,truncated): stored=23 pair_state=recovery_required transport=sik
+PASS invalid_record
+invalid_record(pending,oversized): stored=32 pair_state=recovery_required transport=sik
+PASS invalid_record
+valid_pending_masks_nothing: pair_state=recovery_required operation_active=0
+PASS valid_pending_masks_nothing
+migration_write_failure: pair_state=recovery_required confirmed_records=0
+PASS migration_write_failure
+radio_reservation_published: reserved=1 released=0 radio_writes=0
+PASS radio_reservation_published
+cross_medium_ingress: relayed_control_rx=6 relayed_dropped=6 relayed_connected=0 same_medium_connected=1 same_medium_dropped=0 session=1017397876
+PASS cross_medium_ingress
+incompatible_version: listener_connected=1 selected_reason=protocol_incompatible replay_kept_session=1
+PASS incompatible_version
+radio_fault_isolation: short_writes=15 radio_pair_state=radio_output_fault wifi_connected=1 wifi_peer_connected=1 fault_cleared=1
+PASS radio_fault_isolation
+PASS: production link service, 17 stored-selection/ingress/version/fault cases (hardware, NVS and both portable cores)

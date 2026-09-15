@@ -1,0 +1,13 @@
+{
+  "result": "PASS",
+  "checks": [
+    "320/390/768/1280 px all survey screens",
+    "390 px with 200% text",
+    "collapsed secondary panels",
+    "four setup groups",
+    "visible phone navigation",
+    "keyboard focus",
+    "read-only locking",
+    "no JavaScript errors"
+  ]
+}

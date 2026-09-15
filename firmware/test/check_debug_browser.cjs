@@ -6,6 +6,7 @@ const otaJs=web('update-ui.js'),html=web('debug.html'),nav=web('navigation.js'),
 (async()=>{fs.mkdirSync(out,{recursive:true});const browser=await chromium.launch({channel:'msedge',headless:true});try{
  const context=await browser.newContext({viewport:{width:390,height:844},acceptDownloads:true}),page=await context.newPage(),errors=[],posts=[];
  let enabled=false,owner=false,offline=false,frozen=false,uptime=0,role='ROVER',token='',peerConnected=false;
+ let updateState={version:1,state:'idle',unit:2,available:true,locked:false,boot:'Normal boot',boot_id:7};
  const report={version:1,boot_id:7,uptime_ms:2000,throttled:4,overwritten:8,truncated:1,entries:[{sequence:1,at_ms:1000,channel:'GNSS RX',text:'$GPGGA,passive sample'},{sequence:2,at_ms:1050,channel:'SiK RX',text:'<img src=x onerror="window.injected=true">'}]};
  page.on('pageerror',e=>errors.push(e.message));
  await context.route('**/*',async route=>{const r=route.request(),url=new URL(r.url());
@@ -26,7 +27,7 @@ const otaJs=web('update-ui.js'),html=web('debug.html'),nav=web('navigation.js'),
   if(url.pathname==='/api/v1/survey')return route.fulfill({json:{unit:'B',role,collection:{active:true},gnss:{profile_verified:true,fixed:true}}});
   if(url.pathname==='/api/v1/diagnostic')return route.fulfill({json:{corrections:{transport:'sik',peer_connected:peerConnected,pair_state:peerConnected?'connected':'negotiating',output:{forwarded:42}}}});
   if(url.pathname==='/update-ui.js')return route.fulfill({body:otaJs,contentType:'application/javascript'});
-  if(url.pathname==='/api/v1/update')return route.fulfill({json:{version:1,state:'idle',unit:2,available:true,locked:false,boot:'Normal boot',boot_id:7}});
+  if(url.pathname==='/api/v1/update')return route.fulfill({json:updateState});
   if(url.pathname==='/api.js')return route.fulfill({body:api,contentType:'application/javascript'});
   if(url.pathname==='/navigation.js')return route.fulfill({body:nav,contentType:'application/javascript'});
   if(url.pathname==='/survey')return route.fulfill({body:'<nav><button>Jobs</button><button>Setup</button><button>Collect</button><button>Points</button></nav><button type="button" id="debugTab" data-navigation disabled>Debug</button><p id="debugAvailability" class="help"></p><p id="debugPeerNote" class="help" hidden></p><script src="/navigation.js"></script>',contentType:'text/html'});
@@ -39,6 +40,12 @@ const otaJs=web('update-ui.js'),html=web('debug.html'),nav=web('navigation.js'),
  assert.equal(await page.locator('#gnss').innerText(),'RTK FIXED');assert.equal(await page.locator('#forwarded').innerText(),'42');
  assert.match(await page.locator('#route').innerText(),/not connected/i); // Receiver FIXED does not prove peer connectivity.
  peerConnected=true;await page.waitForFunction(()=>document.querySelector('#route').textContent.includes('Peer connected'));
+ // R7b: the update card title carries the live upload percentage while bytes are in flight.
+ assert.equal(await page.locator('#updateHeading').innerText(),'Updating Firmware');
+ updateState={...updateState,state:'uploading',received:4200,total:10000};
+ await page.waitForFunction(()=>document.querySelector('#updateHeading').textContent==='Updating Firmware \u2013 42%');
+ updateState={...updateState,state:'idle'};
+ await page.waitForFunction(()=>document.querySelector('#updateHeading').textContent==='Updating Firmware');
  await page.waitForTimeout(2500);assert(!posts.some(p=>p.data.op==='activity'),'no idle-timer activity posts');
  await page.locator('#filter').selectOption('SiK RX');assert(!(await page.locator('#log').innerText()).includes('GPGGA'));
  const downloaded=page.waitForEvent('download');await page.locator('#download').click();const download=await downloaded;assert.deepEqual(JSON.parse(fs.readFileSync(await download.path(),'utf8')),report);
@@ -52,5 +59,5 @@ const otaJs=web('update-ui.js'),html=web('debug.html'),nav=web('navigation.js'),
  await page.goto('http://debug.test/survey');await page.waitForSelector('#debugTab');assert(await page.locator('#debugTab').isDisabled());
  offline=true;await page.waitForFunction(()=>document.querySelector('#debugAvailability').textContent.includes('disconnected'));assert(await page.locator('#debugTab').isDisabled());
  assert(posts.every(p=>p.path==='/api/v1/control'||p.path==='/api/v1/debug'),'passive page must not send survey, GNSS or radio commands');assert.deepEqual(errors,[]);
- fs.writeFileSync(path.join(out,'debug-browser.json'),JSON.stringify({result:'PASS',checks:['gray tab and enable instructions','hardware-enabled availability','takeover without PIN','monitoring while occupation is active','no idle timer; debug persists until disabled','text escaping/filter/download/pause','controller loss clears private view','stale/offline and timeout disable access','role-specific update warnings and guarded OTA controls','320/390/768/1280 layouts','no active diagnostic or survey commands']},null,2));console.log('PASS: Debug navigation, passive browser, persistent debug, role warnings, downloads and responsive layout');
+ fs.writeFileSync(path.join(out,'debug-browser.json'),JSON.stringify({result:'PASS',checks:['gray tab and enable instructions','hardware-enabled availability','takeover without PIN','monitoring while occupation is active','no idle timer; debug persists until disabled','text escaping/filter/download/pause','controller loss clears private view','stale/offline and timeout disable access','role-specific update warnings and guarded OTA controls','update card heading with live upload percentage','320/390/768/1280 layouts','no active diagnostic or survey commands']},null,2));console.log('PASS: Debug navigation, passive browser, persistent debug, role warnings, downloads and responsive layout');
  }finally{await browser.close()}})().catch(e=>{console.error(e);process.exitCode=1});

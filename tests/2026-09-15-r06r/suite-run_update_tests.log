@@ -1,0 +1,4 @@
+PASS: update notice wire corruption, bounded retry/loss, role/session/attempt isolation, reorder/cancel tombstones, deadline and timer wrap, recovery quality gate (1000 fault runs)
+PASS: production OTA service, 23 admission/upload/ownership/failure/boot cases (hardware and SHA primitives doubled)
+PASS: wifi production pair/OTA notices, retry loss, reboot isolation, current-boot quality recovery, cancel tombstones and UART framing
+PASS: radio production pair/OTA notices, retry loss, reboot isolation, current-boot quality recovery, cancel tombstones and UART framing

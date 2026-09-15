@@ -6,6 +6,11 @@ class IPAddress;
 constexpr size_t kDiagnosticCapacity=6144;
 void diagnostic_begin();
 void diagnostic_service(uint32_t now,bool rover,IPAddress peer,bool profile_busy);
+// True while this layer occupies the instrument: an engine run on either medium,
+// the UART2 probe, or the bounded terminal result exchange that follows a SiK
+// run (its engine has finished, but the verdict the link owner settles from is
+// still incomplete). The same value is published as the snapshot's "busy", and
+// the snapshot's "radio_owned" reports that UART2 share alone.
 bool diagnostic_busy();
 bool diagnostic_request(const char *json);
 bool diagnostic_snapshot(char *out,size_t capacity);
