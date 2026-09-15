@@ -19,8 +19,9 @@ generated = root / '.pio/host_firmware.cpp'
 stubs = '''
 bool host_diagnostic_busy=false;
 bool host_radio_active=false;
+bool host_radio_linked=false;
 bool correction_radio_active(){return host_radio_active;}
-bool correction_radio_linked(uint32_t){return false;}
+bool correction_radio_linked(uint32_t){return host_radio_linked;}
 bool correction_radio_submit(const uint8_t *,size_t,uint32_t){return true;}
 void correction_radio_stop(){host_radio_active=false;}
 void correction_radio_clear_pending(){}

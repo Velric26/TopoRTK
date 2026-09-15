@@ -28,6 +28,7 @@
 #include "survey_service.h"
 #include "correction_health.h"
 #include "correction_queue.h"
+#include "instrument_status.h"
 #include "link_diagnostic.h"
 #include "debug_service.h"
 #include "ota_service.h"
@@ -772,20 +773,49 @@ uint16_t fix_color(int quality) {
 }
 
 
-bool peer_linked(uint32_t now) {
-  if (wifi_last_peer_ms == 0 || now - wifi_last_peer_ms > 3000) return false;
-  if (is_base() && !using_local_router()) {
-    return wifi_peer_known && network_service::clients() > 0;
-  }
-  return station_connected();
+bool fresh_gnss_time(uint32_t now);
+uint32_t verified_correction_age(uint32_t now);
+instrument_status::Status status_snapshot(uint32_t now) {
+  // One interpretation of transport, peer, corrections, GNSS and readiness.
+  // Thresholds are the pre-R4 ones, moved verbatim into instrument_status.
+  instrument_status::Inputs in;
+  in.transport = correction_radio_active() ? instrument_status::Transport::Radio
+                                           : instrument_status::Transport::WiFi;
+  in.wifi_peer_known = wifi_peer_known;
+  in.wifi_peer_age_valid = wifi_last_peer_ms != 0;
+  in.wifi_peer_age_ms = wifi_last_peer_ms ? now - wifi_last_peer_ms : 0;
+  in.base_direct_ap = is_base() && !using_local_router();
+  in.base_direct_client = network_service::clients() > 0;
+  in.wifi_station_up = station_connected();
+  in.radio_active = correction_radio_active();
+  in.radio_linked = correction_radio_linked(now);
+  in.wifi_station_rssi_valid = station_connected();
+  in.wifi_station_rssi_dbm = network_service::rssi();
+  in.wifi_peer_report_valid = wifi_peer_known;
+  in.wifi_peer_report_dbm = wifi_peer_rssi_dbm;
+  in.correction_age_valid = verified_correction_age(now) != UINT32_MAX;
+  in.correction_age_ms = verified_correction_age(now);
+  in.base_rtcm_output = device_config.base_rtcm;
+  in.gga_received = latest_gga.received;
+  in.gga_age_ok = latest_gga.received && now - last_gga_ms <= 3000;
+  in.fix_quality = latest_gga.received ? latest_gga.quality : -1;
+  in.receiver_role_matches = std::strcmp(receiver_role, is_base() ? "BASE" : "ROVER") == 0;
+  in.base_role = is_base();
+  in.time_valid = fresh_gnss_time(now);
+  in.uart_online = byte_count > 0 && now - last_rx_ms < 3000;
+  in.version_ok = version_ok;
+  in.profile_applied = unit_profile_applied;
+  in.device_available = !diagnostic_busy() && !ota_locked();
+  return instrument_status::evaluate(in);
 }
 
-int16_t current_link_rssi() {
-  if (!is_base() && station_connected()) {
-    return network_service::rssi();
-  }
-  return wifi_peer_rssi_dbm;
-}
+bool gps_required_fix() { return status_snapshot(millis()).gnss.required_fix; }
+bool correction_link_connected(uint32_t now) { return status_snapshot(now).link_connected; }
+bool fresh_rover_corrections(uint32_t now) { return status_snapshot(now).corrections.fresh; }
+bool system_ready(uint32_t now) { return status_snapshot(now).readiness.system_ready; }
+
+int16_t current_link_rssi() { return status_snapshot(millis()).signal.rssi_dbm; }
+bool current_link_rssi_valid() { return status_snapshot(millis()).signal.valid; }
 
 const char *link_quality_label(int16_t rssi) {
   if (rssi >= -60) return "EXCELLENT";
@@ -806,17 +836,7 @@ bool fresh_gnss_time(uint32_t now) {
 }
 
 
-bool gps_required_fix() {
-  if (!unit_profile_applied || !latest_gga.received || millis() - last_gga_ms > 3000) return false;
-  if (std::strcmp(receiver_role, is_base() ? "BASE" : "ROVER") != 0) return false;
-  if (std::strcmp(receiver_role, "BASE") == 0) return latest_gga.quality == 7;
-  if (std::strcmp(receiver_role, "ROVER") == 0) return latest_gga.quality == 4;
-  return false;
-}
 
-bool correction_link_connected(uint32_t now) {
-  return correction_radio_active()?correction_radio_linked(now):peer_linked(now);
-}
 
 uint32_t verified_correction_age(uint32_t now){
   const auto &f=latest_horizontal_accuracy;
@@ -827,18 +847,6 @@ const char *correction_health_state(uint32_t now){
   return correction_health.state(now,f.received&&f.position_valid,f.received_ms,f.differential_age_ms,f.solution_station);
 }
 
-bool fresh_rover_corrections(uint32_t now) {
-  return is_base() ? device_config.base_rtcm :
-         verified_correction_age(now)<=3000;
-}
-
-bool system_ready(uint32_t now) {
-  if(diagnostic_busy()||ota_locked())return false;
-  const bool uart_active = byte_count > 0 && now - last_rx_ms < 3000;
-  return uart_active && version_ok && unit_profile_applied &&
-         correction_link_connected(now) && gps_required_fix() &&
-         fresh_rover_corrections(now);
-}
 
 uint16_t page_header_color(uint32_t now) {
   bool ready = false;
@@ -919,10 +927,16 @@ void sd_log_solution(uint32_t now) {
   const long rtcm_age = rtcm_last_rx_ms == 0
                             ? -1L
                             : static_cast<long>(now - rtcm_last_rx_ms);
-  const int16_t rssi = current_link_rssi();
+  const auto link = status_snapshot(now);
+  char rssi[8] = "";
+  if (link.signal.valid) {
+    std::snprintf(rssi, sizeof(rssi), "%d", link.signal.rssi_dbm);
+  }
+  const char *transport_label = link.transport == instrument_status::Transport::Radio ? "SIK"
+                                : link.transport == instrument_status::Transport::WiFi ? "WIFI" : "-";
   char line[320] = {};
   std::snprintf(line, sizeof(line),
-                "%lu,%s,%s,%s,%.8f,%.8f,%.3f,%d,%.2f,%s,%ld,%d,%lu,%lu,%lu,%lu,%lu,%lu\n",
+                "%lu,%s,%s,%s,%.8f,%.8f,%.3f,%d,%.2f,%s,%ld,%s,%lu,%lu,%lu,%lu,%lu,%lu,%s\n",
                 static_cast<unsigned long>(now), latest_gnss_time.valid
                                                   ? latest_gga.utc
                                                   : "---",
@@ -935,7 +949,8 @@ void sd_log_solution(uint32_t now) {
                 static_cast<unsigned long>(rtcm_wifi_rx_frames),
                 static_cast<unsigned long>(rtcm_forwarded_bytes),
                 static_cast<unsigned long>(wifi_sequence_gaps),
-                static_cast<unsigned long>(wifi_invalid_packets));
+                static_cast<unsigned long>(wifi_invalid_packets),
+                transport_label);
   sd_append_text(path, line);
 }
 
@@ -997,7 +1012,7 @@ void setup_sd_logging() {
   sd_append_text(path, "uptime_ms,unit,utc,event,detail\n");
   std::snprintf(path, sizeof(path), "%s/solution.csv", sd_session_path);
   sd_append_text(path,
-                 "uptime_ms,utc_time,utc_status,fix,latitude,longitude,altitude_m,satellites,hdop,h_acc,rtcm_age_ms,link_rssi_dbm,rtcm_uart_frames,rtcm_wifi_tx_frames,rtcm_wifi_rx_frames,rtcm_forwarded_bytes,wifi_sequence_gaps,wifi_invalid_packets\n");
+                 "uptime_ms,utc_time,utc_status,fix,latitude,longitude,altitude_m,satellites,hdop,h_acc,rtcm_age_ms,link_rssi_dbm,rtcm_uart_frames,rtcm_wifi_tx_frames,rtcm_wifi_rx_frames,rtcm_forwarded_bytes,wifi_sequence_gaps,wifi_invalid_packets,link_transport\n");
   std::snprintf(path, sizeof(path), "%s/config.csv", sd_session_path);
   sd_append_text(path, "uptime_ms,unit,profile,notes\n");
   char session_path[160] = {};
@@ -1014,14 +1029,13 @@ void setup_sd_logging() {
 }
 
 void service_sd_logging() {
-  if (!sd_ready || !sd_test_passed) return;
   const uint32_t now = millis();
   const bool uart_active = byte_count > 0 && now - last_rx_ms < 3000;
-  const bool linked = peer_linked(now);
+  const int quality = latest_gga.received ? latest_gga.quality : -1;
+  const bool linked = correction_link_connected(now); // Transport-aware: radio or Wi-Fi.
   const bool rtcm_active = is_base()
                                ? rtcm_uart_frames > 0
                                : rtcm_last_rx_ms > 0 && now - rtcm_last_rx_ms <= 3000;
-  const int quality = latest_gga.received ? latest_gga.quality : -1;
   if (!sd_state_initialized) {
     sd_state_initialized = true;
     sd_last_uart_active = uart_active;
@@ -1169,18 +1183,17 @@ void ui_build_frame(UiFrame &f, uint32_t now) {
     }
   }
   if (debug_enabled()) std::strncat(f.header_subtitle, " -DBG", sizeof(f.header_subtitle) - std::strlen(f.header_subtitle) - 1);
-
   if (current_page == ScreenPage::kMain) {
-    const bool linked = correction_link_connected(now);
-    const int16_t rssi = current_link_rssi();
-    const bool radio = correction_radio_active();
+    const auto link = status_snapshot(now);
+    const bool linked = link.link_connected;
+    const bool radio = link.transport == instrument_status::Transport::Radio;
     if (linked) {
       if (radio) std::strcpy(f.link_value, "Radio Connected");
-      else std::snprintf(f.link_value, sizeof(f.link_value), "Wi-Fi  %d dBm", rssi);
+      else std::snprintf(f.link_value, sizeof(f.link_value), "Wi-Fi  %d dBm", link.signal.rssi_dbm);
     } else {
       std::snprintf(f.link_value, sizeof(f.link_value), "%s Disconnected", radio ? "Radio" : "Wi-Fi");
     }
-    f.link_color = !linked ? RGB565_RED : radio ? RGB565_GREEN : link_quality_color(rssi);
+    f.link_color = !linked ? RGB565_RED : radio ? RGB565_GREEN : link_quality_color(link.signal.rssi_dbm);
     std::snprintf(f.fix_value, sizeof(f.fix_value), "%s", current_fix_label(now));
     f.fix_card_color = now - last_gga_ms > 3000 ? RGB565_RED : fix_color(latest_gga.quality);
     format_horizontal_accuracy(f.hacc_value, sizeof(f.hacc_value), now);
@@ -1255,19 +1268,20 @@ void ui_build_frame(UiFrame &f, uint32_t now) {
   }
 
   if (current_page == ScreenPage::kWifiDetails) {
-    const bool linked = peer_linked(now);
-    const int16_t rssi = current_link_rssi();
+    const auto link = status_snapshot(now);
+    const bool linked = link.link_connected; // Transport-aware: radio or Wi-Fi.
     std::snprintf(f.wifi_mode, sizeof(f.wifi_mode), "%s", wifi_transport_label());
     std::snprintf(f.wifi_ssid, sizeof(f.wifi_ssid), "%s", active_wifi_ssid());
     const IPAddress local_ip = network_service::address();
     std::snprintf(f.wifi_ip, sizeof(f.wifi_ip), "%u.%u.%u.%u", local_ip[0], local_ip[1],
                   local_ip[2], local_ip[3]);
     std::snprintf(f.wifi_link, sizeof(f.wifi_link), "%s", linked ? "LINKED" : "NO LINK");
-    if (linked) {
-      std::snprintf(f.wifi_rssi, sizeof(f.wifi_rssi), "%d dBm  %s", rssi,
-                    link_quality_label(rssi));
+    // Signal strength is only known on Wi-Fi; the radio reports none.
+    if (linked && link.signal.valid) {
+      std::snprintf(f.wifi_rssi, sizeof(f.wifi_rssi), "%d dBm  %s", link.signal.rssi_dbm,
+                    link_quality_label(link.signal.rssi_dbm));
     } else {
-      std::strcpy(f.wifi_rssi, "---");
+      std::strcpy(f.wifi_rssi, link.transport == instrument_status::Transport::Radio ? "N/A (RADIO)" : "---");
     }
     if (wifi_peer_known) {
       std::snprintf(f.wifi_peer, sizeof(f.wifi_peer), "%u.%u.%u.%u", wifi_peer[0],
@@ -1438,7 +1452,8 @@ void service_swipe_navigation() {
 
 
 size_t format_web_status(char *output, size_t capacity, uint32_t now) {
-  const bool linked = correction_link_connected(now);
+  const auto link = status_snapshot(now);
+  const bool linked = link.link_connected;
   const bool fresh_gga = latest_gga.received && now - last_gga_ms <= 3000;
   const bool online = version_ok && byte_count > 0 && now - last_rx_ms < 3000;
   char accuracy[32], accuracy_m[32] = "null", quality[16] = "null", satellites[16] = "null";
@@ -1452,11 +1467,12 @@ size_t format_web_status(char *output, size_t capacity, uint32_t now) {
   if (std::strcmp(accuracy, "---") != 0 && std::strcmp(accuracy, "N/A (BASE)") != 0)
     std::snprintf(accuracy_m, sizeof(accuracy_m), "%.6f", latest_horizontal_accuracy.horizontal_1drms_m);
   if (latest_gga.received) std::snprintf(gga_age, sizeof(gga_age), "%lu", static_cast<unsigned long>(now-last_gga_ms));
-  if (wifi_last_peer_ms&&!correction_radio_active()) std::snprintf(peer_age, sizeof(peer_age), "%lu", static_cast<unsigned long>(now-wifi_last_peer_ms));
+  if (link.peer.age_valid && link.transport == instrument_status::Transport::WiFi)
+    std::snprintf(peer_age, sizeof(peer_age), "%lu", static_cast<unsigned long>(link.peer.age_ms));
   if (verified_correction_age(now)!=UINT32_MAX) std::snprintf(correction_age, sizeof(correction_age), "%lu", static_cast<unsigned long>(verified_correction_age(now)));
-  if (linked&&!correction_radio_active()) {
-    std::snprintf(rssi, sizeof(rssi), "%d", current_link_rssi());
-    std::snprintf(signal, sizeof(signal), "\"%s\"", link_quality_label(current_link_rssi()));
+  if (linked&&link.signal.valid) {
+    std::snprintf(rssi, sizeof(rssi), "%d", link.signal.rssi_dbm);
+    std::snprintf(signal, sizeof(signal), "\"%s\"", link_quality_label(link.signal.rssi_dbm));
   }
   uint16_t year; uint8_t month, day, hour, minute, second;
   if (local_time_utc_minus_6(now, latest_gnss_time, year, month, day, hour, minute, second)) {
@@ -1481,7 +1497,7 @@ size_t format_web_status(char *output, size_t capacity, uint32_t now) {
     is_base() ? "BASE" : "ROVER", unit_profile_applied ? "VERIFIED" : profile_failed ? "FAILED" : "CONFIGURING",
     system_ready(now) ? "true" : "false", gps_required_fix() ? "true" : "false", linked ? "true" : "false",
     online ? "true" : "false", current_fix_label(now), quality, gga_age, satellites, accuracy_m, accuracy,
-    linked ? "true" : "false", correction_radio_active()?"SiK RADIO":wifi_transport_label(), signal, rssi, peer_age, correction_age,correction_health_state(now),
+    linked ? "true" : "false", link.transport == instrument_status::Transport::Radio ? "SiK RADIO" : wifi_transport_label(), signal, rssi, peer_age, correction_age,correction_health_state(now),
     static_cast<unsigned long>(wifi_rx_packets), static_cast<unsigned long>(wifi_sequence_gaps),
     static_cast<unsigned long>(wifi_invalid_packets), static_cast<unsigned long>(correction_output_forwarded), local, utc,
     rover_ap_ready() ? "true" : "false",rover_ap_ssid(),rover_ap_address(),rover_ap_clients(),

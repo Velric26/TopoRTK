@@ -1,6 +1,11 @@
 #pragma once
 // Minimal hardware doubles for exercising the actual firmware on a PC.
-#include <algorithm>
+#include <cmath>
+#include <cstdint>
+#include <cstdio>
+#include <cstring>
+#include <fstream>
+#include <map>
 #include <array>
 #include <cassert>
 #include <cmath>
@@ -172,22 +177,52 @@ class TCA9554 {
   void pinMode1(int,int) {}
   void write1(int,int) {}
 };
-class File : public HostPrint {
+// Memory-backed SD double: CSV/log assertions read written content directly.
+class File {
  public:
-  explicit operator bool() const { return false; }
+  std::string *destination = nullptr;
+  bool ok = false;
+  File(std::string *destination_ptr = nullptr, bool valid = false)
+      : destination(destination_ptr), ok(valid) {}
+  explicit operator bool() const { return ok; }
   void flush() {}
-  void close() {}
-  size_t readBytes(char *, size_t) { return 0; }
+  void close() { destination = nullptr; }
+  size_t readBytes(char *out, size_t length) {
+    if (!destination) return 0;
+    const size_t count = std::min(length, destination->size());
+    std::memcpy(out, destination->data(), count);
+    return count;
+  }
+  template<class... Args> size_t printf(const char *format, Args... args) {
+    char buffer[512];
+    std::snprintf(buffer, sizeof(buffer), format, args...);
+    return print(buffer);
+  }
+  size_t print(const char *text) {
+    if (!destination) return 0;
+    *destination += text;
+    return std::strlen(text);
+  }
 };
 struct HostSD {
-  bool exists(const char *) {return false;}
+  std::map<std::string, std::string> files;
+  bool fail = false;
+  bool exists(const char *path) { return files.count(path) != 0; }
   void setPins(int,int,int) {}
-  bool begin(const char *,bool,bool) { return false; }
-  uint64_t cardSize() { return 0; }
-  uint64_t totalBytes() { return 0; }
+  bool begin(const char *,bool,bool) { return !fail; }
+  uint64_t cardSize() { return 16ULL*1024*1024; }
+  uint64_t totalBytes() { return 16ULL*1024*1024; }
   uint64_t usedBytes() { return 0; }
-  bool mkdir(const char *) { return true; }
-  File open(const char *,int) { return File{}; }
+  bool mkdir(const char *) { return !fail; }
+  File open(const char *path, int mode) {
+    if (fail) return File{};
+    if (mode == FILE_READ) {
+      auto it = files.find(path);
+      if (it == files.end()) return File{};
+      return File{&it->second, true};
+    }
+    return File{&files[path], true};
+  }
 };
 static HostSD SD_MMC;
 

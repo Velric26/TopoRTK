@@ -265,6 +265,60 @@ int main() {
   assert(format_web_status(json, sizeof(json), host_now) > 0);
   assert(std::strstr(json, "\"horizontal_uncertainty_m\":null"));
   latest_horizontal_accuracy.horizontal_1drms_m = valid_accuracy;
+
+  // R4 agreement: LCD frame, web JSON and CSV must agree on transport,
+  // link state and signal availability in both radio and Wi-Fi modes.
+  setup_sd_logging();
+  assert(sd_ready && sd_test_passed);
+  latest_gga.received = true; latest_gga.quality = 4; last_gga_ms = host_now;
+  latest_gnss_time.valid = true; latest_gnss_time.received_ms = host_now;
+  wifi_last_peer_ms = host_now; rtcm_last_rx_ms = host_now;
+  auto csv_field = [&](const char *file, unsigned column) {
+    const std::string path = std::string(sd_session_path) + "/" + file;
+    const std::string &content = SD_MMC.files[path];
+    const size_t begin = content.find_last_of('\n', content.size() - 2) + 1;
+    const std::string last = content.substr(begin, content.find('\n', begin) - begin);
+    unsigned index = 0; size_t start = 0;
+    while (start <= last.size()) {
+      const size_t comma = last.find(',', start);
+      if (index == column) return last.substr(start, comma == std::string::npos ? std::string::npos : comma - start);
+      if (comma == std::string::npos) break;
+      start = comma + 1; ++index;
+    }
+    return std::string();
+  };
+  // Radio mode: transport is SiK, no RSSI is fabricated, LCD shows radio state.
+  host_radio_active = true; host_radio_linked = true;
+  host_now += 1000;
+  service_sd_logging(); sd_log_solution(host_now);
+  assert(format_web_status(json, sizeof(json), host_now) > 0);
+  assert(std::strstr(json, "\"transport\":\"SiK RADIO\""));
+  assert(std::strstr(json, "\"rssi_dbm\":null"));
+  assert(std::strstr(json, "\"peer_age_ms\":null"));
+  assert(std::strstr(json, "\"correction_link_connected\":true"));
+  assert(csv_field("solution.csv", 11).empty());          // link_rssi_dbm unknown on radio
+  assert(csv_field("solution.csv", 18) == "SIK");         // link_transport
+  change_page(ScreenPage::kMain);
+  ui_build_frame(ui_frame, host_now);
+  assert(std::strcmp(ui_frame.link_value, "Radio Connected") == 0);
+  change_page(ScreenPage::kWifiDetails);
+  ui_build_frame(ui_frame, host_now);
+  assert(std::strcmp(ui_frame.wifi_link, "LINKED") == 0);
+  assert(std::strcmp(ui_frame.wifi_rssi, "N/A (RADIO)") == 0);
+  // Wi-Fi mode: transport label, real station RSSI and peer age are reported.
+  host_radio_active = false; host_radio_linked = false;
+  host_now += 1000; wifi_last_peer_ms = host_now; rtcm_last_rx_ms = host_now;
+  service_sd_logging(); sd_log_solution(host_now);
+  assert(format_web_status(json, sizeof(json), host_now) > 0);
+  assert(std::strstr(json, "\"transport\":\"DIRECT LINK\"")); // Saved host config is Direct Link.
+  assert(std::strstr(json, "\"rssi_dbm\":-48"));
+  assert(std::strstr(json, "\"peer_age_ms\":0") || std::strstr(json, "\"peer_age_ms\":"));
+  assert(csv_field("solution.csv", 11) == "-48");
+  assert(csv_field("solution.csv", 18) == "WIFI");
+  change_page(ScreenPage::kMain);
+  ui_build_frame(ui_frame, host_now);
+  assert(std::strcmp(ui_frame.link_value, "Wi-Fi  -48 dBm") == 0);
+  change_page(ScreenPage::kMain);
   // Actual AP storage/lifecycle, subnet routing and local password UI.
   assert(rover_ap_ready() && std::strlen(rover_ap_password())==9 && rover_ap_password()[4]=='.');
   for (int i=0;i<9;++i) if (i!=4) assert(rover_ap_password()[i]>='0' && rover_ap_password()[i]<='9');
