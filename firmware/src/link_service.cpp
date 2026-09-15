@@ -466,7 +466,7 @@ void service(uint32_t now, bool rover, bool radio_reserved) {
     const auto op = operation.snapshot(now);
     if (test_armed) {
       if (op.kind == link_operation::Kind::Test && op.active) {
-        if (diagnostic_quick_test_finished(now)) {
+        if (diagnostic_quick_test_ready(now)) {
           operation.test_result(diagnostic_quick_test_pass(now), now);
           test_armed = false;
         }

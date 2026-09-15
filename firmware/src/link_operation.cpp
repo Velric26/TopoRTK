@@ -3,9 +3,11 @@
 namespace link_operation {
 namespace {
 constexpr uint32_t negotiate_ms = 20000, commit_ms = 10000, restore_ms = 10000, retry_ms = 500;
-// A Test runs the canonical 30 s profile; this window is the coordinator's bound
-// on waiting for both verdicts, not the run length itself.
-constexpr uint32_t test_run_ms = 40000;
+// A Test runs the canonical 30 s profile. This window bounds the coordinator's
+// wait for both verdicts and has to cover handing the run over to the delegate
+// (arm and Hello handshake), the full run, and the delegate's verdict coming
+// back — so it is the run length plus generous margin, never less.
+constexpr uint32_t test_run_ms = 60000;
 constexpr uint32_t tombstone_ms = 60000;
 bool expired(uint32_t now, uint32_t since, uint32_t limit) { return uint32_t(now - since) >= limit; }
 bool kind_valid(uint8_t kind) { return kind >= Request && kind <= Run; }

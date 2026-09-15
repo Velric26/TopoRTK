@@ -433,6 +433,14 @@ bool diagnostic_quick_test_start(uint8_t medium,uint8_t profile,uint32_t now){
 // the queries below never advance engine state themselves.
 bool diagnostic_quick_test_busy(uint32_t){return any_engine_busy();}
 bool diagnostic_quick_test_finished(uint32_t){return engine.state==linktest::Done||engine.state==linktest::Failed||pair_engine.state==correctiontest::Done||pair_engine.state==correctiontest::Failed;}
+// The run has ended and its verdict is complete: a terminal state whose peer
+// report arrived, or a failure that will never produce one (peer_timeout,
+// cancellation, role change). "peer_report_received" in result_json() is
+// exactly the peer flag used here, for both engines.
+bool diagnostic_quick_test_ready(uint32_t){
+  if(paired)return pair_engine.state==correctiontest::Failed||(pair_engine.state==correctiontest::Done&&pair_engine.peer_received);
+  return engine.state==linktest::Failed||(engine.state==linktest::Done&&engine.peer_result);
+}
 bool diagnostic_quick_test_pass(uint32_t){return paired?pair_engine.pair_pass():engine.pair_pass();}
 void diagnostic_quick_test_cancel(const char *why,uint32_t now){
   if(!why||!*why)why="cancelled";

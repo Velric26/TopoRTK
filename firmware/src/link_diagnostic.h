@@ -35,6 +35,11 @@ bool diagnostic_quick_test_start(uint8_t transport,uint8_t profile,uint32_t run,
 bool diagnostic_quick_test_busy(uint32_t now);
 // True once the run reached a terminal state (Done or Failed), regardless of pass/fail.
 bool diagnostic_quick_test_finished(uint32_t now);
+// True once the run has ended *and* the final verdict is available, i.e. the
+// peer's own report has arrived (or the run failed without one). pair_pass() is
+// only meaningful when this is true; the operation's own run window is what
+// fails a test whose peer never reports.
+bool diagnostic_quick_test_ready(uint32_t now);
 // The local verdict, valid only when finished(): pair_pass (never true without the
 // peer's own result).
 bool diagnostic_quick_test_pass(uint32_t now);

@@ -1,101 +1,77 @@
 {
+  "unit_versions": {
+    "rover": "0.11.28-arch-r9a5",
+    "base": "0.11.28-arch-r9a5"
+  },
   "steps": [
-    "claimed control",
-    "before: selected=wifi revision=10 peer=true",
-    "link.test sik/clean: HTTP 202 {\"state\":\"queued\"}",
-    "sik/clean settled: failed/conflict committed=false selected=wifi revision=10 quick_test_error=(none) tests={\"wifi\":null,\"sik\":{\"run\":424242,\"state\":\"failed\",\"reason\":\"cancelled\",\"transport\":\"sik\",\"role\":\"ROVER\",\"sent\":0,\"received\":0,\"errors\":0,\"pair_pass\":false,\"local_pass\":false}}",
-    "link.test wifi/clean: HTTP 202 {\"state\":\"queued\"}",
-    "wifi/clean settled: failed/peer_unreachable committed=false selected=wifi revision=10 quick_test_error=(none) tests={\"wifi\":{\"run\":842155,\"state\":\"done\",\"reason\":\"complete\",\"transport\":\"wifi\",\"role\":\"ROVER\",\"sent\":0,\"received\":117,\"errors\":0,\"pair_pass\":true,\"local_pass\":true},\"sik\":{\"run\":424242,\"state\":\"failed\",\"reason\":\"cancelled\",\"transport\":\"sik\",\"role\":\"ROVER\",\"sent\":0,\"received\":0,\"errors\":0,\"pair_pass\":false,\"local_pass\":false}}",
-    "link.test sik/injected: HTTP 202 {\"state\":\"queued\"}",
-    "sik/injected settled: failed/peer_unreachable committed=false selected=wifi revision=10 quick_test_error=(none) tests={\"wifi\":{\"run\":842155,\"state\":\"done\",\"reason\":\"complete\",\"transport\":\"wifi\",\"role\":\"ROVER\",\"sent\":0,\"received\":117,\"errors\":0,\"pair_pass\":true,\"local_pass\":true},\"sik\":{\"run\":424242,\"state\":\"failed\",\"reason\":\"cancelled\",\"transport\":\"sik\",\"role\":\"ROVER\",\"sent\":0,\"received\":0,\"errors\":0,\"pair_pass\":false,\"local_pass\":false}}"
+    "FAIL quick test sik runs and passes: HTTP 202, operation failed/peer_unreachable, last_tests={\"run\":332545,\"state\":\"done\",\"reason\":\"complete\",\"transport\":\"sik\",\"role\":\"ROVER\",\"sent\":0,\"received\":10,\"errors\":0,\"pair_pass\":false,\"local_pass\":false}",
+    "PASS quick test wifi runs and passes: HTTP 202, operation succeeded/applied, last_tests={\"run\":610475,\"state\":\"done\",\"reason\":\"complete\",\"transport\":\"wifi\",\"role\":\"ROVER\",\"sent\":0,\"received\":117,\"errors\":0,\"pair_pass\":true,\"local_pass\":true}",
+    "PASS injected profile refused on Wi-Fi: HTTP 503 {\"error\":\"test_operation_not_available\"}",
+    "FAIL cancel ends an admitted test and keeps the route: in flight=running, cancel HTTP 400, outcome failed/test_failed, selected=wifi revision=10",
+    "PASS selected route and revision never move: selected=wifi revision=10 (was wifi/10)",
+    "PASS no generated traffic reaches the UM980: 0 of 32 log entries"
   ],
-  "sequences": [
+  "cases": [
     {
-      "test": "sik/clean",
-      "transport": "sik",
-      "profile": "clean",
-      "observations": [
-        "negotiating/ selected=wifi",
-        "failed/conflict selected=wifi"
-      ]
+      "name": "quick test sik runs and passes",
+      "expectation": "202, operation succeeded, last_tests.sik.pair_pass true",
+      "observed": "HTTP 202, operation failed/peer_unreachable, last_tests={\"run\":332545,\"state\":\"done\",\"reason\":\"complete\",\"transport\":\"sik\",\"role\":\"ROVER\",\"sent\":0,\"received\":10,\"errors\":0,\"pair_pass\":false,\"local_pass\":false}",
+      "pass": false
     },
     {
-      "test": "wifi/clean",
-      "transport": "wifi",
-      "profile": "clean",
-      "observations": [
-        "negotiating/ selected=wifi",
-        "running/ selected=wifi",
-        "failed/peer_unreachable selected=wifi"
-      ]
+      "name": "quick test wifi runs and passes",
+      "expectation": "202, operation succeeded, last_tests.wifi.pair_pass true",
+      "observed": "HTTP 202, operation succeeded/applied, last_tests={\"run\":610475,\"state\":\"done\",\"reason\":\"complete\",\"transport\":\"wifi\",\"role\":\"ROVER\",\"sent\":0,\"received\":117,\"errors\":0,\"pair_pass\":true,\"local_pass\":true}",
+      "pass": true
     },
     {
-      "test": "sik/injected",
-      "transport": "sik",
-      "profile": "injected",
-      "observations": [
-        "negotiating/ selected=wifi",
-        "running/ selected=wifi",
-        "failed/peer_unreachable selected=wifi"
-      ]
+      "name": "injected profile refused on Wi-Fi",
+      "expectation": "503 test_operation_not_available",
+      "observed": "HTTP 503 {\"error\":\"test_operation_not_available\"}",
+      "pass": true
+    },
+    {
+      "name": "cancel ends an admitted test and keeps the route",
+      "expectation": "in flight, 202 cancel, operation cancelled, route and revision unchanged",
+      "observed": "in flight=running, cancel HTTP 400, outcome failed/test_failed, selected=wifi revision=10",
+      "pass": false
+    },
+    {
+      "name": "selected route and revision never move",
+      "expectation": "unchanged across every test",
+      "observed": "selected=wifi revision=10 (was wifi/10)",
+      "pass": true
+    },
+    {
+      "name": "no generated traffic reaches the UM980",
+      "expectation": "0 synthetic frames on receiver channels",
+      "observed": "0 of 32 log entries",
+      "pass": true
     }
   ],
-  "receiver_traffic": {
-    "entries": 32,
-    "synthetic_on_receiver_channels": 0,
-    "sample": []
+  "sequences": {
+    "sik": [
+      "negotiating/",
+      "running/",
+      "failed/peer_unreachable"
+    ],
+    "wifi": [
+      "running/",
+      "succeeded/applied"
+    ]
   },
   "before": {
-    "version": 1,
-    "boot_id": "b64aba3b",
-    "uptime_ms": 17539,
+    "selected": "wifi",
     "revision": 10,
-    "selected_transport": "wifi",
-    "candidate_transport": null,
-    "peer_connected": true,
-    "corrections_fresh": false,
-    "operation": null,
-    "last_tests": {
-      "wifi": null,
-      "sik": {
-        "run": 424242,
-        "state": "failed",
-        "reason": "cancelled",
-        "transport": "sik",
-        "role": "ROVER",
-        "sent": 0,
-        "received": 0,
-        "errors": 0,
-        "pair_pass": false,
-        "local_pass": false
-      }
-    }
+    "peer": true
   },
   "after": {
-    "version": 1,
-    "boot_id": "b64aba3b",
-    "uptime_ms": 102644,
+    "selected": "wifi",
     "revision": 10,
-    "selected_transport": "wifi",
-    "candidate_transport": null,
-    "peer_connected": true,
-    "corrections_fresh": false,
-    "operation": {
-      "id": "498724061aa5f025e3b864f9f1108e3d",
-      "tag": 2843855966,
-      "kind": "test",
-      "transport": "sik",
-      "previous_transport": "wifi",
-      "state": "failed",
-      "committed": false,
-      "coordinator": true,
-      "phase_remaining_ms": 0,
-      "reason": "peer_unreachable",
-      "profile": 1
-    },
+    "peer": false,
     "last_tests": {
       "wifi": {
-        "run": 842155,
+        "run": 610475,
         "state": "done",
         "reason": "complete",
         "transport": "wifi",
@@ -107,17 +83,23 @@
         "local_pass": true
       },
       "sik": {
-        "run": 424242,
-        "state": "failed",
-        "reason": "cancelled",
+        "run": 978395,
+        "state": "done",
+        "reason": "complete",
         "transport": "sik",
         "role": "ROVER",
         "sent": 0,
-        "received": 0,
+        "received": 12,
         "errors": 0,
         "pair_pass": false,
         "local_pass": false
       }
     }
-  }
+  },
+  "receiver_traffic": {
+    "entries": 32,
+    "synthetic_on_receiver_channels": 0
+  },
+  "route_unchanged": true,
+  "result": "FAIL"
 }
