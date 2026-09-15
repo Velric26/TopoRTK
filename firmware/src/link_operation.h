@@ -29,14 +29,25 @@ enum class Reason : uint8_t {
 enum Msg : uint8_t { Request = 7, Prepare = 8, Ready = 9, Commit = 10, Done = 11, Run = 12 };
 // Body byte for Request/Prepare: the requested operation kind.
 // Body byte for Done: the outcome code below.
-// For a Test, Request/Prepare/Run also carry the requested profile in the byte
-// after the kind: 0 clean, 1 injected faults.
+// A Test names the shape it runs on Request/Prepare/Run: the profile byte and
+// the request's seconds/rate/mode. Every other operation kind carries zeros
+// there, so a selection can never smuggle a test shape to the peer.
 enum Done : uint8_t { kApplied = 1, kFailed = 2, kDenied = 3, kCancelled = 4 };
 
 struct Message {
   uint8_t kind = 0, from = 0, to = 0, role = 0, transport = 0, code = 0, profile = 0;
   uint32_t boot = 0, peer_boot = 0, tag = 0, revision = 0;
+  uint16_t seconds = 0, rate = 0;
+  uint8_t mode = 0;
 };
+// The parameter a Test request names that the tested medium does not offer, or
+// nullptr when it offers the whole shape. Wi-Fi runs the packet engine, which
+// has no fault-injection profile; SiK runs the paired RTCM engine, which has no
+// rate or direction knob. The name is the refusal branch the diagnostic layer
+// publishes as "<medium>:<branch>", so one rule answers for the wire, the HTTP
+// admission and the device-local engine start.
+const char *test_parameter_refusal(Transport transport, uint8_t profile, uint16_t seconds, uint16_t rate,
+                                   uint8_t mode);
 // Validates one complete PLC1 envelope carrying an operation kind.
 bool decode(const correction::Packet &packet, Message &message);
 void encode(correction::Packet &packet, uint8_t unit, bool rover, const Message &message);
@@ -63,8 +74,11 @@ struct Snapshot {
   Reason reason = Reason::None;
   bool coordinator = false, active = false, committed = false;
   // A Test never adopts the tested medium: committed stays false and the
-  // verdict is reported here instead.
+  // verdict is reported here instead. The shape is published as the actual
+  // values, so the settings snapshot can show what is running.
   uint8_t profile = 0;
+  uint16_t seconds = 0, rate = 0;
+  uint8_t mode = 0;
   bool test_passed = false;
 };
 
@@ -87,9 +101,11 @@ struct Actions {
   bool stage = false;     // start/adopt candidate-medium staging
   bool unstage = false;   // release staging, candidate abandoned
   // A Test operation: arm the local test engine on the staged medium with this
-  // profile. The link owner reports the verdict back through test_result().
+  // shape. The link owner reports the verdict back through test_result().
   bool run_test = false;
   uint8_t profile = 0;
+  uint16_t seconds = 0, rate = 0;
+  uint8_t mode = 0;
   bool send = false;
   Message message{};
 };
@@ -99,12 +115,13 @@ class Engine {
   // Restores durable state. A pending record that never committed is reported
   // interrupted and the confirmed selection stays authoritative.
   void begin(bool rover, bool storage_ok, const Confirmed *confirmed, const Pending *pending);
-  // Coordinator admission for a request (local or forwarded by a delegate).
+  // Coordinator admission for a request (local or forwarded by a delegate). A
+  // Test must name the whole shape it runs; every other kind carries zeros.
   bool request(Kind kind, Transport transport, uint32_t tag, uint32_t revision, uint32_t now, Reason &reason,
-               uint8_t profile = 0);
+               uint8_t profile = 0, uint16_t seconds = 0, uint16_t rate = 0, uint8_t mode = 0);
   // Delegate initiation: forward a client request to the coordinator.
   bool forward(Kind kind, Transport transport, uint32_t tag, uint32_t revision, uint32_t now, Reason &reason,
-               uint8_t profile = 0);
+               uint8_t profile = 0, uint16_t seconds = 0, uint16_t rate = 0, uint8_t mode = 0);
   bool receive(const Message &message, uint32_t now);
   bool cancel(uint32_t tag, uint32_t now);
   // After a local (recovery) selection the interrupted record is settled and the
@@ -136,7 +153,8 @@ class Engine {
   enum class Phase : uint8_t { None = 0, Prepare, Commit, Run, Restore };
   void send(uint8_t kind, uint8_t code, uint32_t now);
   void settle(State state, Reason reason, uint32_t now);
-  void reserve(Kind kind, Transport transport, uint32_t tag, uint32_t revision, uint32_t now, uint8_t profile);
+  void reserve(Kind kind, Transport transport, uint32_t tag, uint32_t revision, uint32_t now, uint8_t profile,
+               uint16_t seconds, uint16_t rate, uint8_t mode);
 
   State state_ = State::Idle;
   Reason reason_ = Reason::None;
@@ -145,7 +163,8 @@ class Engine {
   bool rover_ = false, storage_ok_ = true, forwarding_ = false;
   bool peer_ready_ = false, commit_received_ = false, committed_ = false, committed_commit_pending_ = false;
   uint32_t tag_ = 0, revision_ = 0, now_ = 0, started_ = 0, sent_ = 0, advance_ = 0;
-  uint8_t profile_ = 0;
+  uint8_t profile_ = 0, mode_ = 0;
+  uint16_t seconds_ = 0, rate_ = 0;
   bool test_passed_ = false, test_result_known_ = false, peer_test_passed_ = false, peer_test_known_ = false;
   uint32_t settled_tag_ = 0, tombstone_tag_ = 0, tombstone_at_ = 0;
   Kind settled_kind_ = Kind::None;

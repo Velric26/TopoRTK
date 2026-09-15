@@ -155,7 +155,10 @@ void drop_report(uint8_t medium){
   Preferences p;if(p.begin("linkdiag",false)){p.remove(medium?"report_sik":"report_wifi");p.end();}
 }
 bool cached_busy=false;uint32_t published=0;
-struct Request{bool route=false;bool cancel=false,probe=false,selftest=false,paired=false;linktest::Config config;uint8_t transport=0,profile=correctiontest::Injected;};
+// Requests this layer still serves itself: a local link selection, the wiring
+// probe and the fault self-test. A packet or RTCM run is never armed from here,
+// because the pair operation owns that start and both peers must run one shape.
+struct Request{bool route=false,probe=false,selftest=false;uint8_t transport=0;};
 const char *state_name(){switch(engine.state){case linktest::Armed:return "armed";case linktest::Running:return "running";case linktest::Done:return "done";case linktest::Failed:return "failed";default:return "idle";}}
 void result_json(JsonObject d){
   if(paired){
@@ -342,18 +345,10 @@ bool diagnostic_request(const char *json){
     if(d.containsKey("session"))return false; // Sessions are negotiated, never supplied by a caller.
     return xQueueSend(queue,&r,0)==pdTRUE;
   }
-  if(!std::strcmp(op,"selftest")){r.selftest=true;return d["confirm"]==true&&xQueueSend(queue,&r,0)==pdTRUE;}if(!std::strcmp(op,"probe")){r.probe=true;return d["confirm"]==true&&xQueueSend(queue,&r,0)==pdTRUE;}r.cancel=std::strcmp(op,"cancel")==0;
-  r.paired=!std::strcmp(op,"pairtest");if(!r.cancel&&!r.paired&&std::strcmp(op,"arm"))return false;
-  if(!d["run"].is<uint32_t>())return false;r.config.run=d["run"];
-  if(r.paired){if(!d["seconds"].is<uint16_t>())return false;r.config.seconds=d["seconds"];r.config.rate=1000;r.config.mode=0;r.transport=1;
-    if(d.containsKey("profile")){if(!d["profile"].is<const char*>())return false;const char *profile=d["profile"];if(std::strcmp(profile,"clean")&&std::strcmp(profile,"injected"))return false;r.profile=!std::strcmp(profile,"clean")?correctiontest::Clean:correctiontest::Injected;}
-    if(!linktest::valid_config(r.config)||d["confirm"]!=true)return false;}
-  else if(!r.cancel){if(!d["seconds"].is<uint16_t>()||!d["rate"].is<uint16_t>()||!d["mode"].is<uint8_t>())return false;
-    r.config.seconds=d["seconds"];r.config.rate=d["rate"];r.config.mode=d["mode"];
-    const char *t=d["transport"]|"";if(std::strcmp(t,"wifi")&&std::strcmp(t,"sik"))return false;r.transport=std::strcmp(t,"sik")==0;
-    if(!linktest::valid_config(r.config)||d["confirm"]!=true)return false;
-  }
-  return xQueueSend(queue,&r,0)==pdTRUE;
+  if(!std::strcmp(op,"selftest")){r.selftest=true;return d["confirm"]==true&&xQueueSend(queue,&r,0)==pdTRUE;}
+  if(!std::strcmp(op,"probe")){r.probe=true;return d["confirm"]==true&&xQueueSend(queue,&r,0)==pdTRUE;}
+  // A run is never armed from here: the pair operation starts it on both peers.
+  return false;
 }
 void diagnostic_service(uint32_t now,bool rover,IPAddress peer,bool profile_busy){
   node_role=rover?1:0; // a quick test admitted this turn is armed with this role
@@ -379,19 +374,6 @@ void diagnostic_service(uint32_t now,bool rover,IPAddress peer,bool profile_busy
       else {run_transport_selftest();survey_diagnostic_release();}
     }
     else if(request.probe){if(!test_busy()&&!probe_phase&&!profile_busy&&survey_diagnostic_acquire()){locked=true;radio_transport::begin();radio_transport::discard_input();probe_size=0;probe_text[0]=0;probe_start=now;probe_phase=1;}}
-    else if(request.cancel){if(paired){if(pair_engine.busy()&&request.config.run==pair_engine.run)pair_engine.abort(now,"cancelled");}else if(engine.busy()&&request.config.run==engine.config.run)engine.abort(now,"cancelled");}
-    else if(!test_busy()&&!probe_phase&&request.config.run!=engine.config.run&&request.config.run!=pair_engine.run){
-      if(profile_busy||!survey_diagnostic_acquire()){engine.reason="finish_survey_or_receiver_operation_first";}
-      else {
-        locked=true;
-        if(!save_start_marker(request.config.run,request.transport,rover?1:0,request.profile,request.paired)){survey_diagnostic_release();locked=false;engine.reason="cannot_save_test_start";}
-        else {paired=request.paired;if(paired)pair_engine.arm(request.config.run,request.config.seconds,rover?1:0,now,request.profile);else engine.arm(request.config,rover?1:0,now);transport=request.transport;persisted=persisted_peer=false;
-          if(transport){radio_transport::begin();radio_transport::discard_input();}
-          if(paired)start_uart_observation(now);
-          if(!transport&&!wifi_transport::start(wifi_transport::Channel::Diagnostics))engine.abort(now,"wifi_diagnostic_socket_unavailable");
-        }
-      }
-    }
   }
   // One ownership value per turn: the same predicate gates the stream argument,
   // this layer's own UART2 reads and writes, and the published busy state.
@@ -475,18 +457,21 @@ void diagnostic_service(uint32_t now,bool rover,IPAddress peer,bool profile_busy
   portENTER_CRITICAL(&guard);cached_busy=test_busy()||radio_owned;portEXIT_CRITICAL(&guard);
   if(now-published>=200)publish(now);
 }
-// The quick test is the existing engine for that medium, armed on the canonical
-// quick profile. /transport/ (0 Wi-Fi, 1 SiK) is also the medium whose stored
-// report and start marker the run belongs to.
-bool diagnostic_quick_test_start(uint8_t medium,uint8_t profile,uint32_t run,uint32_t now){
+// The quick test is the existing engine for that medium, armed with the shape
+// the operation admitted. /transport/ (0 Wi-Fi, 1 SiK) is also the medium whose
+// stored report and start marker the run belongs to.
+bool diagnostic_quick_test_start(uint8_t medium,uint8_t profile,uint32_t run,uint16_t seconds,uint16_t rate,uint8_t mode,uint32_t now){
   if(medium>1)return refuse_quick("transport","unsupported");
-  // The classic packet engine has one canonical profile: base-to-rover, 30 s,
-  // 1000 ms, clean. Fault injection exists only in the paired RTCM engine.
-  if(medium?profile>correctiontest::Injected:profile!=0)return refuse_quick(medium_name(medium),"profile_unsupported");
+  // One rule says which shape a medium offers; this layer publishes the branch
+  // it names. The packet engine runs any rate and direction, the paired RTCM
+  // engine has neither knob, and only that engine injects faults.
+  const char *unsupported=link_operation::test_parameter_refusal(
+    medium?link_operation::Transport::Radio:link_operation::Transport::WiFi,profile,seconds,rate,mode);
+  if(unsupported)return refuse_quick(medium_name(medium),unsupported);
   if(any_engine_busy())return refuse_quick(medium_name(medium),"engine_busy");
   if(probe_phase)return refuse_quick(medium_name(medium),"probe_running");
   if(ota_locked())return refuse_quick(medium_name(medium),"ota_active");
-  linktest::Config config;config.run=run;config.seconds=30;config.rate=1000;config.mode=0;
+  linktest::Config config;config.run=run;config.seconds=seconds;config.rate=rate;config.mode=mode;
   if(!linktest::valid_config(config))return refuse_quick(medium_name(medium),"run_id_rejected");
   // The tested medium is brought up here: a quick test is the moment to start it,
   // so no prior probe, route selection or medium state is required. UART2 begin()
@@ -510,6 +495,10 @@ bool diagnostic_quick_test_start(uint8_t medium,uint8_t profile,uint32_t run,uin
   paired=medium==1;transport=medium;persisted=persisted_peer=false;quick_locked=true;quick_error[0]=0;
   if(medium){radio_transport::discard_input();start_uart_observation(now);}
   return true;
+}
+bool diagnostic_quick_test_start(uint8_t medium,uint8_t profile,uint32_t run,uint32_t now){
+  // The Settings quick tests keep the canonical quick profile.
+  return diagnostic_quick_test_start(medium,profile,run,30,1000,0,now);
 }
 bool diagnostic_quick_test_start(uint8_t medium,uint8_t profile,uint32_t now){
   // A lone instrument generates its own id; a pair operation passes one shared

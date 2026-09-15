@@ -42,7 +42,8 @@ struct QueuedRequest {
   bool valid = false, cancel = false;
   link_operation::Kind kind = link_operation::Kind::None;
   Transport transport = Transport::WiFi;
-  uint8_t profile = 0;
+  uint8_t profile = 0, mode = 0;
+  uint16_t seconds = 0, rate = 0;
   uint32_t tag = 0, revision = 0;
   char id[33] = {};
 };
@@ -338,7 +339,8 @@ void apply_actions(uint32_t now) {
     // tag is the identifier both sides already share; a fresh request brings a
     // fresh tag, so the run id stays unique per operation.
     const uint32_t run = 100000u + (running.tag % 900000u);
-    if (!diagnostic_quick_test_start(uint8_t(running.transport), actions.profile, run, now)) {
+    if (!diagnostic_quick_test_start(uint8_t(running.transport), actions.profile, run, actions.seconds,
+                                     actions.rate, actions.mode, now)) {
       // Not a link verdict: the tested medium refused to run the test at all.
       operation.test_unavailable(now);
     }
@@ -384,13 +386,47 @@ void drain_queue(uint32_t now) {
     if (!accepted) reason = link_operation::Reason::Conflict;
   } else if (rover_) {
     accepted = operation.request(request.kind, request.transport, request.tag, request.revision, now, reason,
-                                    request.profile);
+                                 request.profile, request.seconds, request.rate, request.mode);
   } else {
     accepted = operation.forward(request.kind, request.transport, request.tag, request.revision, now, reason,
-                                    request.profile);
+                                 request.profile, request.seconds, request.rate, request.mode);
   }
   if (!accepted) operation.refuse(request.tag, request.kind, request.transport, reason, now);
 }
+bool admit(link_operation::Kind kind, Transport transport, const char *id, uint32_t revision, uint8_t profile,
+           uint16_t seconds, uint16_t rate, uint8_t mode, link_operation::Reason &reason) {
+  const uint32_t tag = link_operation::tag_from_hex(id);
+  if (!tag) { reason = link_operation::Reason::Conflict; return false; }
+  if (kind == link_operation::Kind::Test &&
+      link_operation::test_parameter_refusal(transport, profile, seconds, rate, mode)) {
+    // A combination the tested medium does not offer is refused before it is
+    // queued, so the answer is a status code and never a started operation.
+    reason = link_operation::Reason::Unsupported;
+    return false;
+  }
+  View current;
+  portENTER_CRITICAL(&guard);
+  current = view;
+  const bool pending_request = queued.valid;
+  portEXIT_CRITICAL(&guard);
+  if (!current.storage_ok) { reason = link_operation::Reason::StorageFailure; return false; }
+  if (current.busy || pending_request) { reason = link_operation::Reason::Busy; return false; }
+  if (current.tag == tag && current.state != uint8_t(link_operation::State::Idle)) {
+    if (current.kind == uint8_t(kind) && current.transport == uint8_t(transport)) return true;  // idempotent repeat
+    reason = link_operation::Reason::ConflictingId;
+    return false;
+  }
+  if (revision != current.revision) { reason = link_operation::Reason::StaleRevision; return false; }
+  portENTER_CRITICAL(&guard);
+  queued = QueuedRequest{};
+  queued.valid = true; queued.kind = kind; queued.transport = transport; queued.profile = profile;
+  queued.seconds = seconds; queued.rate = rate; queued.mode = mode;
+  queued.tag = tag; queued.revision = revision;
+  std::memcpy(queued.id, id, 32);
+  portEXIT_CRITICAL(&guard);
+  return true;
+}
+
 }  // namespace
 
 void begin(bool rover, uint32_t now) {
@@ -557,37 +593,14 @@ void service(uint32_t now, bool rover, bool radio_reserved) {
 
 bool request_operation(link_operation::Kind kind, Transport transport, const char *id,
                        uint32_t revision, link_operation::Reason &reason, uint8_t profile) {
-  const uint32_t tag = link_operation::tag_from_hex(id);
-  if (!tag) { reason = link_operation::Reason::Conflict; return false; }
-  if (kind == link_operation::Kind::Test) {
-    // A Test proves a medium without adopting it. Only the radio engine can inject
-    // faults, so the injected profile is refused for Wi-Fi rather than silently run
-    // as a clean test.
-    if (profile > 1 || (profile == 1 && transport != Transport::Radio)) {
-      reason = link_operation::Reason::Unsupported;
-      return false;
-    }
-  }
-  View current;
-  portENTER_CRITICAL(&guard);
-  current = view;
-  const bool pending_request = queued.valid;
-  portEXIT_CRITICAL(&guard);
-  if (!current.storage_ok) { reason = link_operation::Reason::StorageFailure; return false; }
-  if (current.busy || pending_request) { reason = link_operation::Reason::Busy; return false; }
-  if (current.tag == tag && current.state != uint8_t(link_operation::State::Idle)) {
-    if (current.kind == uint8_t(kind) && current.transport == uint8_t(transport)) return true;  // idempotent repeat
-    reason = link_operation::Reason::ConflictingId;
-    return false;
-  }
-  if (revision != current.revision) { reason = link_operation::Reason::StaleRevision; return false; }
-  portENTER_CRITICAL(&guard);
-  queued = QueuedRequest{};
-  queued.valid = true; queued.kind = kind; queued.transport = transport; queued.profile = profile;
-  queued.tag = tag; queued.revision = revision;
-  std::memcpy(queued.id, id, 32);
-  portEXIT_CRITICAL(&guard);
-  return true;
+  // A selection carries no test shape; the engine zeroes it before it reaches
+  // the wire, so only a Test ever publishes one.
+  return admit(kind, transport, id, revision, profile, 0, 0, 0, reason);
+}
+
+bool request_test(Transport transport, const char *id, uint32_t revision, link_operation::Reason &reason,
+                  uint8_t profile, uint16_t seconds, uint16_t rate, uint8_t mode) {
+  return admit(link_operation::Kind::Test, transport, id, revision, profile, seconds, rate, mode, reason);
 }
 
 OperationView operation_view(uint32_t now) {
@@ -658,6 +671,12 @@ void service_settings(uint32_t now, bool corrections_fresh) {
     entry["phase_remaining_ms"] = op.active ? op.phase_remaining_ms : static_cast<uint32_t>(0);
     entry["reason"] = link_operation::reason_text(op.reason);
     entry["profile"] = op.profile;   // 0 clean, 1 injected faults (Test only)
+    // The shape a Test actually runs, as values rather than wire indices: both
+    // peers run what the coordinator admitted, and the page shows it while the
+    // operation is still the only place the request is recorded.
+    entry["seconds"] = op.seconds;
+    entry["rate"] = op.rate;
+    entry["mode"] = op.mode;
   }
   diagnostic_tests_json(document.createNestedObject("last_tests"));
   if (document.overflowed()) return;

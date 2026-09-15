@@ -59,6 +59,17 @@ JsonObject status(uint32_t now) {
 }
 const char *text(const JsonObject &object, const char *key) { return object[key] | ""; }
 
+// The other settings surface: the exact published document a consumer parses.
+StaticJsonDocument<2048> host_settings;
+JsonObject published_settings(uint32_t now) {
+  link_service::service_settings(now, false);
+  char buffer[2048];
+  assert(link_service::settings_snapshot(buffer, sizeof(buffer)));
+  host_settings.clear();
+  assert(!deserializeJson(host_settings, buffer));
+  return host_settings.as<JsonObject>();
+}
+
 // The other instrument, speaking the production pair engine. `peer_medium` is
 // the medium it really transmits on; `ingress` is where its frames arrive, which
 // a relay can make differ.
@@ -352,6 +363,43 @@ void radio_fault_isolation() {
   printf("radio_fault_isolation: short_writes=%u radio_pair_state=radio_output_fault "
          "wifi_connected=1 wifi_peer_connected=1 fault_cleared=1\n", unsigned(short_writes));
 }
+// The settings snapshot is what a browser reads to see what is running: an
+// admitted Test publishes the shape both peers run, as values rather than wire
+// indices, and the id of the request this instrument issued.
+void test_shape_published() {
+  const char *wifi_id = "fedcba9876543210fedcba9876543210";
+  assert(host_nvs.empty());
+  link_service::begin(false, 2000);
+  // An omitted parameter set keeps the canonical quick profile.
+  link_operation::Reason reason = link_operation::Reason::None;
+  assert(link_service::request_test(Transport::Radio, kOperationId, 0, reason, 0, 30, 1000, 0));
+  link_service::service(2100, false, false);
+  {
+    const auto d = published_settings(2300);
+    assert(std::strcmp(text(d["operation"], "kind"), "test") == 0);
+    assert(std::strcmp(text(d["operation"], "transport"), "sik") == 0);
+    assert(std::strcmp(text(d["operation"], "state"), "negotiating") == 0);
+    assert(std::strcmp(text(d["operation"], "id"), kOperationId) == 0);
+    assert(d["operation"]["profile"] == 0);
+    assert(d["operation"]["seconds"] == 30 && d["operation"]["rate"] == 1000 && d["operation"]["mode"] == 0);
+  }
+  assert(link_service::cancel_operation(kOperationId, reason));
+  link_service::service(2500, false, false);
+  // The main loop publishes the record every turn; the HTTP task admits against
+  // what was published, so the released operation has to be visible first.
+  link_service::service_settings(2500, false);
+  // The other medium's own shape, as the consumer reads it.
+  assert(link_service::request_test(Transport::WiFi, wifi_id, 0, reason, 0, 120, 200, 2));
+  link_service::service(2700, false, false);
+  {
+    const auto d = published_settings(2900);
+    assert(std::strcmp(text(d["operation"], "kind"), "test") == 0);
+    assert(std::strcmp(text(d["operation"], "transport"), "wifi") == 0);
+    assert(std::strcmp(text(d["operation"], "id"), wifi_id) == 0);
+    assert(d["operation"]["seconds"] == 120 && d["operation"]["rate"] == 200 && d["operation"]["mode"] == 2);
+  }
+  printf("test_shape_published: sik=30/1000/0 wifi=120/200/2 published\n");
+}
 }  // namespace
 
 int main(int argc, char **argv) {
@@ -370,6 +418,7 @@ int main(int argc, char **argv) {
   else if (name == "cross_medium_ingress") cross_medium_ingress();
   else if (name == "incompatible_version") incompatible_version();
   else if (name == "radio_fault_isolation") radio_fault_isolation();
+  else if (name == "test_shape_published") test_shape_published();
   else {
     std::fprintf(stderr, "unknown case %s\n", argv[1]);
     return 2;

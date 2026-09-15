@@ -261,7 +261,30 @@ esp_err_t post_settings(httpd_req_t *r){
     else if(!std::strcmp(profile,"injected"))profile_value=1;
     else return error(r,"400 Bad Request","{\"error\":\"profile_required\"}");
   }
-  if(!link_service::request_operation(kind,selected,id,d["revision"].as<uint32_t>(),reason,profile_value))return settings_refusal(r,reason);
+  if(kind==link_operation::Kind::Select){
+    if(!link_service::request_operation(kind,selected,id,d["revision"].as<uint32_t>(),reason,profile_value))return settings_refusal(r,reason);
+    return error(r,"202 Accepted","{\"state\":\"queued\"}");
+  }
+  // A Test runs the shape it names; an omitted field keeps the canonical quick
+  // profile. The medium rule is the operation core's, so the wire, this
+  // admission and the device-local engine start can never disagree about which
+  // combinations exist.
+  uint16_t seconds=30,rate=1000;uint8_t mode=0;
+  if(d.containsKey("seconds")){
+    if(!d["seconds"].is<uint16_t>())return error(r,"400 Bad Request","{\"error\":\"invalid_request\"}");
+    seconds=d["seconds"];
+  }
+  if(d.containsKey("rate")){
+    if(!d["rate"].is<uint16_t>())return error(r,"400 Bad Request","{\"error\":\"invalid_request\"}");
+    rate=d["rate"];
+  }
+  if(d.containsKey("mode")){
+    if(!d["mode"].is<uint8_t>())return error(r,"400 Bad Request","{\"error\":\"invalid_request\"}");
+    mode=d["mode"];
+  }
+  if(link_operation::test_parameter_refusal(selected,profile_value,seconds,rate,mode))
+    return error(r,"400 Bad Request","{\"error\":\"request_refused\"}");
+  if(!link_service::request_test(selected,id,d["revision"].as<uint32_t>(),reason,profile_value,seconds,rate,mode))return settings_refusal(r,reason);
   return error(r,"202 Accepted","{\"state\":\"queued\"}");
 }
 esp_err_t rejected(httpd_req_t *request, httpd_err_code_t) {

@@ -11,7 +11,28 @@ constexpr uint32_t test_run_ms = 60000;
 constexpr uint32_t tombstone_ms = 60000;
 bool expired(uint32_t now, uint32_t since, uint32_t limit) { return uint32_t(now - since) >= limit; }
 bool kind_valid(uint8_t kind) { return kind >= Request && kind <= Run; }
+// The kinds whose body carries a Test shape. Everything else must send zeros.
+bool shape_kind(uint8_t kind) { return kind == Request || kind == Prepare || kind == Run; }
 }  // namespace
+
+const char *test_parameter_refusal(Transport transport, uint8_t profile, uint16_t seconds, uint16_t rate,
+                                   uint8_t mode) {
+  if (seconds != 30 && seconds != 60 && seconds != 120 && seconds != 300) return "seconds_unsupported";
+  if (rate != 200 && rate != 1000 && rate != 3000) return "rate_unsupported";
+  if (mode > 2) return "mode_unsupported";
+  if (profile > 1) return "profile_unsupported";
+  if (transport == Transport::Radio) {
+    // The paired RTCM engine sends one 600-byte message every two seconds in one
+    // direction: it has no rate or direction knob to set and no clean/injected
+    // choice beyond the profile it already carries.
+    if (rate != 1000) return "rate_unsupported";
+    if (mode) return "mode_unsupported";
+  } else if (profile) {
+    // Fault injection exists only in the paired RTCM engine.
+    return "profile_unsupported";
+  }
+  return nullptr;
+}
 
 bool decode(const correction::Packet &packet, Message &message) {
   if (!correction::wire_valid(packet)) return false;
@@ -19,9 +40,11 @@ bool decode(const correction::Packet &packet, Message &message) {
   if (p[4] != 1 || p[5] != 3 || p[6] || p[7] || correction::u32(p + 8)) return false;
   if (std::memcmp(b, "PLC1", 4) || b[4] != 1) return false;
   for (unsigned i = 52; i < 252; ++i) if (p[i]) return false;
-  if (b[10] || b[11] || correction::u32(b + 28) || b[34] || b[35] || correction::u32(b + 36)) return false;
+  // The spare bytes a Test shape rides are validated per kind below.
+  if (b[10] || b[11] || b[35] || correction::u32(b + 36)) return false;
   message.kind = b[5]; message.from = b[6]; message.to = b[7]; message.role = b[8]; message.transport = b[9];
   message.code = b[32]; message.profile = b[33];
+  message.seconds = correction::u16(b + 28); message.rate = correction::u16(b + 30); message.mode = b[34];
   message.boot = correction::u32(b + 12); message.peer_boot = correction::u32(b + 16);
   message.tag = correction::u32(b + 20); message.revision = correction::u32(b + 24);
   if (!kind_valid(message.kind)) return false;
@@ -30,17 +53,28 @@ bool decode(const correction::Packet &packet, Message &message) {
   if (message.peer_boot) return false;   // reserved: the operation is identified by tag/revision
   if (message.kind == Request || message.kind == Prepare) {
     if (message.code < uint8_t(Kind::Select) || message.code > uint8_t(Kind::Test)) return false;
-    if (message.profile > 1) return false;   // 0 clean, 1 injected faults
+    if (message.code == uint8_t(Kind::Test)) {
+      // A Test names the shape both peers run; the tested medium has to offer it.
+      if (test_parameter_refusal(static_cast<Transport>(message.transport), message.profile, message.seconds,
+                                 message.rate, message.mode)) return false;
+    } else if (message.profile || message.seconds || message.rate || message.mode) {
+      return false;   // a selection carries no test shape at all
+    }
     // A forwarded request carries the client's expected revision, which is 0 on
     // an instrument that has never committed a selection. Every other operation
     // message carries the coordinator-assigned revision.
     if (message.kind != Request && !message.revision) return false;
+  } else if (message.kind == Run) {
+    // A Run carries the shape the coordinator admitted, and nothing else.
+    if (message.code || message.profile || !message.revision) return false;
+    if (test_parameter_refusal(static_cast<Transport>(message.transport), message.profile, message.seconds,
+                               message.rate, message.mode)) return false;
   } else if (message.kind == Done) {
-    if (message.profile) return false;
+    if (message.profile || message.seconds || message.rate || message.mode) return false;
     if (message.code < kApplied || message.code > kCancelled) return false;
     // A denial echoes the forwarded request, which may carry no revision yet.
     if (message.code != kDenied && !message.revision) return false;
-  } else if (message.code || message.profile || !message.revision) {
+  } else if (message.seconds || message.rate || message.mode || message.code || message.profile || !message.revision) {
     return false;
   }
   return true;
@@ -51,7 +85,15 @@ void encode(correction::Packet &packet, uint8_t unit, bool rover, const Message 
   uint8_t *p = packet.bytes, *b = p + 12;
   std::memcpy(p, "RTM1", 4); p[4] = 1; p[5] = 3;
   std::memcpy(b, "PLC1", 4); b[4] = 1; b[5] = message.kind; b[6] = unit; b[7] = uint8_t(3 - unit);
-  b[8] = rover ? 1 : 0; b[9] = message.transport; b[32] = message.code; b[33] = message.profile;
+  b[8] = rover ? 1 : 0; b[9] = message.transport; b[32] = message.code;
+  // A Test shape only rides the kinds that carry one; the caller states zeros
+  // for every other kind and the reserved bytes stay zero.
+  if (shape_kind(message.kind)) {
+    b[33] = message.profile;
+    correction::put16(b + 28, message.seconds);
+    correction::put16(b + 30, message.rate);
+    b[34] = message.mode;
+  }
   correction::put32(b + 12, message.boot);
   correction::put32(b + 20, message.tag);
   correction::put32(b + 24, message.revision);
@@ -149,9 +191,11 @@ void Engine::begin(bool rover, bool storage_ok, const Confirmed *confirmed, cons
   }
 }
 
-void Engine::reserve(Kind kind, Transport transport, uint32_t tag, uint32_t revision, uint32_t now, uint8_t profile) {
+void Engine::reserve(Kind kind, Transport transport, uint32_t tag, uint32_t revision, uint32_t now, uint8_t profile,
+                     uint16_t seconds, uint16_t rate, uint8_t mode) {
   kind_ = kind; target_ = transport; previous_ = static_cast<Transport>(confirmed_.transport);
   tag_ = tag; revision_ = revision; profile_ = profile;
+  seconds_ = seconds; rate_ = rate; mode_ = mode;
   test_passed_ = test_result_known_ = peer_test_passed_ = false;
   pending_ = Pending{};
   pending_.kind = uint8_t(kind); pending_.target = uint8_t(transport);
@@ -164,10 +208,15 @@ void Engine::reserve(Kind kind, Transport transport, uint32_t tag, uint32_t revi
 }
 
 bool Engine::request(Kind kind, Transport transport, uint32_t tag, uint32_t revision, uint32_t now, Reason &reason,
-                     uint8_t profile) {
+                     uint8_t profile, uint16_t seconds, uint16_t rate, uint8_t mode) {
   now_ = now;
   if (!tag || kind == Kind::None) { reason = Reason::Conflict; return false; }
-  if (kind == Kind::Test && profile > 1) { reason = Reason::Unsupported; return false; }
+  if (kind == Kind::Test && test_parameter_refusal(transport, profile, seconds, rate, mode)) {
+    reason = Reason::Unsupported; return false;
+  }
+  // Only a Test has a shape; every other kind carries zeros, so a selection can
+  // never smuggle a stale test shape to the peer.
+  if (kind != Kind::Test) { profile = 0; seconds = 0; rate = 0; mode = 0; }
   if (!storage_ok_) { reason = Reason::StorageFailure; return false; }
   if (tombstone_tag_ && tag == tombstone_tag_ && uint32_t(now - tombstone_at_) < tombstone_ms) { reason = Reason::Cancelled; return false; }
   if (settled_tag_ && tag == settled_tag_ && !(state_ == State::Idle)) {
@@ -176,15 +225,21 @@ bool Engine::request(Kind kind, Transport transport, uint32_t tag, uint32_t revi
   }
   if (busy()) { reason = Reason::Busy; return false; }
   if (revision != confirmed_.revision) { reason = Reason::StaleRevision; return false; }
-  reserve(kind, transport, tag, revision + 1, now, profile);
+  reserve(kind, transport, tag, revision + 1, now, profile, seconds, rate, mode);
   return true;
 }
 
 bool Engine::forward(Kind kind, Transport transport, uint32_t tag, uint32_t revision, uint32_t now, Reason &reason,
-                     uint8_t profile) {
+                     uint8_t profile, uint16_t seconds, uint16_t rate, uint8_t mode) {
   now_ = now;
-  if (rover_) return request(kind, transport, tag, revision, now, reason);
+  if (rover_) return request(kind, transport, tag, revision, now, reason, profile, seconds, rate, mode);
   if (!tag || kind == Kind::None) { reason = Reason::Conflict; return false; }
+  if (kind == Kind::Test && test_parameter_refusal(transport, profile, seconds, rate, mode)) {
+    reason = Reason::Unsupported; return false;
+  }
+  // Only a Test has a shape; every other kind carries zeros, so a selection can
+  // never smuggle a stale test shape to the peer.
+  if (kind != Kind::Test) { profile = 0; seconds = 0; rate = 0; mode = 0; }
   if (!storage_ok_) { reason = Reason::StorageFailure; return false; }
   if (tombstone_tag_ && tag == tombstone_tag_ && uint32_t(now - tombstone_at_) < tombstone_ms) { reason = Reason::Cancelled; return false; }
   if (settled_tag_ && tag == settled_tag_ && state_ != State::Idle) {
@@ -195,6 +250,7 @@ bool Engine::forward(Kind kind, Transport transport, uint32_t tag, uint32_t revi
   if (revision != confirmed_.revision) { reason = Reason::StaleRevision; return false; }
   kind_ = kind; target_ = transport; previous_ = static_cast<Transport>(confirmed_.transport);
   tag_ = tag; revision_ = revision; profile_ = profile;   // revision is expected only; the answer assigns the real one
+  seconds_ = seconds; rate_ = rate; mode_ = mode;
   state_ = State::Negotiating; reason_ = Reason::None; phase_ = Phase::Prepare;
   started_ = now; sent_ = 0; forwarding_ = true; commit_received_ = false;
   committed_ = committed_commit_pending_ = false;
@@ -213,7 +269,8 @@ bool Engine::receive(const Message &message, uint32_t now) {
         Reason reason = Reason::None;
         const auto kind = static_cast<Kind>(message.code);
         const auto transport = static_cast<Transport>(message.transport);
-        if (request(kind, transport, message.tag, message.revision, now, reason)) return true;
+        if (request(kind, transport, message.tag, message.revision, now, reason, message.profile, message.seconds,
+                    message.rate, message.mode)) return true;
         refuse(message.tag, kind, transport, reason, now);
         actions_.send = true;
         actions_.message = Message{}; actions_.message.kind = Done; actions_.message.code = kDenied;
@@ -286,6 +343,7 @@ bool Engine::receive(const Message &message, uint32_t now) {
       forwarding_ = false;
       tag_ = message.tag; revision_ = message.revision; kind_ = kind; target_ = transport;
       profile_ = message.profile;
+      seconds_ = message.seconds; rate_ = message.rate; mode_ = message.mode;
       test_passed_ = test_result_known_ = peer_test_passed_ = peer_test_known_ = false;
       previous_ = static_cast<Transport>(confirmed_.transport);
       state_ = State::Negotiating; reason_ = Reason::None; phase_ = Phase::Prepare;
@@ -320,6 +378,7 @@ bool Engine::receive(const Message &message, uint32_t now) {
         // the confirmed record and the durable revision stay untouched.
         state_ = State::Applying; phase_ = Phase::Run; advance_ = now;
         actions_.run_test = true; actions_.profile = profile_;
+        actions_.seconds = seconds_; actions_.rate = rate_; actions_.mode = mode_;
         return true;
       }
       phase_ = Phase::Commit; state_ = State::Applying; advance_ = now;
@@ -379,6 +438,12 @@ void Engine::send(uint8_t kind, uint8_t code, uint32_t now) {
   actions_.message.kind = kind; actions_.message.code = code;
   actions_.message.transport = uint8_t(target_);
   actions_.message.tag = tag_; actions_.message.revision = revision_;
+  // Only the kinds that carry a Test shape write one. Every other operation
+  // message keeps those bytes zero, so a peer can never read a stale shape.
+  if (shape_kind(kind)) {
+    actions_.message.profile = profile_;
+    actions_.message.seconds = seconds_; actions_.message.rate = rate_; actions_.message.mode = mode_;
+  }
   sent_ = now;
 }
 
@@ -425,7 +490,7 @@ void Engine::tick(const Inputs &inputs) {
         state_ = State::Applying;
         phase_ = kind_ == Kind::Test ? Phase::Run : Phase::Commit;
         advance_ = inputs.now;
-        if (kind_ == Kind::Test) { actions_.run_test = true; actions_.profile = profile_; }
+        if (kind_ == Kind::Test) { actions_.run_test = true; actions_.profile = profile_; actions_.seconds = seconds_; actions_.rate = rate_; actions_.mode = mode_; }
         send(Commit, 0, inputs.now);
         return;
       }
@@ -478,6 +543,7 @@ Snapshot Engine::snapshot(uint32_t now) const {
   out.transport = target_; out.previous = previous_; out.reason = reason_;
   out.coordinator = rover_; out.committed = committed_;
   out.profile = profile_; out.test_passed = test_result_known_ && test_passed_;
+  out.seconds = seconds_; out.rate = rate_; out.mode = mode_;
   out.active = state_ == State::Negotiating || state_ == State::Applying || state_ == State::Restoring;
   if (out.active) {
     const uint32_t limit = phase_ == Phase::Run ? test_run_ms

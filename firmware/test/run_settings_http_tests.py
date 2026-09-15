@@ -53,8 +53,10 @@ link_operation::Kind last_kind = link_operation::Kind::None;
 Transport last_transport = Transport::WiFi;
 std::string last_id;
 uint32_t last_revision = 0;
-uint8_t last_profile = 255;
-bool request_result = true, cancel_result = true;
+uint8_t last_profile = 255, last_mode = 255;
+uint16_t last_seconds = 0, last_rate = 0;
+unsigned test_requests = 0;
+bool request_result = true, request_test_result = true, cancel_result = true;
 link_operation::Reason forced_reason = link_operation::Reason::None;
 bool request_operation(link_operation::Kind kind, Transport transport, const char *id, uint32_t revision,
                        link_operation::Reason &reason, uint8_t profile) {
@@ -62,6 +64,14 @@ bool request_operation(link_operation::Kind kind, Transport transport, const cha
   last_profile = profile;
   reason = forced_reason;
   return request_result;
+}
+bool request_test(Transport transport, const char *id, uint32_t revision, link_operation::Reason &reason,
+                  uint8_t profile, uint16_t seconds, uint16_t rate, uint8_t mode) {
+  ++test_requests;
+  last_kind = link_operation::Kind::Test; last_transport = transport; last_id = id ? id : "";
+  last_revision = revision; last_profile = profile; last_seconds = seconds; last_rate = rate; last_mode = mode;
+  reason = forced_reason;
+  return request_test_result;
 }
 bool cancel_operation(const char *id, link_operation::Reason &reason) {
   last_id = id ? id : ""; reason = forced_reason;
@@ -98,6 +108,60 @@ int main(int argc, char **argv) {
     assert(link_service::last_kind == link_operation::Kind::Test);
     assert(link_service::last_transport == link_service::Transport::Radio);
     assert(link_service::last_profile == 1);
+    // An omitted shape keeps the canonical quick profile.
+    assert(link_service::last_seconds == 30 && link_service::last_rate == 1000 && link_service::last_mode == 0);
+    assert(link_service::test_requests == 1);
+  } else if (test == "test_shape_passed") {
+    request.body_text = select_body("link.test", "wifi", ",\"seconds\":120,\"rate\":200,\"mode\":2");
+    assert(post_settings(&request) == 0);
+    assert(status == "202 Accepted" && link_service::test_requests == 1);
+    assert(link_service::last_seconds == 120 && link_service::last_rate == 200 && link_service::last_mode == 2);
+    assert(link_service::last_profile == 0);
+  } else if (test == "test_shape_canonical_default") {
+    request.body_text = select_body("link.test", "wifi", "");
+    assert(post_settings(&request) == 0);
+    assert(status == "202 Accepted");
+    assert(link_service::last_seconds == 30 && link_service::last_rate == 1000 && link_service::last_mode == 0);
+  } else if (test == "test_shape_refused_combinations") {
+    // A combination the tested medium does not offer is refused before it is
+    // queued, whatever the other fields say.
+    const char *refused[] = {
+      ",\"profile\":\"injected\"",                    // Wi-Fi has no injected profile
+      ",\"mode\":3",                                  // mode out of range
+      ",\"seconds\":45",                              // no such duration
+    };
+    for (const char *extra : refused) {
+      request.body_text = select_body("link.test", "wifi", extra);
+      assert(post_settings(&request) == 0);
+      assert(status == "400 Bad Request" && response == "{\"error\":\"request_refused\"}");
+    }
+    const char *radio_refused[] = {
+      ",\"rate\":200",                                // the paired RTCM engine has no rate knob
+      ",\"mode\":1",                                  // and no direction knob
+    };
+    for (const char *extra : radio_refused) {
+      request.body_text = select_body("link.test", "sik", extra);
+      assert(post_settings(&request) == 0);
+      assert(status == "400 Bad Request" && response == "{\"error\":\"request_refused\"}");
+    }
+    assert(link_service::test_requests == 0);          // nothing was queued
+    // The same values on the medium that does offer them are accepted.
+    request.body_text = select_body("link.test", "sik", ",\"rate\":1000,\"mode\":0,\"profile\":\"injected\"");
+    assert(post_settings(&request) == 0);
+    assert(status == "202 Accepted" && link_service::test_requests == 1);
+    assert(link_service::last_profile == 1 && link_service::last_rate == 1000 && link_service::last_mode == 0);
+  } else if (test == "test_shape_type_rejected") {
+    // A field of the wrong type is a malformed request, never a silent default.
+    request.body_text = select_body("link.test", "wifi", ",\"seconds\":\"120\"");
+    assert(post_settings(&request) == 0);
+    assert(status == "400 Bad Request" && response == "{\"error\":\"invalid_request\"}");
+    request.body_text = select_body("link.test", "wifi", ",\"rate\":1000.5");
+    assert(post_settings(&request) == 0);
+    assert(status == "400 Bad Request" && response == "{\"error\":\"invalid_request\"}");
+    request.body_text = select_body("link.test", "wifi", ",\"mode\":-1");
+    assert(post_settings(&request) == 0);
+    assert(status == "400 Bad Request" && response == "{\"error\":\"invalid_request\"}");
+    assert(link_service::test_requests == 0);
   } else if (test == "test_profile_default") {
     request.body_text = select_body("link.test", "sik", "");
     assert(post_settings(&request) == 0);
@@ -113,7 +177,7 @@ int main(int argc, char **argv) {
     assert(status == "202 Accepted" && link_service::last_id == id);
   } else if (test == "test_op_unavailable") {
     request.body_text = select_body("link.test", "sik", "");
-    link_service::request_result = false;
+    link_service::request_test_result = false;
     link_service::forced_reason = link_operation::Reason::Unsupported;
     assert(post_settings(&request) == 0);
     assert(status == "503 Service Unavailable" && response == "{\"error\":\"test_operation_not_available\"}");
@@ -207,8 +271,10 @@ generated.write_text(stubs + handlers + cases, encoding='utf-8')
 exe = out / 'settings_http.exe'
 json_include = '-I' + str(root / '.pio/libdeps/unit_a/ArduinoJson/src')
 subprocess.run(['g++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-I' + str(root / 'src'), json_include,
-                str(generated), '-o', str(exe)], check=True)
+                str(generated), str(root / 'src/link_operation.cpp'), '-o', str(exe)], check=True)
 for case in ['select', 'select_wifi', 'test_profile_injected', 'test_profile_default', 'test_profile_unsupported',
+             'test_shape_passed', 'test_shape_canonical_default', 'test_shape_refused_combinations',
+             'test_shape_type_rejected',
              'cancel', 'test_op_unavailable', 'stale', 'busy', 'conflict', 'cancelled',
              'storage', 'origin', 'unauthorized', 'malformed', 'oversize', 'unreadable', 'no_confirm',
              'no_revision', 'no_transport', 'unknown_op', 'get', 'get_unavailable']:

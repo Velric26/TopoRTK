@@ -73,10 +73,14 @@ class HardwareSerial : public HostPrint {
   template<class... Args> void begin(Args...) {}
   void setRxBufferSize(int) {}
   void setTxBufferSize(int) {}
+  // Received bytes, as the attached device would send them. Empty for every
+  // port nothing feeds; the receiver's own reader drains it.
+  std::vector<uint8_t> input;
+  void feed(const uint8_t *bytes, size_t length) { input.insert(input.end(), bytes, bytes + length); }
   int tx_free=2048;size_t short_limit=2048;std::vector<uint8_t> binary_output;
   int availableForWrite(){return tx_free;}
-  int available() { return 0; }
-  int read() { return -1; }
+  int available() { return static_cast<int>(input.size()); }
+  int read() { if (input.empty()) return -1; const int value = input.front(); input.erase(input.begin()); return value; }
   size_t write(const uint8_t *p, size_t length) {size_t n=std::min(length,short_limit);binary_output.insert(binary_output.end(),p,p+n);return n;}
 };
 extern HardwareSerial Serial;

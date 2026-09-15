@@ -177,6 +177,9 @@ inline bool survey_diagnostic_acquire() { return true; }
 inline void survey_diagnostic_release() {}
 inline bool diagnostic_busy() { return false; }
 inline bool diagnostic_quick_test_start(uint8_t, uint8_t, uint32_t) { return true; }
+// The operation's own start carries the admitted shape; the double accepts the
+// production signature so the unmodified service compiles against it.
+inline bool diagnostic_quick_test_start(uint8_t, uint8_t, uint32_t, uint16_t, uint16_t, uint8_t, uint32_t) { return true; }
 inline bool diagnostic_quick_test_start(uint8_t, uint8_t, uint32_t, uint32_t) { return true; }
 inline bool diagnostic_quick_test_ready(uint32_t) { return false; }
 inline bool diagnostic_quick_test_pass(uint32_t) { return false; }

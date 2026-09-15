@@ -26,10 +26,13 @@ struct Node {
   bool rover = false, storage_ok = true, persist_ok = true;
   bool staging_active = false, staging_ready = false, production = false;
   bool target_usable = true, restore_usable = true;   // fault injection for cutover failures
-  // Device-local quick-test double: reports a verdict once, or never.
+  // Device-local quick-test double: reports a verdict once, or never, and
+  // records the shape the operation admitted for the run.
   bool test_engine_running = false, test_verdict = true, test_reports = true;
   unsigned test_runs = 0;
   uint32_t test_since = 0;
+  uint8_t test_profile = 0, test_mode = 0;
+  uint16_t test_seconds = 0, test_rate = 0;
   uint32_t staged_at = 0;
   Transport selected = Transport::WiFi;
   // Mirrors link_service: the survey/diagnostic reservation the staging phase
@@ -86,7 +89,11 @@ struct Node {
         staging_active = true; staging_ready = false; staged_at = now;
       }
     }
-    if (actions.run_test) { test_engine_running = true; test_since = now; ++test_runs; }
+    if (actions.run_test) {
+      test_engine_running = true; test_since = now; ++test_runs;
+      test_profile = actions.profile; test_seconds = actions.seconds; test_rate = actions.rate;
+      test_mode = actions.mode;
+    }
     if (actions.commit) { selected = engine.snapshot(now).transport; production = target_usable; }
     if (actions.restore) {
       const auto op = engine.snapshot(now);
@@ -364,7 +371,7 @@ void test_never_changes_the_selection() {
   p.rover.confirmed.transport = uint8_t(Transport::WiFi); p.rover.confirmed.revision = 4;
   link_operation::seal(p.rover.confirmed);
   p.rover.engine.begin(true, true, &p.rover.confirmed, nullptr);
-  assert(p.rover.engine.request(Kind::Test, Transport::Radio, tag_of(0x91), 4, now_ms, reason));
+  assert(p.rover.engine.request(Kind::Test, Transport::Radio, tag_of(0x91), 4, now_ms, reason, 0, 30, 1000, 0));
   p.run(60000);
   const auto op = p.rover.engine.snapshot(now_ms);
   assert(op.state == State::Succeeded);
@@ -384,7 +391,7 @@ void test_failure_never_passes() {
   Reason reason;
   p.rover.production = true; p.base.production = true;
   p.rover.test_verdict = false;                       // the coordinator's own run fails
-  assert(p.rover.engine.request(Kind::Test, Transport::Radio, tag_of(0x92), 0, now_ms, reason));
+  assert(p.rover.engine.request(Kind::Test, Transport::Radio, tag_of(0x92), 0, now_ms, reason, 0, 30, 1000, 0));
   p.run(60000);
   const auto op = p.rover.engine.snapshot(now_ms);
   assert(op.state == State::Failed);
@@ -398,7 +405,7 @@ void test_without_peer_verdict_never_passes() {
   Reason reason;
   p.rover.production = true; p.base.production = true;
   p.base.test_reports = false;                        // the peer never reports a verdict
-  assert(p.rover.engine.request(Kind::Test, Transport::Radio, tag_of(0x93), 0, now_ms, reason));
+  assert(p.rover.engine.request(Kind::Test, Transport::Radio, tag_of(0x93), 0, now_ms, reason, 0, 30, 1000, 0));
   p.run(120000);
   const auto op = p.rover.engine.snapshot(now_ms);
   // Either the peer's run window expires first (test_failed) or nothing arrives at
@@ -414,7 +421,7 @@ void test_on_the_selected_medium_still_runs() {
   Reason reason;
   p.rover.production = true; p.rover.selected = Transport::WiFi;
   p.base.production = true; p.base.selected = Transport::WiFi;
-  assert(p.rover.engine.request(Kind::Test, Transport::WiFi, tag_of(0x94), 0, now_ms, reason));
+  assert(p.rover.engine.request(Kind::Test, Transport::WiFi, tag_of(0x94), 0, now_ms, reason, 0, 30, 1000, 0));
   p.run(60000);
   const auto op = p.rover.engine.snapshot(now_ms);
   assert(op.state == State::Succeeded);
@@ -429,7 +436,7 @@ void test_unavailable_when_the_medium_refuses() {
   Reason reason;
   p.rover.production = true; p.base.production = true;
   p.rover.test_reports = false; p.base.test_reports = false;
-  assert(p.rover.engine.request(Kind::Test, Transport::Radio, tag_of(0x98), 0, now_ms, reason));
+  assert(p.rover.engine.request(Kind::Test, Transport::Radio, tag_of(0x98), 0, now_ms, reason, 0, 30, 1000, 0));
   p.run(3000);
   assert(p.rover.engine.snapshot(now_ms).active);
   p.rover.engine.test_unavailable(now_ms);
@@ -441,16 +448,162 @@ void test_unavailable_when_the_medium_refuses() {
   std::printf("PASS: a test that could not start reports test_unavailable\n");
 }
 
+// F05: a Test names its shape on the operation body, which must round-trip on
+// exactly the kinds that carry one and be refused when the tested medium does
+// not offer the combination.
+void test_shape_wire_rules() {
+  const uint8_t carries[] = {uint8_t(link_operation::Request), uint8_t(link_operation::Prepare),
+                             uint8_t(link_operation::Run)};
+  for (unsigned i = 0; i < 3; ++i) {
+    Message message;
+    message.kind = carries[i];
+    message.code = carries[i] == uint8_t(link_operation::Run) ? 0 : uint8_t(Kind::Test);
+    message.transport = uint8_t(Transport::WiFi);
+    message.tag = 0x9abcdef0u; message.revision = 7; message.boot = 0x0000beef;
+    message.seconds = 120; message.rate = 3000; message.mode = 1;
+    correction::Packet packet;
+    link_operation::encode(packet, 2, true, message);
+    Message decoded;
+    assert(link_operation::decode(packet, decoded));
+    assert(decoded.seconds == 120 && decoded.rate == 3000 && decoded.mode == 1);
+    assert(decoded.kind == carries[i] && decoded.tag == 0x9abcdef0u && decoded.revision == 7);
+  }
+  // The same shape for the paired RTCM engine: it runs the profile and duration
+  // it is given, with no rate or direction.
+  {
+    Message message;
+    message.kind = link_operation::Prepare; message.code = uint8_t(Kind::Test);
+    message.transport = uint8_t(Transport::Radio); message.tag = 0x11u; message.revision = 2;
+    message.boot = 0x22; message.profile = 1; message.seconds = 300;
+    message.rate = 1000; message.mode = 0;
+    correction::Packet packet;
+    link_operation::encode(packet, 1, false, message);
+    Message decoded;
+    assert(link_operation::decode(packet, decoded));
+    assert(decoded.profile == 1 && decoded.seconds == 300 && decoded.rate == 1000 && decoded.mode == 0);
+  }
+  // A combination the tested medium does not offer is not representable: Wi-Fi
+  // has no fault-injection profile, and the paired RTCM engine has no rate or
+  // direction knob.
+  auto rejects_shape = [](uint8_t kind, uint8_t code, Transport transport, uint8_t profile, uint16_t seconds,
+                          uint16_t rate, uint8_t mode) {
+    Message message;
+    message.kind = kind; message.code = code;
+    message.transport = uint8_t(transport); message.tag = 0x33u; message.revision = 4;
+    message.boot = 0x44; message.profile = profile; message.seconds = seconds; message.rate = rate;
+    message.mode = mode;
+    correction::Packet packet;
+    link_operation::encode(packet, 2, true, message);
+    Message decoded;
+    return !link_operation::decode(packet, decoded);
+  };
+  const uint8_t prepare = uint8_t(link_operation::Prepare), test = uint8_t(Kind::Test);
+  assert(rejects_shape(prepare, test, Transport::WiFi, 1, 30, 1000, 0));      // Wi-Fi takes no injected profile
+  assert(rejects_shape(prepare, test, Transport::Radio, 0, 30, 200, 0));      // no 200 bytes/s on SiK
+  assert(rejects_shape(prepare, test, Transport::Radio, 0, 30, 1000, 1));     // no direction knob on SiK
+  assert(rejects_shape(prepare, test, Transport::Radio, 0, 3000, 1000, 0));   // 3000 s is not a duration
+  assert(rejects_shape(prepare, test, Transport::WiFi, 0, 30, 1000, 3));      // mode out of range
+  assert(rejects_shape(prepare, uint8_t(Kind::Select), Transport::WiFi, 0, 30, 1000, 0));   // a selection has no shape
+  assert(rejects_shape(prepare, uint8_t(Kind::Select), Transport::Radio, 1, 0, 0, 0));      // not even a profile
+  assert(rejects_shape(uint8_t(link_operation::Run), 0, Transport::Radio, 0, 30, 1000, 1)); // a Run is a Test shape
+  // The encoder writes no shape on the acknowledgement kinds, and the same
+  // bytes set by hand are refused: only Request/Prepare/Run carry one.
+  Message ack;
+  ack.kind = uint8_t(link_operation::Ready); ack.transport = uint8_t(Transport::WiFi);
+  ack.tag = 0x55u; ack.revision = 4; ack.boot = 0x66;
+  ack.profile = 1; ack.seconds = 30; ack.rate = 1000; ack.mode = 1;
+  correction::Packet ack_packet;
+  link_operation::encode(ack_packet, 2, true, ack);
+  {
+    Message decoded;
+    assert(link_operation::decode(ack_packet, decoded));
+    assert(!decoded.profile && !decoded.seconds && !decoded.rate && !decoded.mode);
+  }
+  {
+    correction::Packet bad = ack_packet; correction::put16(bad.bytes + 40, 30); correction::seal(bad);
+    Message decoded; assert(!link_operation::decode(bad, decoded));
+  }
+  {
+    correction::Packet bad = ack_packet; correction::put16(bad.bytes + 42, 1000); correction::seal(bad);
+    Message decoded; assert(!link_operation::decode(bad, decoded));
+  }
+  {
+    correction::Packet bad = ack_packet; bad.bytes[46] = 1; correction::seal(bad);
+    Message decoded; assert(!link_operation::decode(bad, decoded));
+  }
+  {
+    correction::Packet bad = ack_packet; bad.bytes[45] = 1; correction::seal(bad);
+    Message decoded; assert(!link_operation::decode(bad, decoded));
+  }
+  std::printf("PASS: a Test shape rides Request/Prepare/Run and no combination a medium does not offer\n");
+}
+
+// A selection must reach the peer with no test shape on it, whatever a caller
+// hands the engine: those bytes would make its own operation body undecodable.
+void selection_carries_no_test_shape() {
+  Pair p;
+  Reason reason;
+  assert(p.rover.engine.request(Kind::Select, Transport::Radio, tag_of(0xa3), 0, now_ms, reason, 1, 120, 3000, 2));
+  p.run(1200);
+  const auto op = p.rover.engine.snapshot(now_ms);
+  assert(op.state == State::Succeeded && op.reason == Reason::Applied);
+  assert(!op.profile && !op.seconds && !op.rate && !op.mode);
+  assert(p.rover.selected == Transport::Radio && p.base.selected == Transport::Radio);
+  std::printf("PASS: a selection reaches the peer with no test shape on it\n");
+}
+
+// The coordinator admits one shape and the delegate runs the coordinator's
+// values, which it only ever saw on the operation body: a companion that was
+// asked for something else cannot run a different test.
+void test_shape_reaches_both_peers() {
+  {
+    Pair p;
+    Reason reason;
+    p.rover.production = true; p.base.production = true;
+    assert(p.rover.engine.request(Kind::Test, Transport::Radio, tag_of(0xa1), 0, now_ms, reason, 1, 120, 1000, 0));
+    p.run(3000);
+    const auto op = p.rover.engine.snapshot(now_ms);
+    assert(op.profile == 1 && op.seconds == 120 && op.rate == 1000 && op.mode == 0);
+    assert(p.rover.test_runs == 1 && p.base.test_runs == 1);
+    assert(p.rover.test_profile == 1 && p.base.test_profile == 1);
+    assert(p.rover.test_seconds == 120 && p.base.test_seconds == 120);
+    assert(p.rover.test_rate == 1000 && p.base.test_rate == 1000);
+    assert(p.rover.test_mode == 0 && p.base.test_mode == 0);
+    p.run(30000);
+    assert(p.rover.engine.snapshot(now_ms).state == State::Succeeded);
+    assert(p.rover.engine.revision() == 0);   // a Test adopts nothing
+  }
+  {
+    // Wi-Fi is the medium with the rate and direction knobs.
+    Pair p;
+    Reason reason;
+    p.rover.production = true; p.base.production = true;
+    assert(p.rover.engine.request(Kind::Test, Transport::WiFi, tag_of(0xa2), 0, now_ms, reason, 0, 60, 200, 2));
+    p.run(3000);
+    assert(p.rover.test_seconds == 60 && p.base.test_seconds == 60);
+    assert(p.rover.test_rate == 200 && p.base.test_rate == 200);
+    assert(p.rover.test_mode == 2 && p.base.test_mode == 2);
+    assert(!p.rover.test_profile && !p.base.test_profile);
+    p.run(30000);
+    assert(p.rover.engine.snapshot(now_ms).state == State::Succeeded);
+    std::printf("PASS: both peers run the shape the coordinator admitted, on either medium\n");
+  }
+}
+
 void test_profile_bounds_are_enforced() {
   Pair p;
   Reason reason;
-  // The engine bounds the profile byte it will carry; which profile a medium
-  // accepts is link_service's rule (injected faults exist only for the radio
-  // engine) and is asserted where that decision lives.
-  assert(!p.rover.engine.request(Kind::Test, Transport::Radio, tag_of(0x95), 0, now_ms, reason, 2));
+  // The engine enforces the whole medium rule, because that rule also decides
+  // which operation bodies decode: a combination the medium does not offer can
+  // never be admitted, queued or run.
+  assert(!p.rover.engine.request(Kind::Test, Transport::Radio, tag_of(0x95), 0, now_ms, reason, 2, 30, 1000, 0));
   assert(reason == Reason::Unsupported);
-  assert(p.rover.engine.request(Kind::Test, Transport::Radio, tag_of(0x96), 0, now_ms, reason, 1));
-  std::printf("PASS: the engine enforces the profile bounds it carries\n");
+  assert(!p.rover.engine.request(Kind::Test, Transport::Radio, tag_of(0x96), 0, now_ms, reason, 0, 30, 200, 0));
+  assert(reason == Reason::Unsupported);
+  assert(!p.rover.engine.request(Kind::Test, Transport::WiFi, tag_of(0x96), 0, now_ms, reason, 1, 30, 1000, 0));
+  assert(reason == Reason::Unsupported);
+  assert(p.rover.engine.request(Kind::Test, Transport::Radio, tag_of(0x96), 0, now_ms, reason, 1, 30, 1000, 0));
+  std::printf("PASS: the engine enforces the shape the tested medium offers\n");
 }
 
 void test_cancel_reaches_both_sides() {
@@ -458,7 +611,7 @@ void test_cancel_reaches_both_sides() {
   Reason reason;
   p.rover.production = true; p.base.production = true;
   p.rover.test_reports = false; p.base.test_reports = false;   // keep the run in flight
-  assert(p.rover.engine.request(Kind::Test, Transport::Radio, tag_of(0x97), 0, now_ms, reason));
+  assert(p.rover.engine.request(Kind::Test, Transport::Radio, tag_of(0x97), 0, now_ms, reason, 0, 30, 1000, 0));
   const uint32_t tag = tag_of(0x97);
   p.run(3000);
   const auto started = p.rover.engine.snapshot(now_ms);
@@ -504,18 +657,29 @@ void codec_boundaries() {
   { correction::Packet bad = packet; bad.bytes[21] = 3; reject(bad, 9); }         // transport
   { correction::Packet bad = packet; bad.bytes[22] = 1; reject(bad, 10); }         // body reserved
   { correction::Packet bad = packet; bad.bytes[44] = 9; reject(bad, 11); }         // code out of range
-  { correction::Packet bad = packet; correction::put32(bad.bytes + 40, 5); reject(bad, 12); }   // session
+  { correction::Packet bad = packet; correction::put32(bad.bytes + 40, 5); reject(bad, 12); }   // seconds byte on a selection
   { correction::Packet bad = packet; correction::put32(bad.bytes + 28, 1); reject(bad, 13); }   // peer boot
   { correction::Packet bad = packet; correction::put32(bad.bytes + 32, 0); reject(bad, 14); }   // tag
   { correction::Packet bad = packet; correction::put32(bad.bytes + 36, 0); reject(bad, 15); }   // revision
-  // Byte 45 (body byte 33) carries the Test profile since R9, so the reserved-byte
-  // guard moves to its neighbour and the profile rules get their own boundaries.
-  { correction::Packet bad = packet; bad.bytes[46] = 1; reject(bad, 16); }                     // reserved
-  { correction::Packet good = packet; good.bytes[45] = 1; correction::seal(good);
+  // Byte 45 (body byte 33) carries the Test profile since R9, and body bytes
+  // 28-31 and 34 carry the Test shape since F05, so the reserved-byte guard
+  // moves to its neighbours and the shape rules get their own boundaries.
+  { correction::Packet bad = packet; bad.bytes[47] = 1; reject(bad, 16); }                     // reserved
+  // A profile belongs to a Test: on a Test prepare the injected profile is
+  // carried, on a selection it is refused outright.
+  correction::Packet test_prepare = packet;
+  test_prepare.bytes[44] = uint8_t(Kind::Test);
+  correction::put16(test_prepare.bytes + 40, 30);
+  correction::put16(test_prepare.bytes + 42, 1000);
+  correction::seal(test_prepare);
+  { Message decoded_test; assert(link_operation::decode(test_prepare, decoded_test));
+    assert(decoded_test.code == uint8_t(Kind::Test) && decoded_test.seconds == 30); }
+  { correction::Packet good = test_prepare; good.bytes[45] = 1; correction::seal(good);
     Message decoded_profile; assert(link_operation::decode(good, decoded_profile));
-    assert(decoded_profile.profile == 1); }                                                    // profile 1 on Prepare
-  { correction::Packet bad = packet; bad.bytes[45] = 2; reject(bad, 19); }                     // profile out of range
-  { correction::Packet bad = packet; bad.bytes[17] = uint8_t(link_operation::Ready); bad.bytes[45] = 1; reject(bad, 20); }  // profile only on Request/Prepare
+    assert(decoded_profile.profile == 1); }                                                    // profile 1 on a Test prepare
+  { correction::Packet bad = test_prepare; bad.bytes[45] = 2; reject(bad, 19); }               // profile out of range
+  { correction::Packet bad = packet; bad.bytes[45] = 1; reject(bad, 21); }                     // profile on a selection
+  { correction::Packet bad = packet; bad.bytes[17] = uint8_t(link_operation::Ready); bad.bytes[45] = 1; reject(bad, 20); }  // profile only on Request/Prepare/Run
 
   { correction::Packet bad = packet; correction::put32(bad.bytes + 48, 1); reject(bad, 17); }   // revision copy
   { correction::Packet bad = packet; bad.bytes[60] = 1; reject(bad, 18); }        // padding
@@ -546,6 +710,9 @@ int main() {
   test_on_the_selected_medium_still_runs();
   test_unavailable_when_the_medium_refuses();
   test_profile_bounds_are_enforced();
+  test_shape_reaches_both_peers();
+  selection_carries_no_test_shape();
+  test_shape_wire_rules();
   test_cancel_reaches_both_sides();
   local_selection_updates_the_baseline();
   reboot_reports_interrupted();

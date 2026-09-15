@@ -32,6 +32,11 @@ bool select(Transport transport, bool rover, uint32_t now);
 // snapshot. Returns false with a reason when the request is refused outright.
 bool request_operation(link_operation::Kind kind, Transport transport, const char *id,
                        uint32_t revision, link_operation::Reason &reason, uint8_t profile = 0);
+// The same admission for a Test, which names the whole shape both peers run.
+// The tested medium has to offer it (link_operation::test_parameter_refusal),
+// and the values are carried to the peer on the operation body itself.
+bool request_test(Transport transport, const char *id, uint32_t revision, link_operation::Reason &reason,
+                  uint8_t profile, uint16_t seconds, uint16_t rate, uint8_t mode);
 bool cancel_operation(const char *id, link_operation::Reason &reason);
 // On-instrument view of the same record the Settings snapshot publishes, for the
 // touchscreen Link-mode page (R6b). No JSON document and no allocation.

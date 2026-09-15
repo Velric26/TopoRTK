@@ -46,7 +46,7 @@ const save=(name,d)=>fs.writeFileSync(path.join(out,name+'.json'),JSON.stringify
   const initial=await paired('sik');
   let session=initial[0].corrections.session;
   for(const u of units){
-   for(const id of ['arm','pairarm','probe','selftest'])assert(await u.page.locator('#'+id).isDisabled());
+   for(const id of ['probe','selftest'])assert(await u.page.locator('#'+id).isDisabled());
    assert.equal((await post(u,{op:'selftest',confirm:true})).status,202);
    await u.page.waitForFunction(()=>!!state?.corrections?.error);
    const d=await get(u,'diagnostic');assert(!d.busy&&d.corrections.transport==='sik');

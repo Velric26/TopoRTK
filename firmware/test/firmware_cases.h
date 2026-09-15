@@ -6,27 +6,99 @@ void publish_web_status(const char *json, size_t length, uint32_t, bool rover) {
   published_web_rover = rover;
 }
 
+// The receiver service owns UART1; the host suite observes the same port object
+// and feeds it the bytes a UM980 would send, so every receiver fact arrives
+// through the production reader rather than a test-only setter.
+extern HardwareSerial gnss;
+
+GnssSnapshot receiver() { return gnss_service::snapshot(); }
+
+void feed_raw(const void *bytes, size_t length) {
+  gnss.feed(static_cast<const uint8_t *>(bytes), length);
+  gnss_service::service_input(host_now);
+}
+
+void feed_bytes(const std::vector<uint8_t> &bytes) {
+  feed_raw(bytes.data(), bytes.size());
+}
+
+void feed_line(const std::string &line) {
+  const std::string framed = line + "\r\n";
+  feed_raw(framed.data(), framed.size());
+}
+
+// NMEA sentences checksum everything after the leading '$'.
+std::string nmea_sentence(const std::string &body) {
+  uint8_t checksum = 0;
+  for (size_t index = 1; index < body.size(); ++index) checksum ^= uint8_t(body[index]);
+  char suffix[8];
+  std::snprintf(suffix, sizeof(suffix), "*%02X", static_cast<unsigned>(checksum));
+  return body + suffix;
+}
+
+// The receiver's own GGA for 19.4326 N / 99.1332 W: empty UTC and altitude
+// fields, exactly as the UM980 emits them.
+std::string gga_fixture(int quality, int satellites, double hdop) {
+  char body[160];
+  std::snprintf(body, sizeof(body),
+                "$GPGGA,,1925.95600,N,09907.99200,W,%d,%d,%.1f,,M,,,", quality,
+                satellites, hdop);
+  return nmea_sentence(body);
+}
+
+// The receiver's own RMC for 2026-09-08 18:24:00 UTC with a valid navigation status.
+std::string rmc_fixture() {
+  return nmea_sentence("$GPRMC,182400.00,A,1925.95600,N,09907.99200,W,0.0,0.0,080926,,,A");
+}
+
+// A whole RTCM 3 1006 reference frame for the given station and position.
+std::vector<uint8_t> reference_frame(uint16_t station, const survey::Position &position) {
+  const survey::Cartesian ecef = survey::ecef(position);
+  std::vector<uint8_t> frame(27, 0);
+  frame[0] = 0xd3;
+  frame[1] = 0x00;
+  frame[2] = 21;
+  auto put = [&](int start, uint64_t value, int count) {
+    for (int bit = 0; bit < count; ++bit)
+      if ((value >> (count - 1 - bit)) & 1)
+        frame[3 + (start + bit) / 8] |= static_cast<uint8_t>(1 << (7 - (start + bit) % 8));
+  };
+  auto signed38 = [](double meters) {
+    return static_cast<uint64_t>(static_cast<int64_t>(meters * 10000.0)) & ((uint64_t(1) << 38) - 1);
+  };
+  put(0, 1006, 12);
+  put(12, station, 12);
+  put(34, signed38(ecef.x), 38);
+  put(74, signed38(ecef.y), 38);
+  put(114, signed38(ecef.z), 38);
+  const uint32_t crc = crc24q(frame.data(), 24);
+  frame[24] = static_cast<uint8_t>(crc >> 16);
+  frame[25] = static_cast<uint8_t>(crc >> 8);
+  frame[26] = static_cast<uint8_t>(crc);
+  return frame;
+}
+
 void reply(const std::string &body, bool corrupt = false) {
   uint8_t checksum = 0;
   for (char c : body) checksum ^= c;
   char line[256];
   std::snprintf(line, sizeof(line), "%s*%02X", body.c_str(), corrupt ? checksum ^ 1 : checksum);
-  handle_line(line);
+  feed_line(line);
 }
 
 void complete_profile() {
   unsigned count = 0;
-  while (profile_running) {
+  while (receiver().profile_running) {
     assert(++count <= 12);
-    assert(!unit_profile_applied);
-    service_profile();
-    const std::string command = active_profile_command(profile_step);
+    assert(!receiver().profile_applied);
+    gnss_service::service_profile(host_now);
+    const std::string command = gnss_service::pending_profile_command();
     reply("$command," + command + ",response: OK");
     if (command == "MODE") reply(std::string("#MODE,TEST;MODE ") + (is_base() ? "BASE" : "ROVER"));
     host_now += 110;
-    service_profile();
+    gnss_service::service_profile(host_now);
   }
-  assert(unit_profile_applied && !profile_failed);
+  assert(receiver().profile_applied && !receiver().profile_failed);
 }
 
 void contact(int x, int y, int points=1, int elapsed=30) {
@@ -57,6 +129,9 @@ void assert_clean_page(const char *preview_path = nullptr) {
 }
 
 int main() {
+  // The receiver service owns UART1 and installs its observations here; every
+  // receiver fact below arrives through its own reader and sequencers.
+  receiver_service_begin();
   // Same production observer: metadata/replayed epochs cannot hide an outage.
   auto msm=[](unsigned type,uint32_t epoch){std::vector<uint8_t> b(32);b[0]=0xd3;b[2]=26;b[3]=type>>4;b[4]=(type&15)<<4;b[5]=7;
     b[6]=epoch>>22;b[7]=epoch>>14;b[8]=epoch>>6;b[9]=epoch<<2;const auto crc=crc24q(b.data(),29);b[29]=crc>>16;b[30]=crc>>8;b[31]=crc;return b;};
@@ -72,7 +147,9 @@ int main() {
   data=msm(1074,604799000);assert(!health.observe(data.data(),data.size(),30));
   // Actual firmware queue and COM2 writer: no partial admission under pressure.
   {
-    const auto before=host_now;device_config.role=DeviceRole::kRover;unit_profile_applied=true;
+    const auto before=host_now;gnss_service::set_config(device_config);
+    gnss_service::apply_unit_profile();        // the correction gate needs a verified profile
+    complete_profile();
     wifi_last_peer_ms=host_now;
     correction_output_reset();debug_enable_local(true);gnss.binary_output.clear();gnss.tx_free=0;
     auto reference=msm(1006,0),observation=msm(1074,1000);
@@ -136,13 +213,36 @@ int main() {
     assert(queue_correction(reference.data(),reference.size(),host_now));gnss.short_limit=3;service_correction_output();
     assert(correction_output_fault&&correction_health.arrival_age(host_now)==UINT32_MAX);
     assert(!queue_correction(reference.data(),reference.size(),host_now));gnss.short_limit=2048;
-    correction_output_reset();unit_profile_applied=false;assert(!queue_correction(reference.data(),reference.size(),host_now));
+    // The correction gate follows the receiver's own profile state: dropping it
+    // (a role/reference reset) refuses corrections again.
+    correction_output_reset();gnss_service::reset_for_config_change();
+    assert(!receiver().profile_applied&&!receiver().profile_running);
+    assert(!queue_correction(reference.data(),reference.size(),host_now));
     host_now=before;gnss.binary_output.clear();
     std::puts("PASS: production COM2 whole-frame admission, backpressure/expiry, carried age, exclusive route, profile gate and latched output fault");
   }
   // Five startup commands are scheduled individually; no invocation advances time.
-  profile_running=false;version_ok=false;gnss_startup_complete=false;next_gnss_handshake_ms=host_now;gnss_handshake_step=0;
-  for(unsigned i=0;i<5;++i){const auto before=host_now;service_gnss_startup();assert(host_now==before);host_now+=100;}assert(!gnss_handshake_step);
+  receiver_service_begin();                   // a fresh receiver: nothing proven yet
+  assert(!receiver().version_ok&&!receiver().startup_complete);
+  host_now+=1500;                             // the service schedules its first attempt
+  for(unsigned i=0;i<5;++i){
+    const auto before=host_now;
+    const auto commands=gnss.output;
+    gnss_service::service_startup(host_now);
+    assert(host_now==before);                     // no invocation advances time
+    assert(gnss.output.size()>commands.size());   // exactly one command per invocation
+    host_now+=100;
+  }
+  // The block is the allowlisted handshake in order; the wrap above sends
+  // nothing more until the 3 s retry window elapses.
+  const std::string handshake =
+      "VERSION\r\nGPGGA COM2 1\r\nGPRMC COM2 1\r\nBESTNAVA COM2 1\r\nMODE\r\n";
+  assert(gnss.output.size()>=handshake.size()&&
+         gnss.output.compare(gnss.output.size()-handshake.size(),handshake.size(),handshake)==0);
+  host_now+=100;
+  const std::string wrapped=gnss.output;
+  gnss_service::service_startup(host_now);
+  assert(gnss.output==wrapped);
   std::puts("PASS: observation freshness, repeated epochs, metadata outage, receiver age/station, corruption, week/timer wrap, nonblocking handshake");
   auto bestnav=[](const std::string &body){const std::string payload="BESTNAVA,97,GPS,FINE,2435,432000000,0,0,18,16;"+body;
     char suffix[12];std::snprintf(suffix,sizeof(suffix),"*%08X",ascii_crc32(payload.c_str(),payload.c_str()+payload.size()));return "#"+payload+suffix;};
@@ -154,41 +254,51 @@ int main() {
   assert(parse_bestnav_accuracy(bestnav("SOL_COMPUTED,NARROW_INT,19.4,-99.1,2234,-30,WGS84,0.01,0.02,0.03,\"7\",0.0,0.0,30,25").c_str(),0,observed,parse_stats)&&!observed.position_valid);
   assert(parse_bestnav_accuracy(bestnav("SOL_COMPUTED,NARROW_INT,19.4,-99.1,2234,-30,WGS84,,0.02,0.03,\"7\",1.2,0.0,30,25").c_str(),0,observed,parse_stats)&&!observed.position_valid);
   auto corrupt=fixed;corrupt.back()=corrupt.back()=='0'?'1':'0';assert(!parse_bestnav_accuracy(corrupt.c_str(),0,observed,parse_stats));assert(parse_stats.checksum_errors==1);
-  device_config.role=DeviceRole::kBase;base_settings.fixed=1;base_settings.latitude=19.4;base_settings.longitude=-99.1;base_settings.height=2201.5;
-  assert(std::string(active_profile_command(1))=="MODE BASE 19.40000000000 -99.10000000000 2201.5000");
-  base_settings=BaseSettings{};
+  DeviceConfig base_config;
+  base_config.role=DeviceRole::kBase;
+  base_config.base_rtcm=true;
+  gnss_service::set_config(base_config);
+  gnss_service::set_base_coordinate(true,19.4,-99.1,2201.5);
+  assert(std::string(gnss_service::active_profile_command(1))=="MODE BASE 19.40000000000 -99.10000000000 2201.5000");
+  gnss_service::set_base_coordinate(false,0.0,0.0,0.0);
   std::puts("PASS: BESTNAV epoch, ellipsoidal height, correction age/base ID, invalid data and saved fixed-base command");
   ui_module_begin();
   display_ready = touch_ready = true;
-  version_ok = gnss_startup_complete = true;
+  // The receiver proves the version from its own reply line, exactly as the
+  // handshake's first command expects.
+  reply("$command,VERSION,response: OK");
+  assert(receiver().version_ok);
   load_config();
   setup_backlight(device_config.brightness, host_now);
   assert(backlight_pwm_ready && ledcReadFreq(0) == 5000);
-  assert(automatic_brightness_target(host_now, latest_gnss_time) == 255); // No clock: full brightness.
-  latest_gnss_time.valid = true;
-  latest_gnss_time.received_ms = host_now;
-  latest_gnss_time.year = 2026; latest_gnss_time.month = 9; latest_gnss_time.day = 9;
-  latest_gnss_time.hour = 5; latest_gnss_time.minute = 18; // 23:18 UTC-6, previous day.
-  assert(automatic_brightness_target(host_now, latest_gnss_time) == board::kNightBacklightDuty);
+  // The backlight curve takes whatever clock it is handed; the receiver's own
+  // clock is injected later through the same sentence path.
+  GnssTimeData brightness_time;
+  assert(automatic_brightness_target(host_now, brightness_time) == 255); // No clock: full brightness.
+  brightness_time.valid = true;
+  brightness_time.received_ms = host_now;
+  brightness_time.year = 2026; brightness_time.month = 9; brightness_time.day = 9;
+  brightness_time.hour = 5; brightness_time.minute = 18; // 23:18 UTC-6, previous day.
+  assert(automatic_brightness_target(host_now, brightness_time) == board::kNightBacklightDuty);
   uint16_t year; uint8_t month, day, hour, minute, second;
-  assert(local_time_utc_minus_6(host_now, latest_gnss_time, year, month, day, hour, minute, second));
+  assert(local_time_utc_minus_6(host_now, brightness_time, year, month, day, hour, minute, second));
   assert(day == 8 && hour == 23 && minute == 18);
-  latest_gnss_time.hour = 18; // Noon local.
-  assert(automatic_brightness_target(host_now, latest_gnss_time) == 255);
-  latest_gnss_time.hour = 11; latest_gnss_time.minute = 0; // Dawn 05:00 local.
-  assert(automatic_brightness_target(host_now, latest_gnss_time) == board::kNightBacklightDuty);
-  latest_gnss_time.hour = 12; // Mid-dawn transition.
-  assert(automatic_brightness_target(host_now, latest_gnss_time) > board::kNightBacklightDuty);
-  assert(automatic_brightness_target(host_now, latest_gnss_time) < 255);
-  assert(automatic_brightness_target(host_now + 3000, latest_gnss_time) == 255); // Stale clock.
-  latest_gnss_time = GnssTimeData{};
+  brightness_time.hour = 18; // Noon local.
+  assert(automatic_brightness_target(host_now, brightness_time) == 255);
+  brightness_time.hour = 11; brightness_time.minute = 0; // Dawn 05:00 local.
+  assert(automatic_brightness_target(host_now, brightness_time) == board::kNightBacklightDuty);
+  brightness_time.hour = 12; // Mid-dawn transition.
+  assert(automatic_brightness_target(host_now, brightness_time) > board::kNightBacklightDuty);
+  assert(automatic_brightness_target(host_now, brightness_time) < 255);
+  assert(automatic_brightness_target(host_now + 3000, brightness_time) == 255); // Stale clock.
+  brightness_time = GnssTimeData{};
   brightness_mode = BrightnessMode::kNight;
-  for (int tick=0; tick<75; ++tick) { host_now += 20; service_brightness(host_now, brightness_mode, latest_gnss_time); }
+  for (int tick=0; tick<75; ++tick) { host_now += 20; service_brightness(host_now, brightness_mode, brightness_time); }
   assert(backlight_duty == board::kNightBacklightDuty && ledcRead(0) == board::kNightBacklightDuty);
   brightness_mode = BrightnessMode::kDay;
-  host_now += 500; service_brightness(host_now, brightness_mode, latest_gnss_time); // A busy loop must catch up, not move one step.
+  host_now += 500; service_brightness(host_now, brightness_mode, brightness_time); // A busy loop must catch up, not move one step.
   assert(backlight_duty > 100 && backlight_duty < 255);
-  host_now += 1000; service_brightness(host_now, brightness_mode, latest_gnss_time);
+  host_now += 1000; service_brightness(host_now, brightness_mode, brightness_time);
   assert(backlight_duty == 255 && ledcRead(0) == 256);
   brightness_mode = BrightnessMode::kNight;
   setup_backlight(brightness_mode, host_now); // Saved Night starts dim, without a full-brightness flash.
@@ -199,19 +309,27 @@ int main() {
   // Failed NVS writes must leave role, Wi-Fi, and displayed brightness unchanged.
   preferences.fail = true;
   select_role(DeviceRole::kBase);
-  assert(!is_base() && config_error && !profile_running);
+  assert(!is_base() && config_error && !receiver().profile_running);
   preferences.fail = false;
   select_role(DeviceRole::kBase);
-  assert(is_base() && profile_running && WiFi.selected_mode == WIFI_AP);
-  service_profile();
+  assert(is_base() && receiver().profile_running && WiFi.selected_mode == WIFI_AP);
+  gnss_service::service_profile(host_now);
+  const std::string waiting_command = gnss_service::pending_profile_command();
   reply("$command,UNLOG COM2,response: OK", true);
-  assert(!profile_ack && !unit_profile_applied);
+  // A corrupt reply is ignored: the sequencer neither advances nor applies.
+  assert(receiver().profile_running && !receiver().profile_applied);
+  assert(std::string(gnss_service::pending_profile_command()) == waiting_command);
   complete_profile();
-  // A new profile can complete before the next GGA; it must not restart immediately.
-  last_gga_ms = 0;
-  host_now += 100;
-  service_gnss_startup();
-  assert(unit_profile_applied && !profile_running);
+  // A new profile can complete before the next GGA arrives: its own 2 s grace
+  // window holds the handshake off, so a stale solution cannot restart it.
+  feed_line(gga_fixture(4, 28, 0.5));    // the receiver's last solution
+  host_now += 5100;                      // ... which is now older than the window
+  gnss_service::apply_unit_profile();    // a fresh profile runs and completes
+  complete_profile();
+  const std::string after_profile = gnss.output;
+  gnss_service::service_startup(host_now);
+  assert(receiver().profile_applied && !receiver().profile_running);
+  assert(gnss.output == after_profile);  // no handshake command during the grace period
   select_brightness(BrightnessMode::kNight);
   const auto writes = preferences.writes;
   select_brightness(BrightnessMode::kNight);
@@ -220,15 +338,18 @@ int main() {
   load_config();
   assert(is_base() && brightness_mode == BrightnessMode::kNight);
   wifi_peer_known = true;
-  wifi_last_peer_ms = rtcm_last_rx_ms = host_now;
+  wifi_last_peer_ms = host_now;
+  const auto role_frame = msm(1074, 1000);
+  assert(gnss_service::write_frame(role_frame.data(), role_frame.size(), host_now) == role_frame.size());
+  assert(receiver().rtcm_last_rx_ms == host_now);
   select_role(DeviceRole::kRover);
-  assert(!wifi_peer_known && !wifi_last_peer_ms && !rtcm_last_rx_ms); // Role change resets link state.
+  assert(!wifi_peer_known && !wifi_last_peer_ms && receiver().rtcm_last_rx_ms == 0); // Role change resets link state.
   assert(WiFi.selected_mode == WIFI_AP_STA); // Rover: station plus its phone AP.
   complete_profile();
-  apply_unit_profile();
-  service_profile();
-  for (int retry=0; retry<3; ++retry) { host_now += 2100; service_profile(); }
-  assert(profile_failed && !profile_running && !unit_profile_applied);
+  gnss_service::apply_unit_profile();
+  gnss_service::service_profile(host_now);
+  for (int retry=0; retry<3; ++retry) { host_now += 2100; gnss_service::service_profile(host_now); }
+  assert(receiver().profile_failed && !receiver().profile_running && !receiver().profile_applied);
   select_role(DeviceRole::kRover);
   complete_profile();
 
@@ -247,7 +368,7 @@ int main() {
   contact(150,250); contact(150,250,1,1300); release();
   assert(!is_base());
   tap(150,250);
-  assert(is_base() && profile_running);
+  assert(is_base() && receiver().profile_running);
   const auto brightness_before = brightness_mode;
   tap(50,344);
   assert(brightness_mode == brightness_before); // Locked while applying.
@@ -264,18 +385,28 @@ int main() {
   // Render actual production draw functions with the bundled 5x7 bitmap font.
   select_role(DeviceRole::kRover);
   complete_profile();
-  latest_gga.received=true; latest_gga.quality=4; latest_gga.satellites=28;
-  latest_gga.hdop=0.5; latest_gga.latitude=19.4326; latest_gga.longitude=-99.1332;
-  latest_horizontal_accuracy.received=true;
-  latest_horizontal_accuracy.horizontal_1drms_m=0.012;
-  latest_horizontal_accuracy.received_ms=host_now;
-  latest_horizontal_accuracy.position_valid=true;latest_horizontal_accuracy.differential_age_ms=500;latest_horizontal_accuracy.solution_station=7;
+  // The receiver's own sentences carry the solution the rendered surfaces show;
+  // no test setter exists for receiver state.
+  feed_line(gga_fixture(4, 28, 0.5));
+  feed_line(rmc_fixture());
+  feed_line(bestnav("SOL_COMPUTED,NARROW_INT,19.4,-99.1,2234.0,-30.0,WGS84,0.012,0.0,0.03,\"7\",0.500,0.000,30,25,25,0"));
   const auto current_msm=msm(1074,3000);assert(correction_health.observe(current_msm.data(),current_msm.size(),host_now));
-  latest_gnss_time.valid=latest_gnss_time.received=true;
-  latest_gnss_time.year=2026; latest_gnss_time.month=9; latest_gnss_time.day=8;
-  latest_gnss_time.hour=18; latest_gnss_time.minute=24; latest_gnss_time.received_ms=host_now;
-  byte_count=1; last_rx_ms=last_gga_ms=wifi_last_peer_ms=rtcm_last_rx_ms=host_now;
+  assert(gnss_service::write_frame(current_msm.data(),current_msm.size(),host_now)==current_msm.size());
+  wifi_last_peer_ms=host_now;
   WiFi.linked=true;
+  // What the boundary produced is exactly what the surfaces used to be handed.
+  assert(receiver().gga.received&&receiver().gga.quality==4&&receiver().gga.satellites==28);
+  assert(receiver().gga.hdop==0.5);
+  assert(std::fabs(receiver().gga.latitude-19.4326)<1e-9&&std::fabs(receiver().gga.longitude+99.1332)<1e-9);
+  assert(receiver().gga_ms==host_now);
+  assert(receiver().accuracy.received&&std::fabs(receiver().accuracy.horizontal_1drms_m-0.012)<1e-12);
+  assert(receiver().accuracy.received_ms==host_now&&receiver().accuracy.position_valid);
+  assert(receiver().accuracy.differential_age_ms==500&&receiver().accuracy.solution_station==7);
+  assert(receiver().time.valid&&receiver().time.received_ms==host_now);
+  assert(receiver().time.year==2026&&receiver().time.month==9&&receiver().time.day==8);
+  assert(receiver().time.hour==18&&receiver().time.minute==24);
+  assert(receiver().uart_seen&&receiver().last_rx_ms==host_now);
+  assert(receiver().rtcm_last_rx_ms==host_now);
   char json[kWebStatusCapacity];
   const auto config_before_web = encode_config(device_config);
   const auto commands_before_web = gnss.output;
@@ -299,19 +430,27 @@ int main() {
   assert(std::strstr(json, "\"rssi_dbm\":null"));
   assert(std::strstr(json, "\"local\":null"));
   host_now = sample_now;
-  const double valid_accuracy = latest_horizontal_accuracy.horizontal_1drms_m;
-  latest_horizontal_accuracy.horizontal_1drms_m = NAN;
+  // The parser rejects non-finite sigma fields, so an unusable accuracy is only
+  // reachable as "no solution": the same null is emitted for a receiver that
+  // has never reported one.
+  gnss_service::reset_input_state();
+  assert(!receiver().accuracy.received);
   assert(format_web_status(json, sizeof(json), host_now) > 0);
   assert(std::strstr(json, "\"horizontal_uncertainty_m\":null"));
-  latest_horizontal_accuracy.horizontal_1drms_m = valid_accuracy;
+  assert(std::strstr(json, "\"horizontal_uncertainty_label\":\"---\""));
+  feed_line(bestnav("SOL_COMPUTED,NARROW_INT,19.4,-99.1,2234.0,-30.0,WGS84,0.012,0.0,0.03,\"7\",0.500,0.000,30,25,25,0"));
+  assert(receiver().accuracy.received);
 
   // R4 agreement: LCD frame, web JSON and CSV must agree on transport,
   // link state and signal availability in both radio and Wi-Fi modes.
   setup_sd_logging();
   assert(sd_ready && sd_test_passed);
-  latest_gga.received = true; latest_gga.quality = 4; last_gga_ms = host_now;
-  latest_gnss_time.valid = true; latest_gnss_time.received_ms = host_now;
-  wifi_last_peer_ms = host_now; rtcm_last_rx_ms = host_now;
+  feed_line(gga_fixture(4, 28, 0.5));
+  feed_line(rmc_fixture());
+  wifi_last_peer_ms = host_now;
+  // The receiver's last RTCM observation is the reference the link forwarded.
+  const auto link_reference = msm(1006, 0);
+  assert(gnss_service::write_frame(link_reference.data(),link_reference.size(),host_now)==link_reference.size());
   auto csv_field = [&](const char *file, unsigned column) {
     const std::string path = std::string(sd_session_path) + "/" + file;
     const std::string &content = SD_MMC.files[path];
@@ -343,7 +482,8 @@ int main() {
   ui_build_frame(ui_frame, host_now);
   // Wi-Fi mode: transport label, real station RSSI and peer age are reported.
   host_radio_active = false; host_radio_linked = false;
-  host_now += 1000; wifi_last_peer_ms = host_now; rtcm_last_rx_ms = host_now;
+  host_now += 1000; wifi_last_peer_ms = host_now;
+  assert(gnss_service::write_frame(link_reference.data(),link_reference.size(),host_now)==link_reference.size());
   service_sd_logging(); sd_log_solution(host_now);
   assert(format_web_status(json, sizeof(json), host_now) > 0);
   assert(std::strstr(json, "\"rssi_dbm\":-48"));
@@ -479,10 +619,10 @@ int main() {
   std::puts("PASS: touchscreen Link mode, pair-wide request shape, refusal copy, armed-tap expiry and gated local recovery");
   // Debug is enabled by default at boot; the touchscreen toggle turns it off
   // and on, including during receiver setup, and the session persists over time.
-  assert(debug_enabled());change_page(ScreenPage::kSettings);profile_running=true;
+  assert(debug_enabled());change_page(ScreenPage::kSettings);gnss_service::apply_unit_profile();
   tap(260,400);assert(current_page==ScreenPage::kDebug);tap(140,268);assert(!debug_enabled());
   tap(140,268);assert(debug_enabled());
-  profile_running=false;const auto debug_start=host_now;char debug_json[8192];
+  complete_profile();const auto debug_start=host_now;char debug_json[8192];
   debug_observe(debugmode::Channel::GnssRx,"$GPGGA,observed");assert(debug_logs(debug_json,sizeof(debug_json)));assert(std::strstr(debug_json,"GPGGA"));
   for(unsigned i=0;i<10;++i){host_now=debug_start+i*80000;assert(debug_status(debug_json,sizeof(debug_json)));}
   host_now=debug_start+899999;assert(debug_enabled());assert(std::strstr(debug_json,"\"enabled\":true"));
@@ -494,6 +634,12 @@ int main() {
   debugmode::Log bounded;bounded.clear(0);for(unsigned i=0;i<1000;++i)bounded.push(debugmode::Channel::Event,"test",0);assert(bounded.size()==8&&bounded.throttled==992);
   for(unsigned t=1000;t<10000;t+=1000)for(unsigned i=0;i<8;++i)bounded.push(debugmode::Channel::Event,"line",t);assert(bounded.size()==32&&bounded.overwritten>0);
   std::puts("PASS: Debug default-on at boot, touchscreen toggle during receiver setup, persistent session over time, disable clears capture, bounded capture and unchanged COM2 output");
+  // The receiver's solution the previews render: the same sentences the
+  // surfaces were fed, now old enough that every surface reports it stale.
+  feed_line(gga_fixture(4, 28, 0.5));
+  feed_line(rmc_fixture());
+  feed_line(bestnav("SOL_COMPUTED,NARROW_INT,19.4,-99.1,2234.0,-30.0,WGS84,0.012,0.0,0.03,\"7\",0.500,0.000,30,25,25,0"));
+  host_now += 4000;                        // the receiver goes quiet between updates
   const ScreenPage pages[] = {ScreenPage::kMain, ScreenPage::kGpsDetails,
                              ScreenPage::kWifiDetails, ScreenPage::kSettings, ScreenPage::kDebug};
   for (ScreenPage page : pages) {
@@ -529,4 +675,106 @@ int main() {
   pending_role=DeviceRole::kBase;
   draw_dynamic_screen(); display->save(".pio/ui-base-selection.ppm");
   std::puts("PASS: production profile, NVS failures/reload, reset grace, touch actions/cancellation, UI bounds and repaint cache");
+
+  // The receiver's own reader: byte/line accounting, the line-overflow counter
+  // and every RTCM framing reject are observable through the snapshot.
+  {
+    const uint32_t bytes_before = receiver().bytes;
+    const uint32_t lines_before = receiver().lines;
+    feed_raw("$GPGGA,", 7);                 // a partial sentence stays buffered
+    assert(receiver().bytes == bytes_before + 7 && receiver().lines == lines_before);
+    feed_line("partial");
+    assert(receiver().lines == lines_before + 1);
+    const uint32_t errors_before = receiver().checksum_errors;
+    const std::string overlong(600, 'x');
+    feed_raw(overlong.data(), overlong.size());  // overflows the 512-byte line buffer
+    assert(receiver().checksum_errors == errors_before + 1);
+    assert(Serial.output.find("UM980> RX LINE OVERFLOW") != std::string::npos);
+    feed_line(std::string());               // terminate the remainder the overflow left
+    const GnssSnapshot before_rtcm = receiver();
+    feed_bytes(std::vector<uint8_t>{0xD3, 0x00, 0x00});  // payload < 2: rejected at the head
+    assert(receiver().rtcm_frames == before_rtcm.rtcm_frames &&
+           receiver().rtcm_bad == before_rtcm.rtcm_bad + 1);
+    feed_bytes(std::vector<uint8_t>{0xD3, 0x02});        // an incomplete frame
+    host_now += 300;                                    // past the 250 ms assembler gap
+    feed_line(std::string());                           // the gap abandons it, the newline is ignored
+    assert(receiver().rtcm_bad == before_rtcm.rtcm_bad + 2);
+    auto corrupt_frame = msm(1074, 1000);
+    corrupt_frame.back() ^= 1;                          // CRC24Q mismatch
+    feed_bytes(corrupt_frame);
+    assert(receiver().rtcm_bad == before_rtcm.rtcm_bad + 3 &&
+           receiver().rtcm_frames == before_rtcm.rtcm_frames);
+    const auto whole_frame = msm(1074, 1000);
+    feed_bytes(whole_frame);
+    assert(receiver().rtcm_frames == before_rtcm.rtcm_frames + 1);
+    assert(receiver().rtcm_last_message == 1074);
+    // Only the receiver's own output sets the receiver-side age, and only on Base.
+    assert(receiver().rtcm_last_rx_ms == before_rtcm.rtcm_last_rx_ms);
+    std::puts("PASS: receiver stream counters, line overflow and RTCM framing rejects");
+  }
+
+  // Base: a whole RTCM 1006 frame from the receiver is counted, captured as the
+  // reference/station the survey glue reads, and admitted on the started socket.
+  // The role/profile/diagnostic gate stays with the composition root.
+  {
+    select_role(DeviceRole::kBase);
+    complete_profile();
+    assert(wifi_transport::start(wifi_transport::Channel::Corrections));
+    host_radio_active = false;
+    wifi_last_peer_ms = host_now;
+    const auto reference = reference_frame(7, survey::Position(19.4, -99.1, 2201.5));
+    const uint32_t frames_before = receiver().rtcm_frames;
+    const uint32_t wifi_tx_before = rtcm_wifi_tx_frames;
+    feed_bytes(reference);
+    assert(receiver().rtcm_frames == frames_before + 1);
+    assert(receiver().rtcm_last_message == 1006);
+    assert(receiver().rtcm_last_rx_ms == host_now);        // Base observes its own receiver
+    assert(receiver().station == 7 && receiver().reference_ms == host_now);
+    assert(rtcm_wifi_tx_frames == wifi_tx_before + 1);     // admitted by the root's gate
+    host_diagnostic_busy = true;
+    feed_bytes(reference);
+    assert(rtcm_wifi_tx_frames == wifi_tx_before + 1);     // a diagnostic owns the link
+    host_diagnostic_busy = false;
+    std::puts("PASS: receiver RTCM reference capture, station identity and admission gate");
+  }
+
+  // Console verbs read the receiver through its snapshot, and the only command
+  // the console can send is the allowlisted MODE query.
+  {
+    const std::string commands_before_console = gnss.output;
+    handle_usb_command("role?");
+    assert(gnss.output.size() > commands_before_console.size());
+    assert(gnss.output.compare(gnss.output.size()-6,6,"MODE\r\n")==0);
+    assert(Serial.output.find("ESP32> MODE") != std::string::npos);
+    const std::string after_query = gnss.output;
+    handle_usb_command("config?");
+    handle_usb_command("rtcm?");
+    handle_usb_command("accuracy?");
+    handle_usb_command("time?");
+    assert(Serial.output.find("RTCM STATUS: UART=") != std::string::npos);
+    assert(Serial.output.find("ACCURACY STATUS: BESTNAV=") != std::string::npos);
+    assert(Serial.output.find("GNSS TIME:") != std::string::npos);
+    assert(gnss.output == after_query);                   // no console verb writes COM2
+    handle_usb_command("saveconfig");
+    assert(gnss.output == after_query);                   // no arbitrary passthrough
+    assert(Serial.output.find("CONSOLE> rejected") != std::string::npos);
+    std::puts("PASS: receiver console verbs read the snapshot and keep the allowlist");
+  }
+
+  // A proven startup that loses the receiver re-arms the handshake and drops the
+  // profile and the acknowledged role, all inside the receiver owner.
+  {
+    reply("$command,VERSION,response: OK");
+    feed_line(gga_fixture(4, 28, 0.5));
+    gnss_service::service_startup(host_now);
+    assert(receiver().startup_complete && receiver().version_ok);
+    host_now += 6000;                     // the receiver goes quiet
+    const std::string before_link_loss = gnss.output;
+    gnss_service::service_startup(host_now);
+    assert(!receiver().startup_complete && !receiver().version_ok);
+    assert(!receiver().profile_applied && receiver().rtcm_last_rx_ms == 0);
+    assert(std::string(receiver().role) == "UNKNOWN");
+    assert(gnss.output.size() > before_link_loss.size());  // the handshake restarts
+    std::puts("PASS: receiver link loss re-arms the handshake and drops the profile");
+  }
 }

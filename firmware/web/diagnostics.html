@@ -3,84 +3,118 @@
 <title>TopoRTK · Link test</title><style>
 *{box-sizing:border-box}body{font:16px/1.5 system-ui;background:#eef2f5;color:#172d3b;margin:0}main{max-width:880px;margin:auto;padding:24px}section{background:white;border:1px solid #d2dde4;border-radius:14px;padding:20px;margin:18px 0}h1,h2{line-height:1.2}h1{margin-bottom:8px}h2{font-size:1.25rem;margin-top:0}label{display:block}input,select,button{font:inherit;padding:12px;border:1px solid #a6bac5;border-radius:7px;max-width:100%;min-height:48px}input,select{display:block;width:100%;background:white;color:inherit}button{background:#166546;color:white;cursor:pointer;margin:8px 8px 0 0}button.secondary{background:#edf3f6;color:#172d3b}button:disabled{opacity:.5;cursor:default}a{color:#155a77}.muted{color:#526674}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.check{display:flex;align-items:flex-start;gap:10px;margin-top:20px}.check input{width:24px;min-height:24px;flex:none;margin-top:1px}#connection{padding:12px;background:#e3eaf0;border-radius:8px}#message:empty{display:none}#message{border-left:4px solid #155a77;padding:10px}#result{font-size:1.15rem;font-weight:650}dl{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:20px 0}dl div{padding:12px;background:#f2f6f8;border-radius:8px}dt{font-size:.85rem;color:#526674}dd{margin:4px 0 0;font-weight:650}p,dd{overflow-wrap:anywhere}progress{width:100%;height:12px;accent-color:#166546}input:focus-visible,select:focus-visible,button:focus-visible,a:focus-visible{outline:3px solid #2585b5;outline-offset:3px}[hidden]{display:none!important}@media(max-width:540px){main{padding:14px}section{padding:16px}.grid{grid-template-columns:1fr}dl{grid-template-columns:repeat(2,minmax(0,1fr))}}
 </style></head><body><main>
-<a href="/survey">← Survey</a> <a href="/settings">Settings</a><h1>Link test</h1><p class="muted">Runs on the two instruments. The tablet can disconnect during the test.</p>
+<a href="/survey">← Survey</a> <a href="/settings">Settings</a><h1>Link test</h1><p class="muted">The instrument runs the test, both instruments take part, and the tablet can disconnect while it runs.</p>
 <p id="connection" role="status">Connecting…</p><p id="message" role="alert"></p>
-<section><h2>1. Prepare this instrument</h2><p>Keep antennas connected. The latest Take control request controls either instrument. Use the same test code and settings on both. Survey writes are locked during the test.</p>
+<section><h2>1. Prepare this instrument</h2><p>Keep antennas connected. The latest Take control request controls either instrument. One instrument starts the test and both of them run it; there is no code to match and no second page to open. Survey writes are locked during the test.</p>
 
 <p id="controlState" class="muted">View only</p><button id="control" disabled>Take control</button><button id="release" class="secondary" disabled>Release control</button>
 </section>
-<section><h2>Live correction link</h2>
-<p>Select the same link locally on both instruments. The dedicated pair connects automatically, including after restart. This selection changes only this instrument; a queued request is not a connection result. Only the selected link carries corrections. Advanced radio tests still require selecting Wi-Fi first.</p>
-<p id="routeState" role="status">Loading correction routing…</p><p id="routePeer" role="status">Peer connection not confirmed.</p><p id="routeError" role="alert"></p>
-<button id="liveRadio" disabled>Use Radio corrections</button><button id="liveWifi" class="secondary" disabled>Use Wi-Fi corrections</button>
-<p id="routeCounters" class="muted"></p><p class="muted">COM2 counts mean bytes queued to the receiver UART. Peer connected does not mean corrections are fresh, RTK FIXED or survey-ready. The receiver's own fresh solution and matching base reference are still required.</p>
-</section>
-<section><h2>2. Match settings on Base and Rover</h2><div class="grid">
-<label>Six-digit test code<input id="run" inputmode="numeric" pattern="[0-9]{6}" maxlength="6"></label>
-<label>Link<select id="transport"><option value="sik">SiK radio</option><option value="wifi">Wi-Fi between instruments</option></select></label>
-<label>Traffic<select id="mode"><option value="0">Base → Rover</option><option value="1">Rover → Base</option><option value="2">Both directions</option></select></label>
+<section><h2>2. Paired link test</h2><p>The test runs on the medium below and keeps the current correction route; the previous link is restored afterwards. Generated frames are only exchanged between the two instruments and never reach the receiver.</p><div class="grid">
+<label>Tested link<select id="transport"><option value="sik">SiK radio</option><option value="wifi">Wi-Fi between instruments</option></select></label>
 <label>Duration<select id="seconds"><option>30</option><option selected>60</option><option>120</option><option>300</option></select></label>
-<label>Bytes per second, each sender<select id="rate"><option>200</option><option selected>1000</option><option>3000</option></select></label>
-</div><p class="muted">Arm both within two minutes. The test starts when they find each other. Use a fresh code for each test.</p>
+<label>RTCM profile (SiK only)<select id="profile"><option value="clean">Clean traffic · no injected faults</option><option value="injected">Injected faults · drop, corrupt, duplicate and reverse</option></select></label>
+<label>Traffic (Wi-Fi only)<select id="mode"><option value="0">Base → Rover</option><option value="1">Rover → Base</option><option value="2">Both directions</option></select></label>
+<label>Bytes per second, each sender (Wi-Fi only)<select id="rate"><option>200</option><option selected>1000</option><option>3000</option></select></label>
+</div>
 <label class="check"><input type="checkbox" id="confirm"> Antennas and wiring are ready; no survey occupation is active.</label>
-<button id="arm" disabled>Arm this instrument</button><button id="cancel" class="secondary" disabled>Cancel test</button><button id="probe" class="secondary" disabled>Check radio wiring</button>
-<p>RTCM test: uses the test code and duration above, always SiK Base → Rover. Sends one 600-byte synthetic message every two seconds. Both UM980s stay disconnected.</p>
-<label>RTCM profile<select id="profile"><option value="clean">Clean traffic · no injected faults</option><option value="injected">Injected faults · drop, corrupt, duplicate and reverse</option></select></label>
-<p class="muted">Match this profile on both instruments. Compare clean and injected runs under the same antenna and power conditions.</p><button id="pairarm" disabled>Arm RTCM test</button>
-<p id="wiring" class="muted"></p></section>
-<section><h2 id="reportTitle">3. Results</h2><p id="result" aria-live="polite">Waiting for the instrument…</p><p id="reportDetails" class="muted"></p><progress id="progress" max="100" value="0" hidden></progress>
+<button id="start" disabled>Start paired test</button><button id="cancel" class="secondary" disabled>Cancel test</button>
+<p id="quickError" class="muted"></p><p class="muted">Corrections pause while the test runs, so collection should be idle. The tested medium is proven without being selected: the correction route stays as it is.</p></section>
+<section><h2 id="reportTitle">3. Result</h2><p id="testPhase" role="status">No test has been started.</p><p id="result" aria-live="polite">Waiting for the instrument…</p><p id="reportDetails" class="muted"></p><progress id="progress" max="100" value="0" hidden></progress>
 <dl id="metrics" hidden><div><dt>Sent / expected</dt><dd id="sent"></dd></div><div><dt>Received / expected</dt><dd id="received"></dd></div><div><dt>Errors</dt><dd id="errors"></dd></div><div><dt>Duplicates</dt><dd id="duplicates"></dd></div><div><dt>Out of order</dt><dd id="reordered"></dd></div><div><dt>Longest receive gap</dt><dd id="gap"></dd></div></dl>
 <p id="reportStatus" class="muted"></p><button id="download" disabled>Download report</button>
 <p id="uartResult" class="muted" hidden></p>
 <p class="muted">Only the latest report is kept on each instrument. Download it before the next test. Missing peer results mean the pair has not passed.</p>
 <p class="muted">Synthetic delivery test, not RTK accuracy. SiK: 57,600 baud. Bluetooth is not available yet.</p></section>
-<section><h2>4. Local transport fault checks</h2><p>Check loss handling, corruption rejection, reassembly and recovery on this ESP32. No data is sent to the radios or receiver. This does not qualify the radio link.</p><button id="selftest" disabled>Run local fault checks</button><button id="selfdownload" class="secondary" disabled>Download self-test report</button><p id="selfresult" aria-live="polite">No local test report loaded.</p></section>
+<section><h2>4. Local checks</h2><p>Check the radio wiring, or run loss handling, corruption rejection, reassembly and recovery on this ESP32. The wiring probe reads UART2, so it is unavailable while Radio carries the correction link. Neither check qualifies the radio link, and no data reaches the receiver.</p><button id="probe" class="secondary" disabled>Check radio wiring</button><button id="selftest" disabled>Run local fault checks</button><button id="selfdownload" class="secondary" disabled>Download self-test report</button><p id="wiring" class="muted"></p><p id="selfresult" aria-live="polite">No local test report loaded.</p></section>
+<section><h2>5. Local correction link</h2><p>These buttons write <em>this</em> instrument's choice locally. They are the recovery step for a pair that cannot confirm itself, not pair coordination: use <a href="/settings">Settings</a> to switch both instruments together. A queued request is not a connection result.</p>
+<p id="routeState" role="status">Loading correction routing…</p><p id="routePeer" role="status">Peer connection not confirmed.</p><p id="routeError" role="alert"></p>
+<button id="liveRadio" disabled>Use Radio corrections</button><button id="liveWifi" class="secondary" disabled>Use Wi-Fi corrections</button>
+<p id="routeCounters" class="muted"></p><p class="muted">COM2 counts mean bytes queued to the receiver UART. Peer connected does not mean corrections are fresh, RTK FIXED or survey-ready. The receiver's own fresh solution and matching base reference are still required.</p>
+</section>
 </main><script src="/api.js"></script><script>
 'use strict';
 const $=id=>document.getElementById(id);
-let state=null,online=false,requesting=false,lastUptime=null,lastAdvance=0;
-$('run').value=String(100000+crypto.getRandomValues(new Uint32Array(1))[0]%900000);
+const MEDIA={sik:'Radio (SiK)',wifi:'Wi-Fi'};
+let state=null,settings=null,online=false,requesting=false,lastUptime=null,lastAdvance=0,sentId='';
+const randomId=()=>Array.from(crypto.getRandomValues(new Uint8Array(16)),byte=>byte.toString(16).padStart(2,'0')).join('');
+// The published operation has no separate flag: its state names the phases that
+// still own the tested medium, exactly as the Settings page reads it.
+const IN_FLIGHT=['negotiating','running','restoring'];
 function message(s){$('message').textContent=s}
+function active(){return IN_FLIGHT.includes(settings?.operation?.state)}
+function mine(){return !!sentId&&settings?.operation?.id===sentId}
+// The report is the engine's own result while it is in flight or finished, and
+// the stored report of the tested medium once the instrument is idle again.
 function report(){return state?.state==='idle'?state.last_report:state?.run?state:null}
 function controls(){
-  const owner=topoOwner();
+  const owner=topoOwner(),busy=!!state?.busy,radio=state?.corrections?.transport==='sik';
   $('control').disabled=!online||requesting||owner;$('release').disabled=!online||requesting||!owner;
   $('controlState').textContent=owner&&online?'You control this instrument':'View only · Take control to start or cancel';
-  for(const id of ['arm','pairarm','probe','selftest'])$(id).disabled=!online||!owner||requesting||state?.busy||state?.corrections?.transport==='sik';
-  for(const id of ['liveRadio','liveWifi'])$(id).disabled=!online||!owner||requesting||state?.busy;
-  $('cancel').disabled=!online||!owner||requesting||!['armed','running'].includes(state?.state);
-  for(const id of ['run','transport','mode','seconds','rate','confirm','profile'])$(id).disabled=!!state?.busy||requesting;
+  // A test is started by one instrument and run by both; the tested medium is
+  // never a reason to refuse it, so no medium prerequisite is applied here.
+  $('start').disabled=!online||!owner||requesting||busy||active();
+  $('cancel').disabled=!online||!owner||requesting||!mine()||!active();
+  for(const id of ['probe','selftest'])$(id).disabled=!online||!owner||requesting||busy||radio;
+  for(const id of ['liveRadio','liveWifi'])$(id).disabled=!online||!owner||requesting||busy;
+  for(const id of ['transport','seconds','profile','mode','rate','confirm'])$(id).disabled=!!busy||active()||requesting;
+  const medium=$('transport').value;
+  $('profile').disabled=medium!=='sik'||!!busy||active()||requesting;
+  $('mode').disabled=medium!=='wifi'||!!busy||active()||requesting;
+  $('rate').disabled=medium!=='wifi'||!!busy||active()||requesting;
   $('download').disabled=!report();$('selfdownload').disabled=!state?.self_test;
 }
-topoOnControl(()=>controls());
+$('transport').onchange=()=>{$('profile').value='clean';controls()};
+topoOnControl(()=>{if(!topoOwner())sentId='';controls()});
 function requestError(response){return Error(response.status===401?'Control expired or changed. Take control again.':response.body?.error||'Request failed')}
 async function action(fn){requesting=true;controls();try{await fn()}catch(e){message(e.name==='AbortError'||e.name==='TimeoutError'?'No reply. Check the live state before retrying.':e.message)}finally{requesting=false;controls()}}
 $('control').onclick=()=>action(async()=>{await topoClaim();message('Control acquired.')});
 $('release').onclick=()=>action(async()=>{await topoRelease();message('Control released.')});
-$('arm').onclick=()=>action(async()=>{
+$('start').onclick=()=>action(async()=>{
   if(!$('confirm').checked)throw Error('Confirm preparation first.');
-  if(!/^[0-9]{6}$/.test($('run').value)||Number($('run').value)<100000)throw Error('Enter a test code from 100000 to 999999.');
-  if(Number($('run').value)===state?.run)throw Error('Use a fresh test code for the next run.');
-  const response=await topoRequest('/api/v1/diagnostic',{op:'arm',run:Number($('run').value),transport:$('transport').value,mode:Number($('mode').value),seconds:Number($('seconds').value),rate:Number($('rate').value),confirm:true},{timeout:3500});if(!response.ok)throw requestError(response);
-  message('Arm request queued. Check for “Waiting for the other instrument” below.');
+  if(!settings)throw Error('No settings snapshot yet; wait for the connection.');
+  const medium=$('transport').value,body={id:randomId(),revision:settings.revision,op:'link.test',transport:medium,seconds:Number($('seconds').value),confirm:true};
+  // Only the fields the tested medium offers travel: the RTCM engine has no
+  // rate or direction knob, and fault injection exists only for it.
+  if(medium==='sik'){if($('profile').value==='injected')body.profile='injected';}
+  else{body.rate=Number($('rate').value);body.mode=Number($('mode').value);}
+  const response=await topoRequest('/api/v1/settings',body,{timeout:3500});
+  if(!response.ok)throw requestError(response);
+  sentId=body.id;
+  message('Test requested. Both instruments run it; the phase and the result below are the instrument’s own.');
+});
+$('cancel').onclick=()=>action(async()=>{
+  if(!mine())throw Error('Only the instrument that requested the test can cancel it.');
+  const response=await topoRequest('/api/v1/settings',{id:sentId,op:'link.cancel',confirm:true},{timeout:3500});
+  if(!response.ok)throw requestError(response);
+  message('Cancellation requested. The tested medium is released as soon as both sides stop.');
 });
 $('probe').onclick=()=>action(async()=>{if(!$('confirm').checked)throw Error('Confirm preparation first.');const response=await topoRequest('/api/v1/diagnostic',{op:'probe',confirm:true},{timeout:3500});if(!response.ok)throw requestError(response);message('Wiring check queued. Watch the radio result below.')});
-$('pairarm').onclick=()=>action(async()=>{
-  if(!$('confirm').checked)throw Error('Confirm preparation first.');
-  const run=Number($('run').value);if(!/^[0-9]{6}$/.test($('run').value)||run<100000||run===state?.run)throw Error('Use a fresh test code from 100000 to 999999.');
-  const response=await topoRequest('/api/v1/diagnostic',{op:'pairtest',run,seconds:Number($('seconds').value),profile:$('profile').value,confirm:true},{timeout:3500});if(!response.ok)throw requestError(response);message('Arm request queued. Match the RTCM profile, test code and duration on the other instrument.');
-});
-$('liveRadio').onclick=()=>action(async()=>{const response=await topoRequest('/api/v1/diagnostic',{op:'corrections',transport:'sik',confirm:true},{timeout:3500});if(!response.ok)throw requestError(response);message('Local Radio selection queued, not connection confirmation. Select Radio on the companion and check peer state below.')});
-$('liveWifi').onclick=()=>action(async()=>{const response=await topoRequest('/api/v1/diagnostic',{op:'corrections',transport:'wifi',confirm:true},{timeout:3500});if(!response.ok)throw requestError(response);message('Local Wi-Fi selection queued, not connection confirmation. Select Wi-Fi on the companion and check peer state below.')});
-$('cancel').onclick=()=>action(async()=>{const response=await topoRequest('/api/v1/diagnostic',{op:'cancel',run:state.run},{timeout:3500});if(!response.ok)throw requestError(response);message('Cancellation requested. Check for “Test stopped” below.')});
 $('selftest').onclick=()=>action(async()=>{const response=await topoRequest('/api/v1/diagnostic',{op:'selftest',confirm:true},{timeout:3500});if(!response.ok)throw requestError(response);message('Local fault checks requested. See their separate report below.')});
+$('liveRadio').onclick=()=>action(async()=>{const response=await topoRequest('/api/v1/diagnostic',{op:'corrections',transport:'sik',confirm:true},{timeout:3500});if(!response.ok)throw requestError(response);message('Local Radio selection queued, not connection confirmation. Check peer state below.')});
+$('liveWifi').onclick=()=>action(async()=>{const response=await topoRequest('/api/v1/diagnostic',{op:'corrections',transport:'wifi',confirm:true},{timeout:3500});if(!response.ok)throw requestError(response);message('Local Wi-Fi selection queued, not connection confirmation. Check peer state below.')});
 $('selfdownload').onclick=()=>{const d=state?.self_test;if(!d)return;const a=document.createElement('a'),u=URL.createObjectURL(new Blob([JSON.stringify(d,null,2)],{type:'application/json'}));a.href=u;a.download='TopoRTK-local-transport-'+d.run+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)};
 $('download').onclick=()=>{
   const d=report();if(!d)return;
   const a=document.createElement('a'),u=URL.createObjectURL(new Blob([JSON.stringify(d,null,2)],{type:'application/json'}));
   a.href=u;a.download='TopoRTK-link-'+d.run+'-'+(d.role||'instrument').toLowerCase()+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(u),1000);
 };
-const descriptions={waiting_for_other_instrument:'Waiting for the other instrument. Match the test code and settings, then arm it.',peer_timeout:'No matching peer arrived within two minutes.',cancelled:'Cancelled on this instrument.',peer_aborted:'The other instrument stopped the test.',instrument_restarted_during_test:'The instrument restarted before completion.',finish_survey_or_receiver_operation_first:'Finish the survey or receiver operation before arming.',cannot_save_test_start:'The test could not start because its restart marker could not be saved.'};
+const descriptions={peer_unreachable:'No peer report arrived, so the pair has not passed.',restored:'The tested medium could not carry the test; the previous link was restored.',peer_aborted:'The other instrument stopped the test.',interrupted:'The instrument restarted before completion.',test_failed:'The test ran and did not pass. Compare the counters and the peer report.',test_unavailable:'The tested medium could not start the test. Nothing was tested.',cancelled:'Cancelled on this instrument.',restore_failed:'The pair needs a local recovery selection; nothing could be confirmed on either medium.'};
+// The phase and the verdict are the instrument's own operation record: the
+// browser never decides that a test passed.
+function operationText(){
+  const op=settings?.operation;
+  if(!op)return 'No test has been started.';
+  const seconds=op.seconds||0,remaining=Math.round((op.phase_remaining_ms||0)/1000);
+  if(op.state==='negotiating')return 'Preparing the tested link on both instruments'+(remaining?' · up to '+remaining+' s':'')+' …';
+  if(op.state==='running')return 'Running the test on '+MEDIA[op.transport]+'. The instrument reports the result when both sides have finished.';
+  if(op.state==='restoring')return 'Restoring the previous link'+(remaining?' · up to '+remaining+' s':'')+' …';
+  if(op.state==='succeeded')return 'Test finished on '+MEDIA[op.transport]+(seconds?' · '+seconds+' s':'')+'.';
+  if(op.state==='failed')return 'Test failed · '+(descriptions[op.reason]||op.reason||'no reason published');
+  if(op.state==='cancelled')return 'Test cancelled. The correction route did not change.';
+  if(op.state==='interrupted')return descriptions.interrupted;
+  if(op.state==='recovery_required')return descriptions.restore_failed;
+  return 'Test state: '+op.state;
+}
 function render(){
   $('connection').textContent='Connected · '+(state.role==='BASE'?'Base':'Rover');
   const route=state.corrections,base=state.role==='BASE';
@@ -90,18 +124,29 @@ function render(){
   const output=route?.output;
   $('routeCounters').textContent=route?(base?'Base messages queued: '+route.submitted+'. Radio envelopes sent: '+route.envelopes+'. Rover reception is unconfirmed.':'Complete radio messages: '+route.received+'. COM2 frames queued: '+(output?.forwarded||0)+'.')+' Expired queue entries: '+(route.queue_expired+(output?.expired||0))+'. Radio CRC failures: '+route.wire_errors+'.':'';
   $('wiring').textContent='Radio wiring: '+state.radio_probe;
+  $('quickError').textContent=state.quick_test_error?('The instrument refused the last start: '+state.quick_test_error+'.'):'';
   const self=state.self_test;$('selfresult').textContent=state.self_test_error||(self?(self.passed?'PASS · '+self.checks+' local checks passed.':self.state==='interrupted'?'Interrupted · The instrument restarted before the self-test finished.':'Local self-test failed.')+(self.checks?' Memory '+self.workspace_bytes+' bytes; '+(self.duration_us/1000).toFixed(1)+' ms.':'')+' Radio qualification is separate.':'No local test has run.');
+  const op=settings?.operation,phase=op?op.state:'idle';
+  $('testPhase').textContent=operationText();
+  $('progress').hidden=phase!=='running';
+  if(op&&op.seconds)$('progress').value=Math.max(0,Math.min(100,op.seconds?(op.seconds*1000-op.phase_remaining_ms)*100/(op.seconds*1000):0));
   const d=report(),saved=state.state==='idle'&&!!d;
-  if(($('message').textContent.startsWith('Arm request queued')&&state.run===Number($('run').value)&&['armed','running','done','failed'].includes(state.state))||($('message').textContent.startsWith('Wiring check queued')&&state.state==='probing')||($('message').textContent.startsWith('Cancellation requested')&&state.state==='failed'))message('');
-  $('reportTitle').textContent=saved?'3. Saved report':'3. Results';
-  $('progress').hidden=state.state!=='running';$('progress').value=state.seconds?(state.seconds-state.remaining_seconds)*100/state.seconds:0;
-  if(state.state==='probing')$('result').textContent='Checking the local radio UART…';
-  else if(!d)$('result').textContent=descriptions[state.reason]||'Ready. No test has been started.';
+  if($('message').textContent.startsWith('Test requested')&&op&&op.id===sentId&&!['negotiating','running','restoring'].includes(op.state))message('');
+  if($('message').textContent.startsWith('Cancellation requested')&&phase==='cancelled')message('');
+  $('reportTitle').textContent=saved?'3. Saved report of this instrument':'3. Result';
+  if(phase==='negotiating'||phase==='restoring')$('result').textContent='No verdict yet.';
+  else if(phase==='running')$('result').textContent=state.remaining_seconds?'Running · '+state.remaining_seconds+' seconds of traffic remaining':'Starting or finishing packet checks…';
+  else if(phase==='succeeded')$('result').textContent='PASS · Both instruments received every test packet.';
+  else if(phase==='failed')$('result').textContent='Not passed · '+(descriptions[op.reason]||op.reason||'failed');
+  else if(phase==='cancelled')$('result').textContent='Cancelled · Nothing about the correction route changed.';
+  else if(phase==='interrupted')$('result').textContent='Interrupted · '+descriptions.interrupted;
+  else if(state.state==='probing')$('result').textContent='Checking the local radio UART…';
+  else if(!d)$('result').textContent='Ready. No test has been started.';
   else if(d.state==='done')$('result').textContent=d.pair_pass?'PASS · Both instruments received every test packet.':d.local_pass&&!d.peer_report_received?'Local checks passed. Waiting for the peer report; the pair has not passed.':'Not passed · Check the counters and peer report.';
-  else if(d.state==='running')$('result').textContent=state.remaining_seconds?'Running · '+state.remaining_seconds+' seconds remaining':'Starting or finishing packet checks…';
-  else if(d.state==='armed')$('result').textContent=descriptions.waiting_for_other_instrument;
+  else if(d.state==='running')$('result').textContent='Starting or finishing packet checks…';
+  else if(d.state==='armed')$('result').textContent='Waiting for the other instrument.';
   else $('result').textContent='Test stopped · '+(descriptions[d.reason]||d.reason||d.state);
-  $('reportDetails').textContent=d?'Test '+d.run+' · '+(d.role||state.role)+' · '+(d.transport==='sik'?'SiK radio':d.transport==='wifi'?'Wi-Fi':'interrupted')+(d.seconds?' · '+d.seconds+' s · '+d.rate+' bytes/s':''):'';
+  $('reportDetails').textContent=d?'Test '+d.run+' · '+(d.role||state.role)+' · '+(d.transport==='sik'?'SiK radio':d.transport==='wifi'?'Wi-Fi':'interrupted')+(d.seconds?' · '+d.seconds+' s'+(d.rate?' · '+d.rate+' bytes/s':'')+(d.mode!==undefined?' · mode '+d.mode:''):''):'';
   $('metrics').hidden=!d||d.state==='interrupted';
   if(d){$('sent').textContent=(d.sent||0)+' / '+(d.expected_tx||0);$('received').textContent=(d.received||0)+' / '+(d.expected_rx||0);for(const id of ['errors','duplicates','reordered'])$(id).textContent=d[id]||0;$('gap').textContent=(d.max_gap_ms||0)+' ms'}
   if(d?.kind==='paired_rtcm_faults'){
@@ -116,17 +161,20 @@ function render(){
 }
 async function poll(){
   try{
-    const response=await topoRequest('/api/v1/diagnostic',undefined,{timeout:3500});
-    if(!response.ok)throw requestError(response);
-    const body=response.body;
+    const [diagnostic,record]=await Promise.all([
+      topoRequest('/api/v1/diagnostic',undefined,{timeout:3500}),
+      topoRequest('/api/v1/settings',undefined,{timeout:3500}),
+    ]);
+    if(!diagnostic.ok)throw requestError(diagnostic);
+    const body=diagnostic.body;
     if(!Number.isFinite(body.uptime_ms))throw Error('No fresh instrument state');
     if(body.uptime_ms!==lastUptime){lastUptime=body.uptime_ms;lastAdvance=Date.now()}
     if(Date.now()-lastAdvance>3500)throw Error('Instrument state stopped updating');
-    state=body;online=true;
+    state=body;settings=record.ok?record.body:null;online=true;
     // A read never 401s, so the instrument states whether our bearer is still the controller.
-    if(topoOwner()&&response.headers.get('X-Controller')!=='true')topoForget();
+    if(topoOwner()&&diagnostic.headers.get('X-Controller')!=='true')topoForget();
     render();
-  }catch(e){online=false;$('connection').textContent='Disconnected or stale · Last received results shown. Reconnect to retrieve the final report.';$('routePeer').textContent='Peer state stale · Connection not confirmed. Reconnect to retrieve current state.';controls()}
+  }catch(e){online=false;$('connection').textContent='Disconnected or stale · Last received results shown. Reconnect to retrieve the final report.';$('routePeer').textContent='Peer state stale · Connection not confirmed. Reconnect to retrieve current state.';$('testPhase').textContent='Live instrument state unavailable; the test keeps running on the instrument.';controls()}
   finally{setTimeout(poll,1000)}
 }
 poll();

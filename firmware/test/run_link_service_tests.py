@@ -45,7 +45,8 @@ cases = ['missing_record_keeps_wifi_default',
          'radio_reservation_published',
          'cross_medium_ingress',
          'incompatible_version',
-         'radio_fault_isolation']
+         'radio_fault_isolation',
+         'test_shape_published']
 for case in cases:
     subprocess.run([str(exe), *case.split(':')], check=True)
 print(f'PASS: production link service, {len(cases)} stored-selection/ingress/version/fault cases '
