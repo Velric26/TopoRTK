@@ -1,5 +1,5 @@
 const {chromium}=require('playwright'),fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
-const root=path.resolve(__dirname,'../../..'),out=path.join(root,process.env.TOPORTK_TEST_RECORD||'tests/2026-09-14-ota');
+const root=path.resolve(__dirname,'../..'),out=path.join(root,process.env.TOPORTK_TEST_RECORD||'tests/2026-09-14-ota');
 const otaJs=fs.readFileSync(path.join(__dirname,'../src/ota_ui.h'),'utf8').split('R"JS(')[1].split(')JS"')[0];
 const source=fs.readFileSync(path.join(__dirname,'../src/debug_ui.h'),'utf8'),html=source.split('R"HTML(')[1].split(')HTML"')[0],nav=source.split('R"JS(')[1].split(')JS"')[0];
 (async()=>{fs.mkdirSync(out,{recursive:true});const browser=await chromium.launch({channel:'msedge',headless:true});try{

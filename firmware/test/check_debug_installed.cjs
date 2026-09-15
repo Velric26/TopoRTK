@@ -2,7 +2,7 @@
 // No takeover, receiver commands, firmware writes or survey mutations.
 const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
 const [base,unit]=process.argv.slice(2);if(!base||!['A','B'].includes(unit))throw Error('Usage: node check_debug_installed.cjs http://instrument UnitLetter');
-const out=path.resolve(__dirname,'../../../tests/2026-09-14-ota-usb');fs.mkdirSync(out,{recursive:true});
+const out=path.resolve(__dirname,'../../tests/2026-09-14-ota-usb');fs.mkdirSync(out,{recursive:true});
 (async()=>{const browser=await chromium.launch({channel:'msedge',headless:true});try{
  const page=await browser.newPage({viewport:{width:390,height:844}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.goto(base+'/survey');await page.waitForFunction(()=>document.querySelector('#debugAvailability')?.textContent.includes('Enable Debug'));

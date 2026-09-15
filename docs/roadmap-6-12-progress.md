@@ -35,7 +35,7 @@ Validation artifacts: `tests/2026-09-10-roadmap-6-12`. Synthetic native/browser 
 
 CSV includes all points (including deleted records), per-row units/reference/revision, and full original observation/configuration/quality JSON. Formula-like metadata columns are prefixed with an apostrophe for spreadsheet handling; exact values remain in `observation_json`. Mixed revisions are explicitly retained per row, not silently converted.
 
-`view=backup` pages up to three matching job records and scans at most 32 journal slots per request. It returns the exact JSON strings plus original sequence and CRC32. Stable `at` cursors cover all pages. Backups retain metadata edit reasons/before values and original observations. An offline verifier is available at `firmware/um980-display-demo/tools/verify_survey_backup.py`; it does not restore or modify instrument data.
+`view=backup` pages up to three matching job records and scans at most 32 journal slots per request. It returns the exact JSON strings plus original sequence and CRC32. Stable `at` cursors cover all pages. Backups retain metadata edit reasons/before values and original observations. An offline verifier is available at `firmware/tools/verify_survey_backup.py`; it does not restore or modify instrument data.
 
 Validation details and limits: [checkpoint record](../tests/2026-09-10-roadmap-6-12/README.md). Both instruments ran UI 0.4 at that historical export checkpoint. Unit A's two existing jobs remain intact; no field point or synthetic point was created on hardware.
 

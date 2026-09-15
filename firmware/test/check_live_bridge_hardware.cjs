@@ -2,7 +2,7 @@
 // No generated correction payload is ever sent to a physical UART.
 const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
 const {execFileSync}=require('node:child_process');
-const out=path.resolve(__dirname,'../../../tests/2026-09-13-correction-bridge');
+const out=path.resolve(__dirname,'../../tests/2026-09-13-correction-bridge');
 const units=[{ip:'192.168.100.20',name:'base',port:'COM4'},{ip:'192.168.100.19',name:'rover',port:'COM10'}];
 const save=(name,d)=>fs.writeFileSync(path.join(out,name+'.json'),JSON.stringify(d,null,2));
 (async()=>{

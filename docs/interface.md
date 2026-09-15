@@ -23,7 +23,7 @@ Describe job setup, base setup, rover connection, point collection, stakeout, ch
 The Rover serves a responsive browser interface to an Android tablet, phone, or development PC. During development, both instruments can join a known 2.4 GHz local router; the Rover's assigned local address is shown on the Link screen. For field use without a router, the Rover hosts a password-protected 2.4 GHz access point and serves the same interface. The link is local only; it must continue working without cellular service or Internet access. Android Chrome is the first supported client. The current device address, interface version, and connection instructions must be discoverable from the Rover display and a QR/on-device connection aid.
 
 During development, local-router credentials are held only in the Git-ignored
-`firmware/um980-display-demo/src/wifi_credentials.h`, created from its tracked
+`firmware/src/wifi_credentials.h`, created from its tracked
 example. The production workflow must replace this with local device
 provisioning; neither a password nor a reusable secret belongs in a commit,
 log, export, or displayed QR code.

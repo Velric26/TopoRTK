@@ -1,6 +1,6 @@
 # Host checks
 
-From `firmware/um980-display-demo`, after building `unit_b`:
+From `firmware`, after building `unit_b`:
 
 ```powershell
 g++ -std=c++11 -Wall -Wextra -Werror test/test_config.cpp -o .pio/test_config.exe

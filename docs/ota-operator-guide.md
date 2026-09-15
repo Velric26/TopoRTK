@@ -59,9 +59,9 @@ Only the inactive OTA slot is written, in bounded chunks. Transfer timeout is 30
 From the repository root:
 
 ```powershell
-platformio run -d firmware/um980-display-demo -e unit_a -e unit_b -j 2
-python tools/package_firmware.py firmware/um980-display-demo/.pio/build/unit_a/firmware.bin firmware/um980-display-demo/.pio/build/unit_a/firmware.tpk
-python tools/package_firmware.py firmware/um980-display-demo/.pio/build/unit_b/firmware.bin firmware/um980-display-demo/.pio/build/unit_b/firmware.tpk
+platformio run -d firmware -e unit_a -e unit_b -j 2
+python tools/package_firmware.py firmware/.pio/build/unit_a/firmware.bin firmware/.pio/build/unit_a/firmware.tpk
+python tools/package_firmware.py firmware/.pio/build/unit_b/firmware.bin firmware/.pio/build/unit_b/firmware.tpk
 ```
 
 Keep packages under ignored `.pio` and distribute locally to the intended instruments. Compiled firmware can contain the ignored build-time Wi-Fi configuration; binaries/packages must not be committed to the repository.
@@ -74,13 +74,13 @@ Run from the repository root after the build/package commands above. Requires No
 
 ```powershell
 # Update hardware Unit A; monitor Unit B as its peer.
-node firmware/um980-display-demo/test/run_ota_live.cjs --install A http://192.168.100.20 http://192.168.100.19 firmware/um980-display-demo/.pio/build/unit_a/firmware.tpk
+node firmware/test/run_ota_live.cjs --install A http://192.168.100.20 http://192.168.100.19 firmware/.pio/build/unit_a/firmware.tpk
 
 # Or update hardware Unit B; monitor Unit A as its peer.
-node firmware/um980-display-demo/test/run_ota_live.cjs --install B http://192.168.100.19 http://192.168.100.20 firmware/um980-display-demo/.pio/build/unit_b/firmware.tpk
+node firmware/test/run_ota_live.cjs --install B http://192.168.100.19 http://192.168.100.20 firmware/.pio/build/unit_b/firmware.tpk
 ```
 
-**These commands really install firmware.** Run one at a time. The runner validates package target/size/digest, checks live identity, Debug and idle state, takes control, reviews the package, requires peer preparation acknowledgement, accepts the interruption warning, and uploads without enabling the unconfirmed-peer override. It verifies a changed boot ID, startup acceptance, current default Debug On, and unchanged saved survey state. It never retries automatically. Evidence is private under `firmware/um980-display-demo/.pio/ota-live-<timestamp>/`. If peer acknowledgement is unavailable, the runner stops; use the manual workflow only after reviewing its explicit unconfirmed-peer warning.
+**These commands really install firmware.** Run one at a time. The runner validates package target/size/digest, checks live identity, Debug and idle state, takes control, reviews the package, requires peer preparation acknowledgement, accepts the interruption warning, and uploads without enabling the unconfirmed-peer override. It verifies a changed boot ID, startup acceptance, current default Debug On, and unchanged saved survey state. It never retries automatically. Evidence is private under `firmware/.pio/ota-live-<timestamp>/`. If peer acknowledgement is unavailable, the runner stops; use the manual workflow only after reviewing its explicit unconfirmed-peer warning.
 
 **Verified 2026-09-14 (`0.11.6-arch-r1`, both units):** the scripted runner completed guided updates on Unit A and Unit B with acknowledged peer notices, verified new boots, Debug On after restart and unchanged saved survey state; see the [deployment record](../tests/2026-09-14-arch-r1-deployment/README.md). Two prerequisites matter in practice. First, update notices ride the currently selected correction transport: after a SiK bench session, switch corrections back to Wi-Fi on both units before updating, or preparation cannot be acknowledged. Second, the target must be fully idle: a rejected preparation reports `Finish collection, receiver setup and diagnostics first` while a survey or diagnostic reservation is held, and a restart clears a held reservation. The runner is plain CommonJS and also executes under Bun with the project's `test/node_modules` Playwright when Node is not on PATH; evidence remains private under `.pio/ota-live-<timestamp>/`.
 
@@ -95,12 +95,12 @@ Automatic discovery was considered but deferred because the five-hour usage paus
 Use USB when OTA cannot be used or for recovery/initial provisioning. Confirm the USB identity/port first: current project defaults are Unit A `COM4`, Unit B `COM10`, but enumeration can change. From the repository root, select only the required target:
 
 ```powershell
-platformio run -d firmware/um980-display-demo -e unit_a -t upload
+platformio run -d firmware -e unit_a -t upload
 # Or:
-platformio run -d firmware/um980-display-demo -e unit_b -t upload
+platformio run -d firmware -e unit_b -t upload
 
 # Optional USB console (close before uploading):
-platformio device monitor -d firmware/um980-display-demo -e unit_b
+platformio device monitor -d firmware -e unit_b
 ```
 
 Verify the write hash, boot/version, and preserved settings/jobs afterward. Do not erase flash as a routine update step. Full-flash backups remain optional as described above; USB recovery restores firmware, not erased user data.

@@ -14,7 +14,7 @@
 - [Waveshare ESP32 UART and power integration plan](esp32-uart-integration.md)
 - [Safe serial demo](../../../tools/um980-demo/README.md)
 - [First USB test record](../../../tests/2026-09-04-um980-usb-serial/README.md)
-- [ESP32 display demo](../../../firmware/um980-display-demo/README.md)
+- [ESP32 display demo](../../../firmware/README.md)
 - [First integrated display test](../../../tests/2026-09-04-um980-esp32-display/README.md)
 - [Validated TTL Channel 2 receive test](../../../tests/2026-09-04-um980-esp32-ttl2-receive/README.md)
 - [Validated TTL Channel 2 bidirectional test](../../../tests/2026-09-04-um980-esp32-ttl2-bidirectional/README.md)

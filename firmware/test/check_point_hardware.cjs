@@ -2,7 +2,7 @@
 // Close test-only API sockets: the instrument evicts idle connections at its 3-socket limit.
 const {chromium}=require('playwright');
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
-const output=path.resolve(__dirname,'../../..',process.env.TOPORTK_TEST_RECORD||'tests/2026-09-10-roadmap-6-12');
+const output=path.resolve(__dirname,'../..',process.env.TOPORTK_TEST_RECORD||'tests/2026-09-10-roadmap-6-12');
 (async()=>{const browser=await chromium.launch({channel:'msedge',headless:true});const before=JSON.parse(fs.readFileSync(path.join(output,'hardware-before.json'))),results={};try{
 for(const [unit,ip] of [['A','192.168.100.20'],['B','192.168.100.19']]){
  const page=await browser.newPage({viewport:{width:390,height:844}}),errors=[];page.on('pageerror',e=>errors.push(e.message));

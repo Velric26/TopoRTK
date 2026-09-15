@@ -1,6 +1,6 @@
 // Local transport algorithm only: no synthetic RF or receiver input is generated.
 const {chromium}=require('playwright'),fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
-const out=path.resolve(__dirname,'../../../tests/2026-09-12-correction-transport');
+const out=path.resolve(__dirname,'../../tests/2026-09-12-correction-transport');
 (async()=>{fs.mkdirSync(out,{recursive:true});const browser=await chromium.launch({channel:'msedge',headless:true}),results=[];
 try{for(const ip of ['192.168.100.20','192.168.100.19']){
  const context=await browser.newContext({viewport:{width:768,height:1024},acceptDownloads:true}),p=await context.newPage(),url='http://'+ip,errors=[];

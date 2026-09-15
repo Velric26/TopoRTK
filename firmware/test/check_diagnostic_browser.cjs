@@ -1,6 +1,6 @@
 // Exercises the actual embedded page with controlled protocol states; no physical writes.
 const {chromium}=require('playwright'),fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
-const root=path.resolve(__dirname,'../../..'),out=path.resolve(root,process.env.TOPORTK_TEST_RECORD||'tests/2026-09-12-standalone-tablet');
+const root=path.resolve(__dirname,'../..'),out=path.resolve(root,process.env.TOPORTK_TEST_RECORD||'tests/2026-09-12-standalone-tablet');
 const html=fs.readFileSync(path.join(__dirname,'../src/link_diagnostic_ui.h'),'utf8').split('R"HTML(')[1].split(')HTML"')[0];
 const saved={run:912203,state:'done',reason:'complete',role:'ROVER',transport:'sik',seconds:30,rate:1000,mode:2,expected_tx:117,sent:117,expected_rx:117,received:117,errors:0,duplicates:0,reordered:0,max_gap_ms:694,local_pass:true,peer_report_received:true,pair_pass:true};
 (async()=>{fs.mkdirSync(out,{recursive:true});const browser=await chromium.launch({channel:'msedge',headless:true});try{

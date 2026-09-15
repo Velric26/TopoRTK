@@ -22,7 +22,7 @@ Document commands, cable/port requirements, recovery procedure, and how to confi
 
 Describe tasks/modules for GNSS control, radio monitoring, logging, local UI, networking, and mobile UI.
 
-Current implementation: [UM980 display demo](../firmware/um980-display-demo/README.md).
+Current implementation: [UM980 display demo](../firmware/README.md).
 
 ### Read-only Rover browser status service
 
@@ -51,7 +51,7 @@ Use a live status channel for non-critical display updates and bounded request/r
 ### Development-only Wi-Fi credentials
 
 The tracked template
-[`wifi_credentials.example.h`](../firmware/um980-display-demo/src/wifi_credentials.example.h)
+[`wifi_credentials.example.h`](../firmware/src/wifi_credentials.example.h)
 is copied locally to `wifi_credentials.h` and filled with the local router's
 2.4 GHz SSID and password. The real file is Git-ignored. The saved console
 toggle `wifi local` makes both Base and Rover Wi-Fi clients on that network;

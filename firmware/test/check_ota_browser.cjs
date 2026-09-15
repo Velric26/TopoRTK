@@ -1,7 +1,7 @@
 const {chromium}=require('playwright'),fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
 const source=fs.readFileSync(path.join(__dirname,'../src/debug_ui.h'),'utf8'),html=source.split('R"HTML(')[1].split(')HTML"')[0];
 const js=fs.readFileSync(path.join(__dirname,'../src/ota_ui.h'),'utf8').split('R"JS(')[1].split(')JS"')[0];
-const root=path.resolve(__dirname,'../../..'),out=path.join(root,process.env.TOPORTK_TEST_RECORD||'tests/2026-09-14-ota');fs.mkdirSync(out,{recursive:true});
+const root=path.resolve(__dirname,'../..'),out=path.join(root,process.env.TOPORTK_TEST_RECORD||'tests/2026-09-14-ota');fs.mkdirSync(out,{recursive:true});
 (async()=>{const browser=await chromium.launch({channel:'msedge',headless:true});try{
  const page=await browser.newPage({viewport:{width:390,height:844}}),errors=[],posts=[];
  let owner=false,enabled=true,uptime=0,ack=false,boot=7,version='0.11.0',state='idle',pending=0;

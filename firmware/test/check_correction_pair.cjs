@@ -2,7 +2,7 @@
 const {chromium}=require('playwright'),fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
 const run=Number(process.env.TOPORTK_RUN||913230),seconds=Number(process.env.TOPORTK_SECONDS||60),profile=process.env.TOPORTK_PROFILE||'clean';
 assert(['clean','injected'].includes(profile));
-const out=path.resolve(__dirname,'../../..',process.env.TOPORTK_TEST_RECORD||'tests/2026-09-12-correction-uart',String(run));
+const out=path.resolve(__dirname,'../..',process.env.TOPORTK_TEST_RECORD||'tests/2026-09-12-correction-uart',String(run));
 (async()=>{fs.mkdirSync(out,{recursive:true});const browser=await chromium.launch({channel:'msedge',headless:true}),units=[],results=[];
 try{
  for(const ip of ['192.168.100.20','192.168.100.19']){

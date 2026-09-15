@@ -1,6 +1,11 @@
-# Firmware folder restructure plan — PLANNED, NOT EXECUTED
+# Firmware folder restructure — EXECUTED 2026-09-14
 
-Accepted 2026-09-14, deferred until the paused [R3 working tree](../tests/2026-09-14-arch-r3-transport/README.md) is resolved. This document is the execution record; treat it as the source of truth for the restructure when it happens.
+Accepted and executed on 2026-09-14 (after the R3 checkpoint commit `171ea80`). Final mapping, preserved for reference by dated records that still use the old paths:
+
+- `firmware/um980-display-demo/` → `firmware/` (contents flattened one level; the stale demo name removed).
+- `firmware/waveshare-board-demo/` → `archive/waveshare-board-demo/` (bring-up prototype archived).
+
+Dated records under `tests/2026-09-*` intentionally keep the old paths verbatim; they were accurate when written.
 
 ## Target layout
 

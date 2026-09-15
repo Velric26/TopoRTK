@@ -1,7 +1,7 @@
 // Real browser takeover checks for both roles. No valid survey command is submitted.
 // No bearer or client ID is written to artifacts or logs.
 const {chromium}=require('playwright'),fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
-const output=path.resolve(__dirname,'../../..',process.env.TOPORTK_TEST_RECORD||'tests/2026-09-12-standalone-tablet');
+const output=path.resolve(__dirname,'../..',process.env.TOPORTK_TEST_RECORD||'tests/2026-09-12-standalone-tablet');
 (async()=>{fs.mkdirSync(output,{recursive:true});const browser=await chromium.launch({channel:'msedge',headless:true}),results=[];
 try{for(const ip of ['192.168.100.20','192.168.100.19']){
  const url='http://'+ip,contexts=[await browser.newContext({viewport:{width:390,height:844}}),await browser.newContext({viewport:{width:768,height:1024}})],pages=[await contexts[0].newPage(),await contexts[1].newPage()],errors=[];let latest='';

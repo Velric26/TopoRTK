@@ -1,6 +1,6 @@
 """Run firmware against hardware doubles; render the actual UI into PNG previews.
 
-Run from firmware/um980-display-demo after a PlatformIO unit_b build.
+Run from firmware after a PlatformIO unit_b build.
 Requires Python 3 and g++ on PATH; no third-party Python modules.
 """
 from pathlib import Path

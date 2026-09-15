@@ -32,7 +32,7 @@ Repeat Base-to-Rover, Rover-to-Base and both directions at each useful distance.
 
 ## Development verification
 
-The pure C++ engine test is [diagnostic_core_test.cpp](../tests/2026-09-12-transport-test-kit/diagnostic_core_test.cpp). It covers a clean pair, packet loss/corruption, CRC reference vector, timer wrap, cancellation, peer timeout and invalid/reused configuration. Build with a C++17 compiler and include `firmware/um980-display-demo/src`.
+The pure C++ engine test is [diagnostic_core_test.cpp](../tests/2026-09-12-transport-test-kit/diagnostic_core_test.cpp). It covers a clean pair, packet loss/corruption, CRC reference vector, timer wrap, cancellation, peer timeout and invalid/reused configuration. Build with a C++17 compiler and include `firmware/src`.
 
 Build/upload records and hardware snapshots are in [the dated test record](../tests/2026-09-12-transport-test-kit/README.md). PC USB was used to flash and trigger bench checks; the instruments themselves generate/check packets and save their reports. Field acceptance requires the tablet workflow and the intended field supplies and spacing.
 

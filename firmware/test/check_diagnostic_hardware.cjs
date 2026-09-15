@@ -3,7 +3,7 @@
 const {chromium}=require('playwright'),fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
 const run=Number(process.env.TOPORTK_RUN||913202),transport=process.env.TOPORTK_TRANSPORT||'wifi',seconds=Number(process.env.TOPORTK_SECONDS||30),rate=Number(process.env.TOPORTK_RATE||1000),mode=Number(process.env.TOPORTK_MODE||2);
 assert(run>=100000&&run<=999999&&['wifi','sik'].includes(transport)&&[30,60,120,300].includes(seconds)&&[200,1000,3000].includes(rate)&&[0,1,2].includes(mode));
-const out=path.resolve(__dirname,'../../../tests/2026-09-12-standalone-tablet',transport+'-'+run);fs.mkdirSync(out,{recursive:true});
+const out=path.resolve(__dirname,'../../tests/2026-09-12-standalone-tablet',transport+'-'+run);fs.mkdirSync(out,{recursive:true});
 (async()=>{const browser=await chromium.launch({channel:'msedge',headless:true}),contexts=[],pages=[],urls=['http://192.168.100.20','http://192.168.100.19'];
 try{
  const errors=[],before=[];

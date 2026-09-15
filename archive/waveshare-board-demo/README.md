@@ -60,4 +60,4 @@ The screen must show the TopoRTK test page, red/green/blue bars, and `Touch: REA
 
 ## Source Basis
 
-Pin assignments, display driver, touch controller, and LCD reset sequence follow Waveshare's official examples. See `docs/hardware/waveshare-esp32-s3-touch-lcd-3.5/README.md`.
+- Pin assignments, display driver, touch controller, and LCD reset sequence follow Waveshare's official examples. See `../docs/hardware/waveshare-esp32-s3-touch-lcd-3.5/README.md`.

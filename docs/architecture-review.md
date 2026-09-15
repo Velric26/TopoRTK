@@ -48,13 +48,13 @@ Only the selected correction route forwards data. The diagram shows alternative 
 
 | Boundary | Existing implementation and responsibility |
 |---|---|
-| Receiver | [main.cpp](../firmware/um980-display-demo/src/main.cpp): UART1/COM2, GGA/RMC/BESTNAV parsing, CRC checks, startup/profile acknowledgement and RTCM input parsing. UM980, not ESP32, solves RTK. |
-| Correction safety | [correction_transport.h](../firmware/um980-display-demo/src/correction_transport.h), [correction_queue.h](../firmware/um980-display-demo/src/correction_queue.h), [correction_bridge.h](../firmware/um980-display-demo/src/correction_bridge.h), [correction_health.h](../firmware/um980-display-demo/src/correction_health.h): whole-frame integrity, station/reference selection, bounded buffers/age, fresh observation and receiver-quality checks. Final UART admission remains in `main.cpp`. |
-| Instrument link | Wi-Fi UDP discovery/RTCM in `main.cpp`; SiK UART2 plus diagnostics in [link_diagnostic.cpp](../firmware/um980-display-demo/src/link_diagnostic.cpp); update hello/notice traffic in [peer_update.cpp](../firmware/um980-display-demo/src/peer_update.cpp) and [update_notice.h](../firmware/um980-display-demo/src/update_notice.h). Current formats include RTM1, RTC1 and RTDG. |
-| Persistence and survey | [survey_service.cpp](../firmware/um980-display-demo/src/survey_service.cpp) owns the worker/command queue and serializes SD access; [survey_engine.cpp](../firmware/um980-display-demo/src/survey_engine.cpp) applies job/quality/occupation rules; [survey_store.cpp](../firmware/um980-display-demo/src/survey_store.cpp) implements journal storage. NVS stores device/Base settings, phone credentials, diagnostics and OTA receipts in separate namespaces. |
-| Browser/HTTP | [web_http.cpp](../firmware/um980-display-demo/src/web_http.cpp) serves flash-resident assets, enforces origin/bearer checks and queues typed work. [survey_ui.h](../firmware/um980-display-demo/src/survey_ui.h) and [survey_tools_ui.h](../firmware/um980-display-demo/src/survey_tools_ui.h) own the survey UI; separate status/diagnostic/Debug/OTA assets duplicate some client/navigation logic. |
-| Instrument UI | `main.cpp` owns rendering, state formatting, FT6336 input and backlight; [touch_layout.h](../firmware/um980-display-demo/src/touch_layout.h) already shares drawing/hit-test geometry. |
-| Updates | [ota_service.cpp](../firmware/um980-display-demo/src/ota_service.cpp), [update_package.h](../firmware/um980-display-demo/src/update_package.h), `peer_update.cpp`: guarded inactive-slot upload, paired notices and deferred boot acceptance. These are not a general pair-management service yet. |
+| Receiver | [main.cpp](../firmware/src/main.cpp): UART1/COM2, GGA/RMC/BESTNAV parsing, CRC checks, startup/profile acknowledgement and RTCM input parsing. UM980, not ESP32, solves RTK. |
+| Correction safety | [correction_transport.h](../firmware/src/correction_transport.h), [correction_queue.h](../firmware/src/correction_queue.h), [correction_bridge.h](../firmware/src/correction_bridge.h), [correction_health.h](../firmware/src/correction_health.h): whole-frame integrity, station/reference selection, bounded buffers/age, fresh observation and receiver-quality checks. Final UART admission remains in `main.cpp`. |
+| Instrument link | Wi-Fi UDP discovery/RTCM in `main.cpp`; SiK UART2 plus diagnostics in [link_diagnostic.cpp](../firmware/src/link_diagnostic.cpp); update hello/notice traffic in [peer_update.cpp](../firmware/src/peer_update.cpp) and [update_notice.h](../firmware/src/update_notice.h). Current formats include RTM1, RTC1 and RTDG. |
+| Persistence and survey | [survey_service.cpp](../firmware/src/survey_service.cpp) owns the worker/command queue and serializes SD access; [survey_engine.cpp](../firmware/src/survey_engine.cpp) applies job/quality/occupation rules; [survey_store.cpp](../firmware/src/survey_store.cpp) implements journal storage. NVS stores device/Base settings, phone credentials, diagnostics and OTA receipts in separate namespaces. |
+| Browser/HTTP | [web_http.cpp](../firmware/src/web_http.cpp) serves flash-resident assets, enforces origin/bearer checks and queues typed work. [survey_ui.h](../firmware/src/survey_ui.h) and [survey_tools_ui.h](../firmware/src/survey_tools_ui.h) own the survey UI; separate status/diagnostic/Debug/OTA assets duplicate some client/navigation logic. |
+| Instrument UI | `main.cpp` owns rendering, state formatting, FT6336 input and backlight; [touch_layout.h](../firmware/src/touch_layout.h) already shares drawing/hit-test geometry. |
+| Updates | [ota_service.cpp](../firmware/src/ota_service.cpp), [update_package.h](../firmware/src/update_package.h), `peer_update.cpp`: guarded inactive-slot upload, paired notices and deferred boot acceptance. These are not a general pair-management service yet. |
 
 ### Verified concentration and coupling
 
@@ -73,15 +73,15 @@ Status drift is visible: dashboard/survey freshness use `verified_correction_age
 Other concentrations are defined by responsibility, not physical line count:
 
 - `link_diagnostic.cpp` is **302 lines**, but owns UART2, diagnostic UDP, live corrections, three wire formats, request processing, NVS reports, ATI probes and JSON snapshots.
-- `survey_ui.h` and `survey_tools_ui.h` contain **28,219 and 29,715 bytes** of densely packed embedded HTML/JavaScript. The latter repeatedly replaces global `render`, `controls`, `switchTab` and collection handlers (16–18, 43–45, 52–54, 72–74, 79, 92). [ota_ui.h](../firmware/um980-display-demo/src/ota_ui.h), line 16, similarly wraps Debug controls.
+- `survey_ui.h` and `survey_tools_ui.h` contain **28,219 and 29,715 bytes** of densely packed embedded HTML/JavaScript. The latter repeatedly replaces global `render`, `controls`, `switchTab` and collection handlers (16–18, 43–45, 52–54, 72–74, 79, 92). [ota_ui.h](../firmware/src/ota_ui.h), line 16, similarly wraps Debug controls.
 - The HTTP server registers **22 routes with `max_uri_handlers = 22`** (`web_http.cpp:229,235–257`), leaving no slots for Settings. Added assets/API handlers require capacity derived from their actual route tables.
-- [test/run_host_tests.py](../firmware/um980-display-demo/test/run_host_tests.py), lines 14–52, concatenates source files and regex-strips hardware headers; browser tests extract C++ raw strings. Moving code without moving these verification boundaries would preserve fragile tests.
+- [test/run_host_tests.py](../firmware/test/run_host_tests.py), lines 14–52, concatenates source files and regex-strips hardware headers; browser tests extract C++ raw strings. Moving code without moving these verification boundaries would preserve fragile tests.
 
 ### Existing access, bootstrap and diagnostic behavior
 
 Trusted takeover already exists: `/api/v1/control` accepts `{client}`, returns a bearer and uses a **120-second renewable lease**, without a PIN. The explicit matching values are the six-digit diagnostic `run` and live SiK `session`; neither is an access credential. Keep same-origin checks, single-controller authorization and typed commands.
 
-[rover_ap.cpp](../firmware/um980-display-demo/src/rover_ap.cpp), lines 25–43 and 73–111, already implements hardware-triggered phone-key replacement with NVS readback. `main.cpp:2082–2115` supplies the touchscreen path. Preserve hardware-only reveal/rotation rather than inventing a web password endpoint.
+[rover_ap.cpp](../firmware/src/rover_ap.cpp), lines 25–43 and 73–111, already implements hardware-triggered phone-key replacement with NVS readback. `main.cpp:2082–2115` supplies the touchscreen path. Preserve hardware-only reveal/rotation rather than inventing a web password endpoint.
 
 Selected-link startup is incomplete. `peer_update_receive` rejects a route/session mismatch (`peer_update.cpp:22–32`), and the live radio parser runs only inside `if(live.active())` (`link_diagnostic.cpp:233–252`). The existing TPH1 challenge/echo cannot bootstrap the very session needed to receive it. Peer freshness is transport connectivity; OTA recovery separately depends on receiver quality. New pairing must separate those states.
 
@@ -129,7 +129,7 @@ These records **do not establish** outdoor SiK FIXED/recovery/range, independent
 
 Use ordinary `.h/.cpp` services, fixed-size value snapshots and explicit calls. Do not create a generic event bus, plugin framework, thin-wrapper collection or an `AppContext` containing all the old globals. Main-loop owners mutate receiver/link state; HTTP/UI readers receive copied snapshots, never pointers to mutable queues.
 
-The following are **proposed new paths**, except where explicitly marked existing. Paths are relative to `firmware/um980-display-demo/`. Introduce each only in the stage that gives it a real owner and consumers.
+The following are **proposed new paths**, except where explicitly marked existing. Paths are relative to `firmware/`. Introduce each only in the stage that gives it a real owner and consumers.
 
 | Owner / target | Move or reuse | Public boundary and dependency rule |
 |---|---|---|
@@ -161,7 +161,7 @@ bool parse_bestnav_accuracy(const char *line, uint32_t now_ms,
                             HorizontalAccuracyData &result, GnssParseStats &stats);
 ```
 
-Move existing helper bodies, preserving parsing policy and fixed local buffers. Replace `millis()` with `now_ms` and the global checksum increment with `stats.checksum_errors`. Update `main.cpp::handle_line` and [test/firmware_cases.h](../firmware/um980-display-demo/test/firmware_cases.h); remove original definitions, not retain forwarding aliases. A repository search for `parse_gga\(|parse_rmc_time\(|parse_bestnav_accuracy\(` within this firmware's `src` and `test` identifies consumers. Separately compile the parser and feed it the existing BESTNAV valid/invalid/CRC fixtures. Later `gnss_service` takes main-side ownership without changing the parser again.
+Move existing helper bodies, preserving parsing policy and fixed local buffers. Replace `millis()` with `now_ms` and the global checksum increment with `stats.checksum_errors`. Update `main.cpp::handle_line` and [test/firmware_cases.h](../firmware/test/firmware_cases.h); remove original definitions, not retain forwarding aliases. A repository search for `parse_gga\(|parse_rmc_time\(|parse_bestnav_accuracy\(` within this firmware's `src` and `test` identifies consumers. Separately compile the parser and feed it the existing BESTNAV valid/invalid/CRC fixtures. Later `gnss_service` takes main-side ownership without changing the parser again.
 
 `main.cpp::read_gnss` also increments the current `checksum_errors` on line overflow. Move that use to the same main-owned `GnssParseStats` instance so extraction neither loses nor double-counts errors; remove the old standalone counter. Overflow handling belongs to the receiver owner, not the pure line parser. Verified consumers are the three calls in `handle_line` and BESTNAV cases in `test/firmware_cases.h`; repeat the search at execution to include concurrent additions.
 
@@ -370,7 +370,7 @@ Prefer Astra for bounded protocol/ownership design and review, Sol for fixed sub
 
 1. Move the three receiver result structs and parser/helper bodies to proposed `gnss_parser` using the exact contract above. No equivalent standalone parser exists; current definitions are in `main.cpp`.
 2. Migrate `handle_line`, shared error counter and `test/firmware_cases.h` consumers. Preserve fixed buffers, accepted NMEA/BESTNAV policy, precision, timestamps and error increments.
-3. Change `test/run_host_tests.py` to compile the production `.cpp` normally. Limit temporary concatenation to still-unextracted `main.cpp`; never copy parser logic. Establish the hardware include/adapter seam with existing [test/host_hardware.h](../firmware/um980-display-demo/test/host_hardware.h); later extractions remove private-global dependencies instead of spreading concatenation.
+3. Change `test/run_host_tests.py` to compile the production `.cpp` normally. Limit temporary concatenation to still-unextracted `main.cpp`; never copy parser logic. Establish the hardware include/adapter seam with existing [test/host_hardware.h](../firmware/test/host_hardware.h); later extractions remove private-global dependencies instead of spreading concatenation.
 4. Check both firmware builds, existing parser/profile/NVS behavior, valid BESTNAV with correct station/age and corrupted CRC. Observe unchanged boot/profile/receiver output on both instruments before proceeding.
 
 #### R2 — Deliver sunlight improvement without changing the link
@@ -394,7 +394,7 @@ Prefer Astra for bounded protocol/ownership design and review, Sol for fixed sub
 2. Move peer boot/role/discovery to that owner; make `peer_update.cpp` consume current peer/session state while retaining update-notice/recovery behavior. Cold boot with selected Radio and no Base–Rover Wi-Fi must establish a session without browser intervention/numbers. Repeat Base-first, Rover-first, simultaneous and individual restarts.
 3. Integrate fresh-session identity into Wi-Fi hello/RTCM admission. Current Wi-Fi headers do not provide the newly required session isolation. Version changed messages as **version 3**, retaining message kinds/CRC and adding boot/session identity to data admission. Reject version 2 for production in this cutover; old datagrams are not current corrections.
 4. Add durable `topolink` selection/operation record and Settings API in R6. Complete target-only preparation, role-aware Rover coordination, persistence checks, correlated results and explicit recovery. HTTP queues typed work; main-loop service owns admission/state/NVS.
-5. Remove normal API/UI/driver calls that manually start/join live sessions or arm manually matched runs. Update [run_sik_bench.py](../firmware/um980-display-demo/test/run_sik_bench.py), [check_live_bridge_hardware.cjs](../firmware/um980-display-demo/test/check_live_bridge_hardware.cjs), [check_diagnostic_hardware.cjs](../firmware/um980-display-demo/test/check_diagnostic_hardware.cjs), [check_correction_pair.cjs](../firmware/um980-display-demo/test/check_correction_pair.cjs), diagnostics/Debug and OTA rejoin messages to call the coordinator or internal automatic advanced operation. Preserve engines/reports.
+5. Remove normal API/UI/driver calls that manually start/join live sessions or arm manually matched runs. Update [run_sik_bench.py](../firmware/test/run_sik_bench.py), [check_live_bridge_hardware.cjs](../firmware/test/check_live_bridge_hardware.cjs), [check_diagnostic_hardware.cjs](../firmware/test/check_diagnostic_hardware.cjs), [check_correction_pair.cjs](../firmware/test/check_correction_pair.cjs), diagnostics/Debug and OTA rejoin messages to call the coordinator or internal automatic advanced operation. Preserve engines/reports.
 6. Install this protocol-breaking checkpoint on **both units in one controlled maintenance window**, corrections/collection stopped, USB recovery available. Recognized incompatible traffic gives protocol-incompatible; a silent old peer is only unreachable, not proven incompatible. Both inhibit production readiness. Complete both updates before interoperability testing; do not preserve obsolete manual protocol as a workaround.
 7. R6b (deferred operator request): once R6's pair-operation service exists, add the touchscreen Link-mode selector from the Link details page to the normal selection path — both roles, confirmation before the admitted cutover, typed request through the existing diagnostic queue gates (`test_busy`/`probe`/`profile`/survey reservation), outcome shown on the instrument. Never session codes, never a second bootstrap mechanism.
 
@@ -435,7 +435,7 @@ Review evidence comprises inspected source/callsites, dated validation artifacts
 
 ### Build and offline checks for future firmware checkpoints
 
-Working directory: **`firmware/um980-display-demo`**. Prerequisites: PlatformIO, Python 3, `g++`, Node with importable `playwright`, installed Microsoft Edge, pinned PlatformIO dependencies and `pyproj` under `.pio/proj-test`. Build both environments first: current host runner uses GFX headers from `unit_b` and ArduinoJson from `unit_a`. If the PROJ oracle is absent, the existing test-only setup is `python -m pip install --target .pio/proj-test pyproj`; not part of review publication.
+Working directory: **`firmware`**. Prerequisites: PlatformIO, Python 3, `g++`, Node with importable `playwright`, installed Microsoft Edge, pinned PlatformIO dependencies and `pyproj` under `.pio/proj-test`. Build both environments first: current host runner uses GFX headers from `unit_b` and ArduinoJson from `unit_a`. If the PROJ oracle is absent, the existing test-only setup is `python -m pip install --target .pio/proj-test pyproj`; not part of review publication.
 
 ```powershell
 pio run --environment unit_a
@@ -446,7 +446,7 @@ python test/run_host_tests.py
 python test/run_survey_tests.py
 python test/run_update_tests.py
 python test/run_ota_http_tests.py
-$env:TOPORTK_TEST_RECORD = 'firmware/um980-display-demo/.pio/architecture-browser'
+$env:TOPORTK_TEST_RECORD = 'firmware/.pio/architecture-browser'
 node test/check_web_browser.cjs
 node test/check_survey_browser.cjs
 node test/check_gui_layout.cjs
@@ -457,7 +457,7 @@ node test/check_ota_browser.cjs
 
 Run affected native/browser checks at each checkpoint, and this full integration set once after concurrent work integrates, not while shared files move. The order supplies status JSON fixtures and `.pio/test_survey.exe` for browsers; the first browser command creates shared output storage. `TOPORTK_TEST_RECORD` prevents overwriting dated historical evidence. Updated runners retain these entrypoints after module/asset migration.
 
-Extend existing behavior-oriented cases in `test/firmware_cases.h`, [test/peer_service_cases.h](../firmware/um980-display-demo/test/peer_service_cases.h) and survey/diagnostic browser checks only for genuinely uncertain boundaries below. Assert public observable state and receiver output, not private function order, exact theme RGB strings, HTML substrings or receipt-field copying. Replace [run_ota_http_tests.py](../firmware/um980-display-demo/test/run_ota_http_tests.py)'s slicing between `reject_upload` and `get_debug_nav` when assets move; never retain a dead function to satisfy the slice.
+Extend existing behavior-oriented cases in `test/firmware_cases.h`, [test/peer_service_cases.h](../firmware/test/peer_service_cases.h) and survey/diagnostic browser checks only for genuinely uncertain boundaries below. Assert public observable state and receiver output, not private function order, exact theme RGB strings, HTML substrings or receipt-field copying. Replace [run_ota_http_tests.py](../firmware/test/run_ota_http_tests.py)'s slicing between `reject_upload` and `get_debug_nav` when assets move; never retain a dead function to satisfy the slice.
 
 ### Risk-bearing behavior checks
 
@@ -517,11 +517,11 @@ Reread these non-obvious boundaries before their relevant future stage. Line num
 
 | Existing file | Anchor and reason |
 |---|---|
-| [peer_update.h](../firmware/um980-display-demo/src/peer_update.h) | `peer_wire::Stream`, `peer_wire::control` (19–40): CRC-valid whole-envelope consumption prevents marker-like correction payload from becoming control; body/padding limits matter for PLC1. |
-| [correction_health.h](../firmware/um980-display-demo/src/correction_health.h) | `Health::effective_age`, `Health::state`: arrival age alone is insufficient; receiver freshness, differential age and station match are separate requirements. |
-| [rover_ap.cpp](../firmware/um980-display-demo/src/rover_ap.cpp) | `rotate_rover_ap_password`: checked persistence before AP replacement, preserving upstream station/GNSS. Keep hardware recovery boundary. |
-| [survey_ui.h](../firmware/um980-display-demo/src/survey_ui.h) | `render`, Base-only tab filtering: appending a Settings button alone leaves it hidden on Base. |
-| [run_ota_http_tests.py](../firmware/um980-display-demo/test/run_ota_http_tests.py) | `source.index('esp_err_t reject_upload(')` / `get_debug_nav` slice (7): unrelated asset extraction can otherwise break production upload coverage. |
+| [peer_update.h](../firmware/src/peer_update.h) | `peer_wire::Stream`, `peer_wire::control` (19–40): CRC-valid whole-envelope consumption prevents marker-like correction payload from becoming control; body/padding limits matter for PLC1. |
+| [correction_health.h](../firmware/src/correction_health.h) | `Health::effective_age`, `Health::state`: arrival age alone is insufficient; receiver freshness, differential age and station match are separate requirements. |
+| [rover_ap.cpp](../firmware/src/rover_ap.cpp) | `rotate_rover_ap_password`: checked persistence before AP replacement, preserving upstream station/GNSS. Keep hardware recovery boundary. |
+| [survey_ui.h](../firmware/src/survey_ui.h) | `render`, Base-only tab filtering: appending a Settings button alone leaves it hidden on Base. |
+| [run_ota_http_tests.py](../firmware/test/run_ota_http_tests.py) | `source.index('esp_err_t reject_upload(')` / `get_debug_nav` slice (7): unrelated asset extraction can otherwise break production upload coverage. |
 
 ## Assumptions and contingencies
 
