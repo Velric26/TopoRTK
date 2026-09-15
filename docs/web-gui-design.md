@@ -20,6 +20,20 @@ Both units were flashed with hash verification and passed read-only browser chec
 
 The Rover now offers PIN-free **Take control** with latest-request ownership. The Base still displays its PIN field. The Rover touchscreen replaces the unused WEB CONTROL PIN line with a Take control instruction. The remaining GUI layout is unchanged. See [takeover validation](../tests/2026-09-11-rover-takeover/README.md).
 
+## Settings page (2026-09-15, R8)
+
+`/settings` is reachable from every page on **both roles** and consumes the pair-selection API agreed in R6. It keeps three things visibly separate, because conflating them is how a queued request gets mistaken for a working link:
+
+- **Selected** — the durable `selected_transport` that both instruments store and restore.
+- **Pending** — `candidate_transport` and the live operation (kind, state, reason, coordinator and the phase countdown), so a switch in progress is never drawn as a completed one.
+- **Connected** — `peer_connected` and `corrections_fresh`, reported on their own rows.
+
+A switch is only ever sent from an explicit confirmation: the medium card reveals the interruption warning for that switch, and Confirm posts `{id, revision, op:'link.select', transport, confirm:true}` with a fresh 32-hex id and the revision this page last read. `202` means "queued", never "connected"; the outcome is published by the same endpoint and rendered as success only with `committed`, otherwise as the failure reason with the medium still in use. Stale-revision, busy, conflicting-id, cancelled and storage refusals each get their own operator sentence, and a `recovery_required` outcome points at the Link test page for a local selection on one instrument.
+
+Reconciliation rules: the page polls and renders the server's operation, so a reload during a switch retrieves it and never repeats the request; a lost connection shows "no live settings" and disables every write control rather than guessing; a takeover invalidates the previous browser (401 drops the shared token) and its controls lock immediately; and Cancel is offered only for a request this instrument issued, which the instrument identifies by tag.
+
+Sizing uses rem units with reflowing grids, so 200% text reflows the medium cards and metric rows instead of overflowing. Checks cover both roles, the four widths, the refused and unreachable outcomes, reload and HTTP-loss reconciliation, takeover and the absence of any PIN or password field.
+
 ## Current control and diagnostic update (2026-09-12)
 
 Base and Rover now share PIN-free latest-request takeover. Survey and diagnostic pages remove the Base PIN field, and both touchscreen roles instruct the user to tap Take control. Survey quality gates and accepted-operation behavior are unchanged.

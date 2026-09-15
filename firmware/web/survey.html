@@ -8,7 +8,7 @@
 <div class="banner" id="connection" role="status">Waiting for live data. Controls are locked.</div>
 <details id="pairPanel"><summary id="controlState">View only · Take control</summary><p class="help" id="controlHelp">Connect to the instrument to take control.</p><form id="pair" class="row"><button type="submit" id="takeControl" disabled>Take control</button><button type="button" id="release">Release control</button></form></details>
 <nav aria-label="Survey workflow"><button data-tab="jobs" aria-selected="true">1 · Jobs</button><button data-tab="setup" aria-selected="false">2 · Setup</button><button data-tab="collect" aria-selected="false">3 · Collect</button><button data-tab="base" aria-selected="false" hidden>Base setup</button></nav>
-<button type="button" id="debugTab" data-navigation disabled>Debug</button>
+<p class="help" data-navigation><a href="/settings">Settings</a> · <a href="/diagnostics">Link test</a></p><button type="button" id="debugTab" data-navigation disabled>Debug</button>
 <p id="debugAvailability" class="help"></p>
 <p id="debugPeerNote" class="help" hidden></p>
 <div class="banner" id="message" role="status" hidden></div><div id="retryPanel" hidden><p class="help">A previous request has no confirmed result. Retry checks the same request, without duplicating it.</p><button id="retry" data-write>Check / retry request</button></div>

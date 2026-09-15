@@ -1,0 +1,240 @@
+{
+  "date": "2026-09-15",
+  "firmware": "0.11.22-arch-r8",
+  "rows": [
+    {
+      "unit": "A",
+      "firmware": "0.11.22-arch-r8",
+      "role": "base",
+      "url": "/",
+      "source": "survey.html",
+      "status": 200,
+      "bytes": 27944,
+      "sha256": "7c8dee9a2a5564ba265d4695c8be3b140997119fa4b800fd1595455e3f479cf6",
+      "matches_canonical_source": true
+    },
+    {
+      "unit": "A",
+      "firmware": "0.11.22-arch-r8",
+      "role": "base",
+      "url": "/ui/v1/",
+      "source": "survey.html",
+      "status": 200,
+      "bytes": 27944,
+      "sha256": "7c8dee9a2a5564ba265d4695c8be3b140997119fa4b800fd1595455e3f479cf6",
+      "matches_canonical_source": true
+    },
+    {
+      "unit": "A",
+      "firmware": "0.11.22-arch-r8",
+      "role": "base",
+      "url": "/survey",
+      "source": "survey.html",
+      "status": 200,
+      "bytes": 27944,
+      "sha256": "7c8dee9a2a5564ba265d4695c8be3b140997119fa4b800fd1595455e3f479cf6",
+      "matches_canonical_source": true
+    },
+    {
+      "unit": "A",
+      "firmware": "0.11.22-arch-r8",
+      "role": "base",
+      "url": "/survey-tools.js",
+      "source": "survey-tools.js",
+      "status": 200,
+      "bytes": 29700,
+      "sha256": "70eceb5f22843a8b42474c8c6cf7023e5b8bcb9fcb6e346977f3cadbc8a4a96d",
+      "matches_canonical_source": true
+    },
+    {
+      "unit": "A",
+      "firmware": "0.11.22-arch-r8",
+      "role": "base",
+      "url": "/diagnostics",
+      "source": "diagnostics.html",
+      "status": 200,
+      "bytes": 18894,
+      "sha256": "32776ebce1ae041fe30a29f3131cf6af33208fe50146f7769409325419ba8d53",
+      "matches_canonical_source": true
+    },
+    {
+      "unit": "A",
+      "firmware": "0.11.22-arch-r8",
+      "role": "base",
+      "url": "/debug",
+      "source": "debug.html",
+      "status": 200,
+      "bytes": 13560,
+      "sha256": "3ba29dc48a78aad75baf33802226371026daa16a07f92df3e3bb7fc88af7ca04",
+      "matches_canonical_source": true
+    },
+    {
+      "unit": "A",
+      "firmware": "0.11.22-arch-r8",
+      "role": "base",
+      "url": "/settings",
+      "source": "settings.html",
+      "status": 200,
+      "bytes": 16597,
+      "sha256": "76ac5a7fab6280e5ac66a5986f23053f30c4cc65023a47d53cf48eb528e2b706",
+      "matches_canonical_source": true
+    },
+    {
+      "unit": "A",
+      "firmware": "0.11.22-arch-r8",
+      "role": "base",
+      "url": "/api.js",
+      "source": "api.js",
+      "status": 200,
+      "bytes": 3376,
+      "sha256": "5cd0025fc2713a259e352a6aaf8b0d303e3250c08de58d87ed6bede310e5320c",
+      "matches_canonical_source": true
+    },
+    {
+      "unit": "A",
+      "firmware": "0.11.22-arch-r8",
+      "role": "base",
+      "url": "/navigation.js",
+      "source": "navigation.js",
+      "status": 200,
+      "bytes": 2654,
+      "sha256": "b7f87153147189c49d139f4a9f600c736f2282e7c9e19df28df3013af9a47a8e",
+      "matches_canonical_source": true
+    },
+    {
+      "unit": "A",
+      "firmware": "0.11.22-arch-r8",
+      "role": "base",
+      "url": "/update-ui.js",
+      "source": "update-ui.js",
+      "status": 200,
+      "bytes": 6300,
+      "sha256": "a6654725d8c1c42e918979ab204308254570c6b91a82cc7f54cad11521523cd9",
+      "matches_canonical_source": true
+    },
+    {
+      "unit": "A",
+      "url": "/debug-nav.js",
+      "status": 404,
+      "retired": true,
+      "matches_canonical_source": true
+    },
+    {
+      "unit": "B",
+      "firmware": "0.11.22-arch-r8",
+      "role": "rover",
+      "url": "/",
+      "source": "status.html",
+      "status": 200,
+      "bytes": 15627,
+      "sha256": "65631a62bb1fb2c04cfb9ac494f14731b23ab8131d4491ca75b260c0555c643a",
+      "matches_canonical_source": true
+    },
+    {
+      "unit": "B",
+      "firmware": "0.11.22-arch-r8",
+      "role": "rover",
+      "url": "/ui/v1/",
+      "source": "status.html",
+      "status": 200,
+      "bytes": 15627,
+      "sha256": "65631a62bb1fb2c04cfb9ac494f14731b23ab8131d4491ca75b260c0555c643a",
+      "matches_canonical_source": true
+    },
+    {
+      "unit": "B",
+      "firmware": "0.11.22-arch-r8",
+      "role": "rover",
+      "url": "/survey",
+      "source": "survey.html",
+      "status": 200,
+      "bytes": 27944,
+      "sha256": "7c8dee9a2a5564ba265d4695c8be3b140997119fa4b800fd1595455e3f479cf6",
+      "matches_canonical_source": true
+    },
+    {
+      "unit": "B",
+      "firmware": "0.11.22-arch-r8",
+      "role": "rover",
+      "url": "/survey-tools.js",
+      "source": "survey-tools.js",
+      "status": 200,
+      "bytes": 29700,
+      "sha256": "70eceb5f22843a8b42474c8c6cf7023e5b8bcb9fcb6e346977f3cadbc8a4a96d",
+      "matches_canonical_source": true
+    },
+    {
+      "unit": "B",
+      "firmware": "0.11.22-arch-r8",
+      "role": "rover",
+      "url": "/diagnostics",
+      "source": "diagnostics.html",
+      "status": 200,
+      "bytes": 18894,
+      "sha256": "32776ebce1ae041fe30a29f3131cf6af33208fe50146f7769409325419ba8d53",
+      "matches_canonical_source": true
+    },
+    {
+      "unit": "B",
+      "firmware": "0.11.22-arch-r8",
+      "role": "rover",
+      "url": "/debug",
+      "source": "debug.html",
+      "status": 200,
+      "bytes": 13560,
+      "sha256": "3ba29dc48a78aad75baf33802226371026daa16a07f92df3e3bb7fc88af7ca04",
+      "matches_canonical_source": true
+    },
+    {
+      "unit": "B",
+      "firmware": "0.11.22-arch-r8",
+      "role": "rover",
+      "url": "/settings",
+      "source": "settings.html",
+      "status": 200,
+      "bytes": 16597,
+      "sha256": "76ac5a7fab6280e5ac66a5986f23053f30c4cc65023a47d53cf48eb528e2b706",
+      "matches_canonical_source": true
+    },
+    {
+      "unit": "B",
+      "firmware": "0.11.22-arch-r8",
+      "role": "rover",
+      "url": "/api.js",
+      "source": "api.js",
+      "status": 200,
+      "bytes": 3376,
+      "sha256": "5cd0025fc2713a259e352a6aaf8b0d303e3250c08de58d87ed6bede310e5320c",
+      "matches_canonical_source": true
+    },
+    {
+      "unit": "B",
+      "firmware": "0.11.22-arch-r8",
+      "role": "rover",
+      "url": "/navigation.js",
+      "source": "navigation.js",
+      "status": 200,
+      "bytes": 2654,
+      "sha256": "b7f87153147189c49d139f4a9f600c736f2282e7c9e19df28df3013af9a47a8e",
+      "matches_canonical_source": true
+    },
+    {
+      "unit": "B",
+      "firmware": "0.11.22-arch-r8",
+      "role": "rover",
+      "url": "/update-ui.js",
+      "source": "update-ui.js",
+      "status": 200,
+      "bytes": 6300,
+      "sha256": "a6654725d8c1c42e918979ab204308254570c6b91a82cc7f54cad11521523cd9",
+      "matches_canonical_source": true
+    },
+    {
+      "unit": "B",
+      "url": "/debug-nav.js",
+      "status": 404,
+      "retired": true,
+      "matches_canonical_source": true
+    }
+  ]
+}

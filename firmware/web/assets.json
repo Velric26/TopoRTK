@@ -26,6 +26,11 @@
       "urls": ["/debug"]
     },
     {
+      "source": "settings.html",
+      "mime": "text/html; charset=utf-8",
+      "urls": ["/settings"]
+    },
+    {
       "source": "api.js",
       "mime": "application/javascript; charset=utf-8",
       "urls": ["/api.js"]

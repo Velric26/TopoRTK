@@ -1,0 +1,270 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>TopoRTK · Settings</title><style>
+*{box-sizing:border-box}body{font:1rem/1.5 system-ui;background:#eef2f5;color:#172d3b;margin:0}main{max-width:56rem;margin:auto;padding:1.5rem}section{background:white;border:1px solid #d2dde4;border-radius:14px;padding:1.25rem;margin:1.1rem 0}h1,h2,h3{line-height:1.2}h1{margin-bottom:.5rem}h2{font-size:1.25rem;margin-top:0}h3{font-size:1.05rem;margin:0 0 .4rem}button{font:inherit;padding:.75rem;border:1px solid #a6bac5;border-radius:7px;max-width:100%;min-height:3rem;background:#166546;color:white;cursor:pointer;margin:.5rem .5rem 0 0}button.secondary{background:#edf3f6;color:#172d3b}button:disabled{opacity:.5;cursor:default}a{color:#155a77}.muted{color:#526674}.help{color:#526674;font-size:.92rem}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(15rem,100%),1fr));gap:1rem}.choice{padding:1rem;background:#f2f6f8;border:1px solid #d2dde4;border-radius:10px}.choice[data-selected="true"]{border-color:#166546;box-shadow:0 0 0 2px #16654622}.chip{display:inline-block;padding:.25rem .65rem;border-radius:999px;background:#e3eaf0;font-size:.85rem;margin:0 .4rem 0 0}.chip[data-tone="good"]{background:#d6efe0;color:#0f4a33}.chip[data-tone="busy"]{background:#fdf1d6;color:#6b4d05}.chip[data-tone="bad"]{background:#fadcdc;color:#7a1c1c}#connection{padding:.75rem;background:#e3eaf0;border-radius:8px}#connection[data-tone="bad"]{background:#fadcdc}#message:empty{display:none}#message{border-left:4px solid #155a77;padding:.6rem}#confirmWarning{border-left:4px solid #b45309;background:#fef6e7;padding:.75rem;border-radius:6px}dl{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(11rem,100%),1fr));gap:.75rem;margin:1.25rem 0}dl div{padding:.75rem;background:#f2f6f8;border-radius:8px}dt{font-size:.85rem;color:#526674}dd{margin:.25rem 0 0;font-weight:650}p,dd{overflow-wrap:anywhere}progress{width:100%;height:.75rem;accent-color:#166546}#controlState{font-weight:650}#operationState{font-weight:650}#operationState[data-tone="good"]{color:#0f4a33}#operationState[data-tone="busy"]{color:#6b4d05}#operationState[data-tone="bad"]{color:#7a1c1c}input:focus-visible,button:focus-visible,a:focus-visible{outline:3px solid #155a77;outline-offset:2px}
+</style></head><body><main>
+<h1>Settings</h1>
+<p class="muted" id="identity">Reading instrument…</p>
+<p id="connection" role="status">Connecting…</p>
+<p id="message" role="status"></p>
+
+<section>
+<h2>Correction route</h2>
+<p class="muted">Both instruments must select the same medium, and the pair switches together. The choice is stored on both units and restored after a restart.</p>
+<div class="grid">
+<div class="choice" id="radioCard"><h3>Radio (SiK)</h3><p id="radioState" class="chip">Unknown</p><button id="selectRadio" data-write>Switch to Radio</button></div>
+<div class="choice" id="wifiCard"><h3>Wi-Fi</h3><p id="wifiState" class="chip">Unknown</p><button id="selectWifi" data-write>Switch to Wi-Fi</button></div>
+</div>
+<p class="help" id="lastTests">Paired tests: not run yet. Link tests arrive with the autonomous test checkpoint.</p>
+</section>
+
+<section id="confirmSection" hidden>
+<h2 id="confirmHeading">Confirm switch</h2>
+<p id="confirmWarning"></p>
+<p class="help" id="confirmHint">The instruments pause correction work while they switch. Collection should be idle, and antennas should stay connected.</p>
+<button id="confirmSwitch" data-write>Confirm switch</button><button id="cancelConfirm" class="secondary">Keep the current route</button>
+</section>
+
+<section id="operationSection" hidden>
+<h2 id="operationHeading">Pair operation</h2>
+<p id="operationState" role="status"></p>
+<p class="help" id="operationDetail"></p>
+<progress id="operationProgress" max="100" value="0" aria-label="Time left in this phase"></progress>
+<p class="help" id="operationOwner"></p>
+<button id="cancelOperation" class="secondary" data-write>Cancel request</button>
+</section>
+
+<section>
+<h2>Pair state</h2>
+<dl>
+<div><dt>Selected route</dt><dd id="selectedRoute">—</dd></div>
+<div><dt>Peer instrument</dt><dd id="peerState">—</dd></div>
+<div><dt>Corrections</dt><dd id="correctionsState">—</dd></div>
+</dl>
+<p class="help" id="recoveryHint" hidden></p>
+</section>
+
+<section>
+<h2>Control</h2>
+<p id="controlState">View only · Take control</p>
+<p class="help">Control is claimed without a PIN. The latest takeover replaces the previous controller, and a takeover invalidates the earlier browser.</p>
+<button id="takeControl">Take control</button><button id="release" class="secondary">Release control</button>
+</section>
+
+<p class="help"><a href="/survey">Survey</a> · <a href="/diagnostics">Link test</a> · <a href="/debug">Debug</a></p>
+</main><script src="/api.js"></script><script>
+'use strict';
+const $ = id => document.getElementById(id);
+const SESSION = 1000, REQUEST_TIMEOUT = 3500;
+// The instrument keeps reporting the last operation after it ends, so only these
+// states mean one is actually in flight; a finished outcome must not lock the page.
+const IN_FLIGHT = ['negotiating', 'running', 'restoring'];
+const inFlight = () => !!state?.operation && IN_FLIGHT.includes(state.operation.state);
+let state = null, fresh = false, lastGood = 0, requesting = false, confirmTransport = null, sentTag = 0, sentRevision = null;
+const MEDIA = { radio: 'sik', wifi: 'wifi' };
+const LABEL = { sik: 'Radio (SiK)', wifi: 'Wi-Fi' };
+
+// The instrument correlates a request by tag; recompute the same FNV-1a hash it uses
+// so this page can recognise the operation it issued even when the id field is empty
+// (peer-coordinated operations report their own coordinator instead).
+function tagFromHex(hex) {
+  let hash = 2166136261, length = 0;
+  for (const character of hex) {
+    const digit = character >= '0' && character <= '9' ? character.charCodeAt(0) - 48
+      : character >= 'a' && character <= 'f' ? character.charCodeAt(0) - 87 : -1;
+    if (digit < 0 || ++length > 32) return 0;
+    hash = Math.imul(hash ^ digit, 16777619) >>> 0;
+  }
+  return length === 32 ? hash : 0;
+}
+const randomId = () => Array.from(crypto.getRandomValues(new Uint8Array(16)), b => b.toString(16).padStart(2, '0')).join('');
+const seconds = ms => Math.ceil(ms / 1000);
+
+function message(text) { $('message').textContent = text || ''; }
+
+function locked() { return requesting || !fresh || !topoOwner(); }
+
+function controls() {
+  const owner = topoOwner();
+  const active = inFlight();
+  $('takeControl').disabled = !fresh || requesting || owner;
+  $('release').disabled = !fresh || requesting || !owner;
+  $('controlState').textContent = owner && fresh ? 'You control this instrument' : 'View only · Take control';
+  for (const [id, media] of [['selectRadio', 'radio'], ['selectWifi', 'wifi']]) {
+    const target = MEDIA[media];
+    $(id).disabled = locked() || active || state?.selected_transport === target;
+    $(id).textContent = state?.selected_transport === target ? 'Selected' : 'Switch to ' + (media === 'radio' ? 'Radio' : 'Wi-Fi');
+  }
+  const mine = !!state?.operation && state.operation.tag && state.operation.tag === sentTag;
+  $('cancelOperation').hidden = !active || !mine;
+  $('cancelOperation').disabled = locked();
+  $('confirmSwitch').disabled = locked() || active;
+}
+
+function chip(id, tone, text) { $(id).dataset.tone = tone; $(id).textContent = text; }
+
+function render() {
+  if (!state) return;
+  $('identity').textContent = 'Route settings for this pair · revision ' + state.revision;
+  const selected = state.selected_transport;
+  for (const media of ['radio', 'wifi']) {
+    const target = MEDIA[media];
+    const card = $(media + 'Card'), label = $(media + 'State');
+    card.dataset.selected = String(selected === target);
+    if (state.candidate_transport === target) chip(media + 'State', 'busy', 'Trying now');
+    else if (selected === target) chip(media + 'State', 'good', 'Selected');
+    else label.dataset.tone = '', label.textContent = 'Not selected';
+  }
+  $('selectedRoute').textContent = LABEL[selected] || selected || '—';
+  $('peerState').textContent = state.peer_connected ? 'Connected' : 'Not reachable';
+  $('correctionsState').textContent = state.corrections_fresh ? 'Fresh' : 'Stale or waiting for a base reference';
+  const tests = state.last_tests || {};
+  const describe = value => !value ? 'not run yet' : (value.pair_pass ? 'passed' : 'not passed');
+  $('lastTests').textContent = 'Paired tests: Radio ' + describe(tests.sik) + ' · Wi-Fi ' + describe(tests.wifi) + '.';
+  renderOperation();
+  controls();
+}
+
+function renderOperation() {
+  const operation = state.operation;
+  $('operationSection').hidden = !operation;
+  if (!operation) { $('recoveryHint').hidden = true; $('operationProgress').value = 0; return; }
+  const mine = operation.tag && operation.tag === sentTag;
+  $('operationOwner').textContent = mine
+    ? 'This request came from this browser.'
+    : 'This request was coordinated by the ' + (operation.coordinator ? 'Rover (this instrument)' : 'other instrument') + '; this browser only observes it.';
+  const target = LABEL[operation.transport] || operation.transport;
+  const previous = LABEL[operation.previous_transport] || operation.previous_transport;
+  let text, tone = '';
+  switch (operation.state) {
+    case 'negotiating': text = 'Contacting the other instrument on ' + target + '…'; tone = 'busy'; break;
+    case 'running': text = 'Applying ' + target + '. Corrections are paused.'; tone = 'busy'; break;
+    case 'restoring': text = target + ' could not be confirmed; restoring ' + previous + '…'; tone = 'bad'; break;
+    case 'succeeded': text = operation.committed
+      ? 'Switch complete. Both instruments selected ' + target + '.'
+      : 'Request finished without changing the route (already selected).'; tone = 'good'; break;
+    case 'failed': text = 'Switch failed (' + (operation.reason || 'unknown reason') + '). ' + previous + ' remains in use.'; tone = 'bad'; break;
+    case 'cancelled': text = 'Request cancelled. ' + previous + ' remains in use.'; break;
+    case 'interrupted': text = 'The request was interrupted (restart or power loss), so its outcome is unconfirmed. Check the selected route above and retry if needed.'; tone = 'bad'; break;
+    case 'recovery_required': text = 'Recovery required: the route could not be confirmed and readiness stays inhibited. Use the Link test page to select a medium locally on this instrument, then retry.'; tone = 'bad'; break;
+    default: text = 'Operation state: ' + operation.state;
+  }
+  $('operationState').textContent = text;
+  $('operationState').dataset.tone = tone;
+  $('operationHeading').textContent = operation.kind === 'test' ? 'Paired test' : 'Route switch';
+  const remaining = operation.phase_remaining_ms || 0;
+  const window = operation.state === 'negotiating' ? 20000 : 10000;
+  $('operationProgress').value = Math.max(0, Math.min(100, Math.round((1 - remaining / window) * 100)));
+  $('operationDetail').textContent = 'State ' + operation.state + ' · reason ' + (operation.reason || 'none')
+    + (remaining ? ' · up to ' + seconds(remaining) + ' s left in this phase' : '')
+    + (mine ? ' · request ' + String(sentRevision ?? '') : '');
+  $('recoveryHint').hidden = operation.state !== 'recovery_required';
+  if (!$('recoveryHint').hidden) $('recoveryHint').textContent = 'Local recovery: open the Link test page, select a medium on this instrument only, then return here.';
+}
+
+function confirmWarning(transport) {
+  const target = LABEL[transport] || transport;
+  const other = transport === 'sik' ? 'Wi-Fi' : 'Radio';
+  return 'Switch the pair to ' + target + '? Both instruments must reach each other on ' + target
+    + '; if they cannot, the pair returns to ' + other + '. Correction work pauses on both instruments'
+    + ' during the switch, so a Rover in the field loses corrections until it completes and collection'
+    + ' should be idle.';
+}
+
+async function refresh() {
+  if (requesting) return;
+  try {
+    const response = await topoRequest('/api/v1/settings', undefined, { timeout: REQUEST_TIMEOUT });
+    if (!response.ok || !response.body) throw Error('settings ' + response.status);
+    if (response.body.version !== 1 || typeof response.body.revision !== 'number') throw Error('unsupported settings response');
+    if (topoOwner() && response.headers.get('X-Controller') !== 'true') topoForget();
+    state = response.body;
+    fresh = true; lastGood = performance.now();
+    $('connection').dataset.tone = 'good';
+    $('connection').textContent = 'Live from instrument · updated ' + new Date().toLocaleTimeString();
+    render();
+  } catch (error) {
+    fresh = false;
+    $('connection').dataset.tone = 'bad';
+    $('connection').textContent = 'No live settings. Reconnecting' + (lastGood ? ' · last update ' + Math.round((performance.now() - lastGood) / 1000) + ' s ago' : '') + '.';
+    controls();
+  }
+}
+
+async function send(path, body) {
+  requesting = true; controls();
+  try {
+    const response = await topoRequest(path, body, { timeout: REQUEST_TIMEOUT });
+    if (response.ok) return { ok: true, body: response.body };
+    const code = response.body?.error || ('http_' + response.status);
+    return { ok: false, code, status: response.status };
+  } catch (error) {
+    return { ok: false, code: 'no_reply', status: 0 };
+  } finally {
+    requesting = false;
+  }
+}
+
+function refusalText(code) {
+  return {
+    stale_revision: 'The stored selection changed since this page loaded. The page refreshed; review the new state and confirm again.',
+    operation_busy: 'Another pair operation is already running. Wait for it to finish.',
+    conflicting_id: 'That request id is already used by a different request. Nothing was changed; try again.',
+    operation_cancelled: 'That request was already cancelled.',
+    link_storage_unavailable: 'The instrument cannot write its settings storage, so no switch was started.',
+    test_operation_not_available: 'Paired link tests are not available in this firmware yet.',
+    claim_control_first: 'Take control first.',
+    control_expired: 'Control changed. Take control again.',
+    no_reply: 'The instrument did not answer. The outcome is unconfirmed: reload this page and read the operation state before retrying.',
+    request_refused: 'The instrument refused the request.',
+  }[code] || ('Request refused (' + code + ').');
+}
+
+$('selectRadio').onclick = () => ask(MEDIA.radio);
+$('selectWifi').onclick = () => ask(MEDIA.wifi);
+function ask(transport) {
+  if (locked()) return;
+  confirmTransport = transport;
+  $('confirmHeading').textContent = 'Confirm switch to ' + (LABEL[transport] || transport);
+  $('confirmWarning').textContent = confirmWarning(transport);
+  $('confirmSection').hidden = false;
+  $('confirmSwitch').focus();
+  controls();
+}
+$('cancelConfirm').onclick = () => { confirmTransport = null; $('confirmSection').hidden = true; };
+
+$('confirmSwitch').onclick = async () => {
+  if (locked() || !confirmTransport || !state) return;
+  const transport = confirmTransport;
+  const id = randomId();
+  const revision = state.revision;
+  sentTag = tagFromHex(id); sentRevision = revision;
+  confirmTransport = null; $('confirmSection').hidden = true;
+  message('Sending the pair switch request…');
+  const result = await send('/api/v1/settings', { id, revision, op: 'link.select', transport, confirm: true });
+  if (result.ok) message('Request accepted and queued. The route above shows the outcome; a queued request is never a completed switch.');
+  else {
+    message(refusalText(result.code));
+    if (result.code === 'stale_revision') sentTag = 0;
+  }
+  await refresh();
+};
+
+$('cancelOperation').onclick = async () => {
+  if (locked() || !state?.operation) return;
+  const id = state.operation.tag && state.operation.tag === sentTag ? (state.operation.id || '') : '';
+  if (!id) { message('Only the instrument that issued the request can cancel it.'); return; }
+  message('Cancelling the pair operation…');
+  const result = await send('/api/v1/settings', { id, op: 'link.cancel', confirm: true });
+  message(result.ok ? 'Cancel request queued.' : refusalText(result.code));
+  await refresh();
+};
+
+$('takeControl').onclick = async () => {
+  try { await topoClaim(); message('Control acquired.'); } catch (error) { message('Could not take control: ' + error.message); }
+  await refresh();
+};
+$('release').onclick = async () => { await topoRelease(); message('Control released.'); await refresh(); };
+
+topoOnControl(() => { if (!topoOwner()) sentTag = 0; controls(); });
+refresh();
+setInterval(refresh, SESSION);
+</script></body></html>

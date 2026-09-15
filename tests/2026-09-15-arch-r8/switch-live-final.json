@@ -1,0 +1,74 @@
+{
+  "steps": [
+    "loaded: selected=Radio (SiK) peer=Connected corrections=Stale or waiting for a base reference",
+    "control: You control this instrument",
+    "confirm shown for Wi-Fi: Switch the pair to Wi-Fi? Both instruments must reach each other on Wi-Fi; if they cannot,"
+  ],
+  "before": {
+    "version": 1,
+    "boot_id": "772b1633",
+    "uptime_ms": 38026,
+    "revision": 9,
+    "selected_transport": "sik",
+    "candidate_transport": null,
+    "peer_connected": true,
+    "corrections_fresh": false,
+    "operation": {
+      "id": "58433ab00bc2ddf08cd76bfbe71c397b",
+      "tag": 4282759252,
+      "kind": "select",
+      "transport": "sik",
+      "previous_transport": "wifi",
+      "state": "succeeded",
+      "committed": true,
+      "coordinator": true,
+      "phase_remaining_ms": 0,
+      "reason": "applied"
+    },
+    "last_tests": {
+      "wifi": null,
+      "sik": null
+    }
+  },
+  "after": {
+    "version": 1,
+    "boot_id": "772b1633",
+    "uptime_ms": 44337,
+    "revision": 10,
+    "selected_transport": "wifi",
+    "candidate_transport": null,
+    "peer_connected": true,
+    "corrections_fresh": false,
+    "operation": {
+      "id": "08b349d7fe4be46e351778aecf44bb74",
+      "tag": 3304423377,
+      "kind": "select",
+      "transport": "wifi",
+      "previous_transport": "sik",
+      "state": "succeeded",
+      "committed": true,
+      "coordinator": true,
+      "phase_remaining_ms": 0,
+      "reason": "applied"
+    },
+    "last_tests": {
+      "wifi": null,
+      "sik": null
+    }
+  },
+  "sequences": [
+    {
+      "direction": "Wi-Fi",
+      "heading": "Route switch",
+      "observations": [
+        "Switch complete. Both instruments selected Radio (SiK). | route=Radio (SiK)",
+        "Contacting the other instrument on Wi-Fi… | route=Radio (SiK)",
+        "Applying Wi-Fi. Corrections are paused. | route=Radio (SiK)",
+        "Switch complete. Both instruments selected Wi-Fi. | route=Wi-Fi"
+      ]
+    }
+  ],
+  "errors": [
+    "Failed to load resource: the server responded with a status of 404 (Not Found)"
+  ]
+}

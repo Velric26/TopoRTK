@@ -1,0 +1,70 @@
+{
+  "steps": [
+    "loaded: selected=Radio (SiK) peer=Connected corrections=Stale or waiting for a base reference",
+    "control: You control this instrument",
+    "confirm shown for Wi-Fi: Switch the pair to Wi-Fi? Both instruments must reach each other on Wi-Fi; if they cannot,",
+    "confirm shown for Radio (SiK): Switch the pair to Radio (SiK)? Both instruments must reach each other on Radio (SiK); if ",
+    "Wi-Fi: button disabled (already selected)"
+  ],
+  "before": {
+    "version": 1,
+    "boot_id": "772b1633",
+    "uptime_ms": 15876,
+    "revision": 7,
+    "selected_transport": "sik",
+    "candidate_transport": null,
+    "peer_connected": true,
+    "corrections_fresh": false,
+    "operation": null,
+    "last_tests": {
+      "wifi": null,
+      "sik": null
+    }
+  },
+  "after": {
+    "version": 1,
+    "boot_id": "772b1633",
+    "uptime_ms": 23728,
+    "revision": 8,
+    "selected_transport": "wifi",
+    "candidate_transport": "sik",
+    "peer_connected": true,
+    "corrections_fresh": false,
+    "operation": {
+      "id": "58433ab00bc2ddf08cd76bfbe71c397b",
+      "tag": 4282759252,
+      "kind": "select",
+      "transport": "sik",
+      "previous_transport": "wifi",
+      "state": "negotiating",
+      "committed": false,
+      "coordinator": true,
+      "phase_remaining_ms": 18647,
+      "reason": ""
+    },
+    "last_tests": {
+      "wifi": null,
+      "sik": null
+    }
+  },
+  "sequences": [
+    {
+      "direction": "Wi-Fi",
+      "heading": "Route switch",
+      "observations": [
+        "Contacting the other instrument on Wi-Fi… | route=Radio (SiK)",
+        "Switch complete. Both instruments selected Wi-Fi. | route=Wi-Fi"
+      ]
+    },
+    {
+      "direction": "Radio (SiK)",
+      "heading": "Route switch",
+      "observations": [
+        "Switch complete. Both instruments selected Wi-Fi. | route=Wi-Fi"
+      ]
+    }
+  ],
+  "errors": [
+    "Failed to load resource: the server responded with a status of 404 (Not Found)"
+  ]
+}
