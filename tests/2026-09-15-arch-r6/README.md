@@ -39,13 +39,20 @@ Acceptance run against the deployed image (both roles, over the real HTTP API):
 | Radio candidate without live radios | `failed/peer_unreachable`, both units stayed on Wi-Fi, revisions unchanged, pair still `connected` — a pre-cutover target failure leaves the previous link selected and never reports success |
 | Post-run health | A `BASE` 2 records/2 jobs, B `ROVER` 0 records, collection idle, diagnostics not busy, pair `connected` |
 
-**Radio hardware finding:** both units' ATI probe reports `No SiK identity response; check power, baud and crossed TX/RX` with an empty response, while the same radios answered `RFD SiK 2.0 on HM-TRP` during the R5 bench session. The radio candidate therefore cannot be proven until their power/wiring is restored; the radios' configuration (baud, air rate, power, ECC) was not touched, and no antenna was disconnected. The post-commit **restoration** path (cutover applied, target unusable, previous medium restored) is covered by the portable suite's fault injection rather than on hardware, because it requires a working candidate medium.
+**Radio hardware finding:** the radio *candidate* cannot be proven on the bench at the moment, and the counters localize it to Unit A's SiK module. With both units on Wi-Fi and both radios powered by the bench switch, Unit B's radio answers `UART responds as SiK` (`RFD SiK 2.0 on HM-TRP`) while Unit A reports `No SiK identity response`, and during a cutover attempt the new counters show Unit A receiving **zero** radio control frames (`radio_ctl_rx 0`, `operation_rx 0`, `control_rx` only from Wi-Fi) while Unit B also receives nothing on radio (`radio_ctl_rx 0`). A local Radio selection on these same radios did pair earlier in the session (session `3673110729`), so the recovery step is a radio power cycle, and if that does not restore the identity response, a check of Unit A's UART2 TX/RX crossing and common ground. The radios' configuration (baud, air rate, power, ECC) was not touched and no antenna was disconnected. The post-commit **restoration** path (cutover applied, target unusable, previous medium restored) is covered by the portable suite's fault injection rather than on hardware, because it requires a working candidate medium.
 
-## Blocked transport (historical note for this checkpoint)
+## Defects found and fixed by this hardware run (all with regressions)
 
-The first two delivery attempts used the normal acknowledged OTA path and failed mid-upload — `Upload connection closed or receive error` at 884,736 / 1,261,072 bytes, then `Upload stalled for 12 seconds` at 314,810 / 1,261,072 bytes. Both times the instruments stayed healthy (previous firmware running, `locked false`, `paused false`, Debug on, jobs and records unchanged, pair still connected), which is exactly the designed failure behaviour; the USB flash above is how the image landed.
+The deployment and the first hardware attempts exposed four real defects in the new service, each fixed with a portable test:
+
+1. **Stale admission clock** — an accepted operation used the engine's last tick time, so a request admitted before the first tick (or on a freshly started engine) expired immediately. `request`/`forward` now take the caller's `now`.
+2. **Commit retries reset an applied operation** — the coordinator's 500 ms `Commit` repeats restarted the delegate's apply phase; a retransmitted commit is now idempotent (and re-announces `Done`).
+3. **A retried prepare re-adopted a finished operation** — and, separately, a delegate kept the previous operation's `committed` flag, so a new commit looked like a retransmission. Adopting an operation now always resets that state, a prepare for the operation already in progress only re-announces readiness, and an unrelated active operation still refuses it. A request the instrument is itself forwarding is recognised as its own answer rather than as a conflict.
+4. **Stale baseline after a local recovery selection** — a local `select()` updated the durable record but not the operation engine, so `previous_transport` (and the revision baseline) could be wrong afterwards. The engine now adopts the locally selected medium.
+
+A delegate that is already on the requested medium also reports its candidate satisfied instead of settling silently, which is what a mixed pair does when only one side is on the target.
 
 ## Outstanding
 
-- Radio cutover and post-commit restoration on hardware (needs live SiK radios).
+- Radio cutover and post-commit restoration on hardware (needs Unit A's SiK radio answering).
 - The Settings **page** that consumes this API is R8; R7 (canonical `web/` assets and the deterministic embedder) precedes it and needs no hardware.

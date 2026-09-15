@@ -29,6 +29,7 @@ link_operation::Confirmed confirmed{};
 link_operation::Pending pending{};
 IPAddress address;
 uint32_t tx_wait = 0, output_rejected = 0, short_writes = 0;
+uint32_t control_rx = 0, operation_rx = 0, staging_rx = 0, radio_rx = 0, wifi_rx = 0;
 const char *fault = "";
 
 // Cross-task handoff: the HTTP task fills one bounded request; the main loop
@@ -181,12 +182,14 @@ void control(const correction::Packet &packet, uint32_t now, IPAddress from = IP
 // Routes one control envelope: pair operations first, then the candidate
 // staging engine, then the selected production link.
 void route_control(const correction::Packet &packet, uint32_t now, IPAddress from = IPAddress()) {
+  ++control_rx;
   link_operation::Message message;
   if (link_operation::decode(packet, message)) {
+    ++operation_rx;
     if (message.from == 3 - TOPORTK_UNIT_ID && message.to == TOPORTK_UNIT_ID) operation.receive(message, now);
     return;
   }
-  if (staging_active && staging.receive(packet, now)) return;
+  if (staging_active && staging.receive(packet, now)) { ++staging_rx; return; }
   control(packet, now, from);
 }
 bool transmit(const correction::Packet &packet, Transport transport, IPAddress from = IPAddress()) {
@@ -394,6 +397,7 @@ void service(uint32_t now, bool rover, bool radio_reserved) {
       if (!storage_ok || frame.kind != radio_transport::FrameKind::Rtcm) continue;
       const auto &packet = frame.packet;
       if (peer_wire::control(packet)) {
+        ++radio_rx;
         if (!std::memcmp(packet.bytes + 12, "TPH1", 4)) pair.incompatible(now);
         else route_control(packet, now);
       } else if (selected_ == Transport::Radio && connected(now) && !ota_paused() && live.packet(packet, now)) {
@@ -571,6 +575,14 @@ void write_json(JsonObject d, uint32_t now) {
   d["operation_previous"] = op.previous == Transport::Radio ? "sik" : "wifi";
   d["operation_coordinator"] = op.coordinator;
   d["peer_address"] = address.toString();
+  // Radio/Wi-Fi control reception counters: the evidence a failed candidate is
+  // diagnosed from when the two media behave differently.
+  d["control_rx"] = control_rx;
+  d["operation_rx"] = operation_rx;
+  d["staging_rx"] = staging_rx;
+  d["radio_control_rx"] = radio_rx;
+  d["radio_decode_errors"] = radio_transport::decode_stats().rtcm_errors + radio_transport::decode_stats().pair_errors;
+  d["radio_discarded_bytes"] = radio_transport::decode_stats().discarded_bytes;
   d["fault"] = live.fault(); d["station"] = live.station();
   d["operation_state"] = link_operation::state_text(op.state);
   d["operation_reason"] = link_operation::reason_text(op.reason);
