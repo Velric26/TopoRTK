@@ -34,12 +34,14 @@ $('confirmFirmware').onclick=()=>action(async()=>{
  oldBoot=update.boot_id;targetVersion=selected.version;armed=true;
  $('otaProgress').textContent='Pausing local operations and confirming the update notice…';
 });
+// The card title carries the live percentage while bytes are in flight (R7b).
+function setHeading(percent){$('updateHeading').textContent='Updating Firmware'+(percent==null?'':' – '+percent+'%');}
 function upload(){
  armed=false;window.otaUploading=true;window.pauseDebugRequests();controls();
  const xhr=new XMLHttpRequest();xhr.open('POST','/api/v1/update/upload');xhr.setRequestHeader('Content-Type','application/octet-stream');xhr.setRequestHeader('Authorization','Bearer '+token);xhr.timeout=130000;
- xhr.upload.onprogress=e=>{$('otaProgress').textContent='Uploading '+(e.lengthComputable?Math.floor(e.loaded/e.total*100)+'%':'firmware')+' · Keep power connected. Verification and reboot follow.';};
- xhr.onload=()=>{window.otaUploading=false;if(xhr.status===200){awaitingBoot=true;$('otaProgress').textContent='Image accepted. Waiting for a new boot and startup verification…';}else{$('otaProgress').textContent='Upload rejected. Reconnect and check update status before retrying.';}controls();};
- xhr.onerror=xhr.ontimeout=()=>{window.otaUploading=false;awaitingBoot=true;$('otaProgress').textContent='Connection interrupted. Update outcome is unknown until the instrument reconnects.';controls();};
+ xhr.upload.onprogress=e=>{const percent=e.lengthComputable?Math.floor(e.loaded/e.total*100):null;setHeading(percent);$('otaProgress').textContent='Uploading '+(percent==null?'firmware':percent+'%')+' · Keep power connected. Verification and reboot follow.';};
+ xhr.onload=()=>{window.otaUploading=false;setHeading();if(xhr.status===200){awaitingBoot=true;$('otaProgress').textContent='Image accepted. Waiting for a new boot and startup verification…';}else{$('otaProgress').textContent='Upload rejected. Reconnect and check update status before retrying.';}controls();};
+ xhr.onerror=xhr.ontimeout=()=>{window.otaUploading=false;setHeading();awaitingBoot=true;$('otaProgress').textContent='Connection interrupted. Update outcome is unknown until the instrument reconnects.';controls();};
  xhr.send(selected.file);
 }
 async function pollUpdate(){
@@ -48,6 +50,7 @@ async function pollUpdate(){
   const r=await fetch('/api/v1/update',{cache:'no-store',signal:AbortSignal.timeout(3000)});if(!r.ok)throw Error();update=await r.json();
   $('peerUpdate').textContent=update.peer_status||'Paired unit: no update notice.';
   $('otaState').textContent='Update: '+update.state+' · '+update.boot;
+  setHeading(update.state==='uploading'&&update.total>0?Math.min(100,Math.floor(update.received/update.total*100)):null);
   if(update.state==='review')$('otaProgress').textContent=update.peer_acknowledged?'Peer acknowledged preparation. Review the interruption warning, then confirm to begin.':'Peer notification unconfirmed. The other unit may show ordinary link loss; explicit acknowledgement below is required to proceed.';
   if(update.state==='failed'){armed=false;awaitingBoot=false;$('otaProgress').textContent=update.error||'Update stopped. Current firmware retained.';}
   if(update.state==='ready'&&armed&&selected)upload();

@@ -6,7 +6,7 @@ const root=path.resolve(__dirname,'../..'),out=path.join(root,process.env.TOPORT
 (async()=>{const browser=await chromium.launch({channel:'msedge',headless:true});try{
  const page=await browser.newPage({viewport:{width:390,height:844}}),errors=[],posts=[];
  let owner=false,enabled=true,uptime=0,ack=false,boot=7,version='0.11.0',state='idle',pending=0;
- let uploaded=null,failUpload=false,uploadCount=0;
+ let uploaded=null,failUpload=false,uploadCount=0,received=0,total=128;
  const file=Buffer.alloc(640);file.write('TPK1');file[4]=1;file[5]=2;file[6]=1;file.writeUInt32LE(512,8);file.write('0.11.1',48);
  page.on('pageerror',e=>errors.push(e.message));
  await page.route('**/*',async route=>{const r=route.request(),url=new URL(r.url());
@@ -32,7 +32,7 @@ const root=path.resolve(__dirname,'../..'),out=path.join(root,process.env.TOPORT
   if(url.pathname==='/api/v1/diagnostic')return route.fulfill({json:{corrections:{transport:'sik'}}});
   if(url.pathname==='/api/v1/update'){
    if(pending&&!--pending){if(state==='pausing')state='ready';else{state='idle';boot=8;version='0.11.1';owner=false;}}
-   return route.fulfill({json:{version:1,state,unit:2,firmware:version,available:true,locked:!['idle','failed'].includes(state),boot_id:boot,boot:boot===8?'New firmware verified':'USB / normal boot',error:state==='failed'?'Upload stalled for 12 seconds':'',peer_acknowledged:ack,peer_status:'Base updating - corrections paused'}});
+   return route.fulfill({json:{version:1,state,unit:2,firmware:version,available:true,locked:!['idle','failed'].includes(state),boot_id:boot,boot:boot===8?'New firmware verified':'USB / normal boot',error:state==='failed'?'Upload stalled for 12 seconds':'',peer_acknowledged:ack,peer_status:'Base updating - corrections paused',received,total}});
   }
   if(url.pathname==='/update-ui.js')return route.fulfill({body:js,contentType:'application/javascript'});
   return route.fulfill({body:html,contentType:'text/html'});
@@ -56,6 +56,15 @@ const root=path.resolve(__dirname,'../..'),out=path.join(root,process.env.TOPORT
  await page.waitForFunction(()=>document.querySelector('#otaProgress').textContent==='Upload stalled for 12 seconds',null,{timeout:10000});
  assert.equal(uploadCount,2);assert.equal(boot,8);assert(await page.locator('#confirmFirmware').isDisabled());
  assert(!await page.evaluate(()=>window.otaUploading));
- assert.deepEqual(errors,[]);fs.writeFileSync(path.join(out,'ota-browser.json'),JSON.stringify({result:'PASS',checks:['file selection has no mutation','wrong unit rejected','current-controller gate','explicit interruption confirmation','unconfirmed peer override','one binary upload after ready','new boot verification before success','Debug on (default) after restart','specific failure shown without automatic retry','responsive 320/390/768/1280']},null,2));
+ // R7b: the card title is renamed and carries the server-reported percentage while
+ // the instrument reports an upload in flight, then returns to the plain title.
+ assert.equal(await page.locator('#updateHeading').innerText(),'Updating Firmware');
+ state='uploading';received=42;total=100;
+ await page.waitForFunction(()=>document.querySelector('#updateHeading').textContent==='Updating Firmware – 42%',null,{timeout:5000});
+ received=140;total=100;
+ await page.waitForFunction(()=>document.querySelector('#updateHeading').textContent==='Updating Firmware – 100%',null,{timeout:5000});
+ state='idle';
+ await page.waitForFunction(()=>document.querySelector('#updateHeading').textContent==='Updating Firmware',null,{timeout:5000});
+ assert.deepEqual(errors,[]);fs.writeFileSync(path.join(out,'ota-browser.json'),JSON.stringify({result:'PASS',checks:['file selection has no mutation','wrong unit rejected','current-controller gate','explicit interruption confirmation','unconfirmed peer override','one binary upload after ready','new boot verification before success','Debug on (default) after restart','specific failure shown without automatic retry','card title carries the live upload percentage','responsive 320/390/768/1280']},null,2));
  console.log('PASS: OTA browser target/review/confirmation, unconfirmed-peer override, upload and new-boot verification');
  }finally{await browser.close()}})().catch(e=>{console.error(e);process.exitCode=1});

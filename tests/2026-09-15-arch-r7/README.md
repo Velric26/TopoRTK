@@ -1,4 +1,4 @@
-# R7 asset migration — canonical `web/` sources, embedder and derived capacity (0.11.18-arch-r7, 2026-09-15)
+# R7 asset migration — canonical `web/` sources, embedder, derived capacity and the Debug update card (0.11.18-arch-r7, 0.11.19-arch-r7b, 2026-09-15)
 
 First R7 step: the browser pages and scripts stop living inside C++ string literals. Seven blobs were extracted byte-identically into `firmware/web/`, described by `web/assets.json`, embedded by a PlatformIO pre-build script, and served from a generated route table. No page behavior, layout or URL changed — the deployed bytes are identical to what 0.11.17-arch-r6 served.
 
@@ -38,6 +38,18 @@ Both instruments stayed on the selected Wi-Fi link (revision 6, peer connected) 
 
 During the first `check_web_hardware.py` run against the deployed Rover, its assertion that `link.invalid_packets` and `link.sequence_gaps` stay constant across the sampling window failed by one increment. The counter is incremented only in the UDP receive path (`main.cpp` admission of correction/test datagrams), which HTTP asset serving cannot reach. A 60 s idle sample afterwards showed no spontaneous increment and the re-run passed. Recorded as a live transient to watch, not a migration regression.
 
+## R7b — Debug card heading and live upload percentage (in 0.11.19-arch-r7b)
+
+The Debug page's firmware card is now titled **Updating Firmware** (`web/debug.html`), and while bytes are in flight the title becomes **Updating Firmware – N%**. The percentage comes from the upload's own progress events in the page driving the transfer, and the same formatter also renders the instrument-reported `received`/`total` when a client polls during an in-flight upload.
+
+Live verification on Unit A (0.11.19-arch-r7b), a real transfer that was deliberately aborted mid-flight so nothing was re-flashed:
+
+- Uploading page title: `Updating Firmware – 7%` → `Updating Firmware – 14%`.
+- The instrument's own counters for the same transfer: `received 180224`, `total 1262720` (14.3 %), `error "Upload connection closed or receive error"`, `state failed`, `firmware 0.11.19-arch-r7b` retained, `locked false`, `paused false`, `attempt 35`.
+- A second, passive client polling `/api/v1/update` every 400 ms during the transfer received **no response at all** (all samples timed out): the instrument pauses web access while receiving an image, so the percentage is visible to the uploading page, not to a bystander. The polling formatter covers the reachable window after the last byte, before the instrument leaves `uploading`.
+- After the abort the pair returned to normal: both units `0.11.19-arch-r7b`, Wi-Fi selected, revision 6, peers connected, jobs preserved (A 2, B 0).
+- `check_ota_browser.cjs` gained a deterministic assertion for the rename and for a server-reported `uploading` state (`Updating Firmware – 42%`, clamped `– 100%`, back to plain when idle); `check_debug_browser.cjs` still passes.
+
 ## Scope of this step
 
-Done: asset sources, manifest, deterministic embedder, derived HTTP capacity, deleted embedded headers, browser checks reading canonical sources. Still open in R7: explicit navigation and the single shared controller client (today's per-page scripts and monkey-patching remain), and the R7b Debug-card rename with the live upload percentage — its edit now lands in `web/debug.html`.
+Done: asset sources, manifest, deterministic embedder, derived HTTP capacity, deleted embedded headers, browser checks reading canonical sources, and R7b. Still open in R7: explicit navigation and the single shared controller client (today's per-page scripts and monkey-patching remain).
