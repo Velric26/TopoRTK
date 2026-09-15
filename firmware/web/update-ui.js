@@ -2,7 +2,6 @@
 'use strict';
 let selected=null,update=null,armed=false,oldBoot=null,targetVersion='',awaitingBoot=false;
 window.otaUploading=false;
-const originalControls=controls;
 function updateControls(){
  const available=online&&enabled&&owner&&!requesting&&!window.otaUploading;
  const busy=update?.locked;
@@ -12,7 +11,9 @@ function updateControls(){
  $('cancelFirmware').disabled=!available||!busy||['uploading','restarting'].includes(update?.state);
  $('allowPeerWarning').hidden=update?.state!=='review';
 }
-controls=()=>{originalControls();updateControls()};
+// The Debug page renders page state and then calls this hook, so the update card
+// follows owner, request and upload changes without patching that page's controls().
+window.updateControls=updateControls;
 $('acceptInterruption').onchange=updateControls;$('allowUnconfirmed').onchange=updateControls;
 $('firmwareFile').onchange=async()=>{
  selected=null;armed=false;$('acceptInterruption').checked=false;$('allowUnconfirmed').checked=false;
@@ -26,11 +27,11 @@ $('firmwareFile').onchange=async()=>{
   $('firmwareReview').textContent='Unit '+String.fromCharCode(64+bytes[5])+' · Version '+version+' · '+Math.ceil(file.size/1024)+' KiB. The instrument verifies the full image before selecting it for boot.';
  }catch(e){$('firmwareReview').textContent=e.message;}updateControls();
 };
-$('reviewFirmware').onclick=()=>action(async()=>{if(!selected)return;await api('/api/v1/update',{op:'prepare',header:selected.header});$('otaProgress').textContent='Reserving the instrument and notifying its peer. Normal forwarding continues until you confirm.';});
-$('cancelFirmware').onclick=()=>action(async()=>{armed=false;await api('/api/v1/update',{op:'cancel'});});
+$('reviewFirmware').onclick=()=>action(async()=>{if(!selected)return;const r=await topoRequest('/api/v1/update',{op:'prepare',header:selected.header},{timeout:3500});if(!r.ok)throw Error(r.body?.error||'Request failed');$('otaProgress').textContent='Reserving the instrument and notifying its peer. Normal forwarding continues until you confirm.';});
+$('cancelFirmware').onclick=()=>action(async()=>{armed=false;const r=await topoRequest('/api/v1/update',{op:'cancel'},{timeout:3500});if(!r.ok)throw Error(r.body?.error||'Request failed');});
 $('confirmFirmware').onclick=()=>action(async()=>{
  if(!selected||!$('acceptInterruption').checked)return;
- await api('/api/v1/update',{op:'start',confirm:true,allow_unconfirmed:$('allowUnconfirmed').checked});
+ const r=await topoRequest('/api/v1/update',{op:'start',confirm:true,allow_unconfirmed:$('allowUnconfirmed').checked},{timeout:3500});if(!r.ok)throw Error(r.body?.error||'Request failed');
  oldBoot=update.boot_id;targetVersion=selected.version;armed=true;
  $('otaProgress').textContent='Pausing local operations and confirming the update notice…';
 });
@@ -38,7 +39,7 @@ $('confirmFirmware').onclick=()=>action(async()=>{
 function setHeading(percent){$('updateHeading').textContent='Updating Firmware'+(percent==null?'':' – '+percent+'%');}
 function upload(){
  armed=false;window.otaUploading=true;window.pauseDebugRequests();controls();
- const xhr=new XMLHttpRequest();xhr.open('POST','/api/v1/update/upload');xhr.setRequestHeader('Content-Type','application/octet-stream');xhr.setRequestHeader('Authorization','Bearer '+token);xhr.timeout=130000;
+ const xhr=new XMLHttpRequest();xhr.open('POST','/api/v1/update/upload');xhr.setRequestHeader('Content-Type','application/octet-stream');xhr.setRequestHeader('Authorization','Bearer '+topoToken());xhr.timeout=130000;
  xhr.upload.onprogress=e=>{const percent=e.lengthComputable?Math.floor(e.loaded/e.total*100):null;setHeading(percent);$('otaProgress').textContent='Uploading '+(percent==null?'firmware':percent+'%')+' · Keep power connected. Verification and reboot follow.';};
  xhr.onload=()=>{window.otaUploading=false;setHeading();if(xhr.status===200){awaitingBoot=true;$('otaProgress').textContent='Image accepted. Waiting for a new boot and startup verification…';}else{$('otaProgress').textContent='Upload rejected. Reconnect and check update status before retrying.';}controls();};
  xhr.onerror=xhr.ontimeout=()=>{window.otaUploading=false;setHeading();awaitingBoot=true;$('otaProgress').textContent='Connection interrupted. Update outcome is unknown until the instrument reconnects.';controls();};
@@ -47,7 +48,7 @@ function upload(){
 async function pollUpdate(){
  try{
   if(window.otaUploading)return;
-  const r=await fetch('/api/v1/update',{cache:'no-store',signal:AbortSignal.timeout(3000)});if(!r.ok)throw Error();update=await r.json();
+  const r=await topoRequest('/api/v1/update',undefined,{timeout:3000});if(!r.ok)throw Error();update=r.body;
   $('peerUpdate').textContent=update.peer_status||'Paired unit: no update notice.';
   $('otaState').textContent='Update: '+update.state+' · '+update.boot;
   setHeading(update.state==='uploading'&&update.total>0?Math.min(100,Math.floor(update.received/update.total*100)):null);

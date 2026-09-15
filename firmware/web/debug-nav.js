@@ -1,8 +1,0 @@
-(()=>{
- const nav=document.querySelector('nav');if(!nav)return;
- const button=document.createElement('button');button.id='debugTab';button.textContent='Debug';button.disabled=true;button.setAttribute('aria-describedby','debugAvailability');button.onclick=()=>location.assign('/debug');nav.append(button);
- const note=document.createElement('p');note.id='debugAvailability';note.className='help';note.textContent='Debug unavailable. On the instrument touchscreen: Setup → Debug → Enable Debug.';nav.after(note);
- const peerNote=document.createElement('p');peerNote.className='help';peerNote.hidden=true;note.after(peerNote);let previous=null,advanced=0;
- async function check(){try{const r=await fetch('/api/v1/debug',{cache:'no-store',signal:AbortSignal.timeout(2500)});if(!r.ok)throw Error();const d=await r.json();if(d.version!==1||!Number.isFinite(d.uptime_ms))throw Error();const key=d.boot_id+':'+d.uptime_ms;if(key!==previous){previous=key;advanced=Date.now()}if(Date.now()-advanced>4000)throw Error();button.disabled=!d.enabled;peerNote.hidden=!d.peer_status;peerNote.textContent=d.peer_status||'';note.textContent=d.enabled?'Debug available · Passive monitoring does not interrupt surveying.':'Debug unavailable. On the instrument touchscreen: Setup → Debug → Enable Debug.';}catch{button.disabled=true;note.textContent='Debug unavailable while disconnected. Reconnect, then enable it on the touchscreen: Setup → Debug.'}finally{setTimeout(check,2000)}}check();
- if(typeof switchTab==='function'&&['jobs','setup','collect','points'].includes(location.hash.slice(1)))switchTab(location.hash.slice(1));
-})();

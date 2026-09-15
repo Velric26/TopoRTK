@@ -22,6 +22,7 @@ const saved={run:912203,state:'done',reason:'complete',role:'ROVER',transport:'s
    if(d.op==='selftest')state={...state,self_test:{kind:'local_transport_fault_suite',suite_version:1,run:77,state:'passed',passed:true,checks:22,failed_mask:0,workspace_bytes:4760,duration_us:4200,saved:true}};
    return route.fulfill({status:202,json:{state:'queued'}});
   }
+  if(url.pathname==='/api.js')return route.fulfill({body:fs.readFileSync(path.join(__dirname,'../web/api.js'),'utf8'),contentType:'application/javascript'});
   return route.fulfill({body:html,contentType:'text/html'});
  });
  await page.goto('http://diagnostic.test/diagnostics');await page.waitForFunction(()=>document.querySelector('#connection').textContent==='Connected · Rover');

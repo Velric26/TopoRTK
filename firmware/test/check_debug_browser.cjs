@@ -2,7 +2,7 @@ const {chromium}=require('playwright'),fs=require('node:fs'),path=require('node:
 const root=path.resolve(__dirname,'../..'),out=path.join(root,process.env.TOPORTK_TEST_RECORD||'tests/2026-09-14-ota');
 // UI sources are the canonical files under web/ (see web/assets.json).
 const web=name=>fs.readFileSync(path.join(__dirname,'../web',name),'utf8');
-const otaJs=web('update-ui.js'),html=web('debug.html'),nav=web('debug-nav.js');
+const otaJs=web('update-ui.js'),html=web('debug.html'),nav=web('navigation.js'),api=web('api.js');
 (async()=>{fs.mkdirSync(out,{recursive:true});const browser=await chromium.launch({channel:'msedge',headless:true});try{
  const context=await browser.newContext({viewport:{width:390,height:844},acceptDownloads:true}),page=await context.newPage(),errors=[],posts=[];
  let enabled=false,owner=false,offline=false,frozen=false,uptime=0,role='ROVER',token='',peerConnected=false;
@@ -27,8 +27,9 @@ const otaJs=web('update-ui.js'),html=web('debug.html'),nav=web('debug-nav.js');
   if(url.pathname==='/api/v1/diagnostic')return route.fulfill({json:{corrections:{transport:'sik',peer_connected:peerConnected,pair_state:peerConnected?'connected':'negotiating',output:{forwarded:42}}}});
   if(url.pathname==='/update-ui.js')return route.fulfill({body:otaJs,contentType:'application/javascript'});
   if(url.pathname==='/api/v1/update')return route.fulfill({json:{version:1,state:'idle',unit:2,available:true,locked:false,boot:'Normal boot',boot_id:7}});
-  if(url.pathname==='/debug-nav.js')return route.fulfill({body:nav,contentType:'application/javascript'});
-  if(url.pathname==='/survey')return route.fulfill({body:'<nav><button>Jobs</button><button>Setup</button><button>Collect</button><button>Points</button></nav><script src="/debug-nav.js"></script>',contentType:'text/html'});
+  if(url.pathname==='/api.js')return route.fulfill({body:api,contentType:'application/javascript'});
+  if(url.pathname==='/navigation.js')return route.fulfill({body:nav,contentType:'application/javascript'});
+  if(url.pathname==='/survey')return route.fulfill({body:'<nav><button>Jobs</button><button>Setup</button><button>Collect</button><button>Points</button></nav><button type="button" id="debugTab" data-navigation disabled>Debug</button><p id="debugAvailability" class="help"></p><p id="debugPeerNote" class="help" hidden></p><script src="/navigation.js"></script>',contentType:'text/html'});
   return route.fulfill({body:html,contentType:'text/html'});
  });
  await page.goto('http://debug.test/survey');await page.waitForSelector('#debugTab');assert(await page.locator('#debugTab').isDisabled());assert.match(await page.locator('#debugAvailability').innerText(),/Setup.*Debug.*Enable/);

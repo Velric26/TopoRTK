@@ -26,9 +26,14 @@
       "urls": ["/debug"]
     },
     {
-      "source": "debug-nav.js",
+      "source": "api.js",
       "mime": "application/javascript; charset=utf-8",
-      "urls": ["/debug-nav.js"]
+      "urls": ["/api.js"]
+    },
+    {
+      "source": "navigation.js",
+      "mime": "application/javascript; charset=utf-8",
+      "urls": ["/navigation.js"]
     },
     {
       "source": "update-ui.js",

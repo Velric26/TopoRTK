@@ -51,7 +51,7 @@ details{border-top:1px solid var(--line);border-bottom:1px solid var(--line)}sum
 </div></details>
 </main><footer><span>Local connection · Updates every second</span><span>Read-only · UI 0.11.2</span></footer>
 </div>
-<script>
+<script src="/api.js"></script><script>
 'use strict';
 const el = id => document.getElementById(id);
 const set = (id, value) => { el(id).textContent = value; };
@@ -94,9 +94,9 @@ async function refresh() {
   busy = true; el('refresh').disabled = true;
   const controller = new AbortController(); const timeout = setTimeout(() => controller.abort(), 1800);
   try {
-    const response = await fetch('/api/v1/status', {cache:'no-store', signal:controller.signal});
+    const response = await topoRequest('/api/v1/status', undefined, {signal:controller.signal});
     if (!response.ok) throw new Error(response.status === 409 ? 'This instrument is no longer the Rover. Open the current Rover address.' : 'No fresh status. Check the Rover power and local network.');
-    const s = await response.json();
+    const s = response.body;
     if (s.api_version !== 1 || s.device.role !== 'ROVER' || typeof s.state.ready !== 'boolean' || !Number.isFinite(s.uptime_ms)) throw new Error('Incompatible status response. Reload this page.');
     const now = performance.now(), key = s.boot_id + ':' + s.uptime_ms;
     if (key !== lastSample) { lastSample = key; sampleChangedAt = now; }

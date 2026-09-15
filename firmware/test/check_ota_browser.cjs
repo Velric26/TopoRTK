@@ -34,6 +34,7 @@ const root=path.resolve(__dirname,'../..'),out=path.join(root,process.env.TOPORT
    if(pending&&!--pending){if(state==='pausing')state='ready';else{state='idle';boot=8;version='0.11.1';owner=false;}}
    return route.fulfill({json:{version:1,state,unit:2,firmware:version,available:true,locked:!['idle','failed'].includes(state),boot_id:boot,boot:boot===8?'New firmware verified':'USB / normal boot',error:state==='failed'?'Upload stalled for 12 seconds':'',peer_acknowledged:ack,peer_status:'Base updating - corrections paused',received,total}});
   }
+  if(url.pathname==='/api.js')return route.fulfill({body:web('api.js'),contentType:'application/javascript'});
   if(url.pathname==='/update-ui.js')return route.fulfill({body:js,contentType:'application/javascript'});
   return route.fulfill({body:html,contentType:'text/html'});
  });

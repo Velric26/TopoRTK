@@ -33,7 +33,7 @@ try{
 }finally{
  for(let i=0;i<contexts.length;i++){
   await contexts[i].setOffline(false).catch(()=>{});
-  if(pages[i])await pages[i].evaluate(async()=>{const token=sessionStorage.getItem('diagnosticToken');if(token)await fetch('/api/v1/control/release',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:'{}'})}).catch(()=>{});
+  if(pages[i])await pages[i].evaluate(async()=>{const token=sessionStorage.getItem('topoControlToken');if(token)await fetch('/api/v1/control/release',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:'{}'})}).catch(()=>{});
  }
  await browser.close();
 }

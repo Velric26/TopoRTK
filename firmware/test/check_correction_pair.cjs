@@ -11,7 +11,7 @@ try{
   const u=units.at(-1);u.before=await(await p.request.get(url+'/api/v1/diagnostic')).json();u.survey=await(await p.request.get(url+'/api/v1/survey')).json();assert(!u.before.busy);
   const denied=await p.request.post(url+'/api/v1/diagnostic',{data:{op:'pairtest',run,seconds,confirm:true}});assert.equal(denied.status(),401);
   await p.locator('#control').click();await p.waitForFunction(()=>document.querySelector('#controlState').textContent==='You control this instrument');
-  const token=await p.evaluate(()=>sessionStorage.getItem('diagnosticToken'));
+  const token=await p.evaluate(()=>sessionStorage.getItem('topoControlToken'));
   for(const invalid of ['unknown',null,0]){const response=await p.request.post(url+'/api/v1/diagnostic',{headers:{Authorization:'Bearer '+token},data:{op:'pairtest',run,seconds,profile:invalid,confirm:true}});assert.equal(response.status(),409);}
   await p.locator('#run').fill(String(run));await p.locator('#seconds').selectOption(String(seconds));await p.locator('#profile').selectOption(profile);await p.locator('#confirm').check();await p.locator('#pairarm').click();
   await p.waitForFunction(id=>state?.run===id&&['armed','running'].includes(state.state),run);
@@ -34,6 +34,6 @@ try{
  }
  fs.writeFileSync(path.join(out,'hardware-results.json'),JSON.stringify({workflow:'PASS',profile,conditions:process.env.TOPORTK_CONDITIONS||'not recorded',pair_pass:results.every(x=>x.report.pair_pass),browser_offline_seconds:seconds>=60?20:0,results},null,2));
 }finally{
- for(const {p,context} of units){await context.setOffline(false).catch(()=>{});await p.evaluate(async()=>{const token=sessionStorage.getItem('diagnosticToken');if(token)await fetch('/api/v1/control/release',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:'{}'})}).catch(()=>{});await context.close()}
+ for(const {p,context} of units){await context.setOffline(false).catch(()=>{});await p.evaluate(async()=>{const token=sessionStorage.getItem('topoControlToken');if(token)await fetch('/api/v1/control/release',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:'{}'})}).catch(()=>{});await context.close()}
  await browser.close();
 }})().catch(e=>{console.error(e);process.exitCode=1});

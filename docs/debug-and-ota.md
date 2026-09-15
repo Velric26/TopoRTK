@@ -54,7 +54,7 @@ Capture includes recent GNSS text, GNSS RTCM summaries, selected live SiK comple
 
 The browser can pause its view and download the current bounded snapshot. Debug has no idle timer and is On by default at startup (0.11.5): it remains on until disabled or restart. The normal controller's two-minute lease remains separate. Both heartbeat requests and direct API mutations still require the current token. Mode and capture are RAM-only; capture is empty at boot.
 
-Public availability: `GET /api/v1/debug`. Private history: `GET /api/v1/debug/log`. Authenticated same-origin `POST /api/v1/debug` accepts only `disable`. `/debug-nav.js` adds a disabled-by-default button with a visible `aria-describedby` note and verifies fresh availability before enabling it. No arbitrary command route exists. The web page explicitly shows the remaining update plan with the upload control disabled.
+Public availability: `GET /api/v1/debug`. Private history: `GET /api/v1/debug/log`. Authenticated same-origin `POST /api/v1/debug` accepts only `disable`. `web/navigation.js` drives the page's explicitly declared Debug tab: it stays disabled until a fresh `GET /api/v1/debug` reports the service enabled and advancing, with the visible `#debugAvailability` note as its `aria-describedby`. No arbitrary command route exists. The web page explicitly shows the remaining update plan with the upload control disabled.
 
 ## Increment 2 — peer update-notice protocol
 

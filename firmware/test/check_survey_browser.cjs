@@ -6,14 +6,15 @@ const root=path.resolve(__dirname,'..'),output=path.resolve(root,'..',process.en
 // UI sources are the canonical files under web/ (see web/assets.json).
 const web=name=>fs.readFileSync(path.join(root,'web',name),'utf8');
 const html=web('survey.html');
-const debugNav=web('debug-nav.js');
+const nav=web('navigation.js'),api=web('api.js');
 const extras=web('survey-tools.js');
 const fixture=JSON.parse(fs.readFileSync(path.join(root,'test/test_survey.cpp'),'utf8').split('fixture=R"(')[1].split(')";')[0]);
 const engine=spawn(path.join(root,'.pio/test_survey.exe'),['--serve'],{cwd:root,stdio:['pipe','pipe','inherit']});let waiting=[],chain=Promise.resolve(),offline=false,controller=false,leaseToken='',claims=0;
 readline.createInterface({input:engine.stdout}).on('line',line=>waiting.shift()?.(JSON.parse(line)));
 function rpc(data){const request=chain.then(()=>new Promise(resolve=>{waiting.push(resolve);engine.stdin.write(JSON.stringify(data)+'\n')}));chain=request;return request}
 const server=http.createServer(async(req,res)=>{res.setHeader('Cache-Control','no-store');if(req.url==='/survey'){res.setHeader('Content-Type','text/html; charset=utf-8');return res.end(html)}res.setHeader('Content-Type','application/json');let raw='';for await(const chunk of req)raw+=chunk;const body=raw?JSON.parse(raw):{};if(offline){res.statusCode=503;return res.end('{"error":"offline"}')}
-if(req.url==='/debug-nav.js'){res.setHeader('Content-Type','application/javascript; charset=utf-8');return res.end(debugNav)}
+if(req.url==='/api.js'){res.setHeader('Content-Type','application/javascript; charset=utf-8');return res.end(api)}
+if(req.url==='/navigation.js'){res.setHeader('Content-Type','application/javascript; charset=utf-8');return res.end(nav)}
 if(req.url==='/api/v1/debug')return res.end(JSON.stringify({version:1,enabled:false,boot_id:1,uptime_ms:Date.now()}));
 if(req.url==='/survey-tools.js'){res.setHeader('Content-Type','application/javascript; charset=utf-8');return res.end(extras)}
 if(req.url.startsWith('/api/v1/data?')){const query=Object.fromEntries(new URL(req.url,'http://localhost').searchParams);for(const key of ['offset','at'])if(key in query)query[key]=Number(query[key]);if('deleted'in query)query.deleted=query.deleted==='true';return res.end(JSON.stringify(await rpc({query})))}
@@ -24,7 +25,7 @@ if(req.url==='/api/v1/survey'){res.setHeader('X-Controller',String(controller&&r
 (async()=>{await new Promise(r=>server.listen(0,'127.0.0.1',r));const url=`http://127.0.0.1:${server.address().port}/survey`,browser=await chromium.launch({channel:'msedge',headless:true});const errors=[];try{
 const page=await browser.newPage({viewport:{width:390,height:844}});page.on('pageerror',e=>errors.push(e.message));await page.goto(url);await page.waitForFunction(()=>document.querySelector('#connection').textContent.startsWith('Live'));assert(await page.locator('#create button').isDisabled());await page.locator('#pairPanel summary').click();assert.equal(await page.locator('#controlPinLabel').count(),0);await page.locator('#pair button[type=submit]').click();await page.waitForFunction(()=>document.querySelector('#controlState').textContent==='You control this instrument');
 // Another browser takes control; the old bearer cannot write or release the new lease.
-const oldToken=await page.evaluate(()=>sessionStorage.getItem('surveyToken'));
+const oldToken=await page.evaluate(()=>sessionStorage.getItem('topoControlToken'));
 const secondContext=await browser.newContext(),second=await secondContext.newPage();await second.goto(url);await second.waitForFunction(()=>!document.querySelector('#takeControl').disabled);await second.locator('#pairPanel summary').click();await second.locator('#takeControl').click();await second.waitForFunction(()=>document.querySelector('#controlState').textContent==='You control this instrument');await page.waitForFunction(()=>document.querySelector('#controlState').textContent==='View only · Take control');assert(await page.locator('#create button').isDisabled());
 const rejected=await page.request.post(url.replace('/survey','/api/v1/command'),{headers:{Authorization:'Bearer '+oldToken},data:{id:'a'.repeat(32),op:'invalid_test_only'}});assert.equal(rejected.status(),401);
 await page.request.post(url.replace('/survey','/api/v1/control/release'),{headers:{Authorization:'Bearer '+oldToken},data:{}});await second.reload();await second.waitForFunction(()=>document.querySelector('#controlState').textContent==='You control this instrument');

@@ -1,168 +1,236 @@
 {
   "date": "2026-09-15",
-  "firmware": "0.11.18-arch-r7",
-  "units": {
-    "A": {
-      "address": "192.168.100.20",
+  "firmware": "0.11.21-arch-r7d",
+  "rows": [
+    {
+      "unit": "A",
+      "firmware": "0.11.21-arch-r7d",
       "role": "base",
-      "firmware": "0.11.18-arch-r7",
-      "boot": "New firmware verified",
-      "assets": [
-        {
-          "url": "/",
-          "source": "survey.html",
-          "status": 200,
-          "mime": "text/html; charset=utf-8",
-          "bytes": 28075,
-          "sha256": "c38b26cdf5096bc31ba1ef16efdf0cc26a110eee058de2c0eddc0500496b3be3",
-          "matches_canonical_source": true
-        },
-        {
-          "url": "/ui/v1/",
-          "source": "survey.html",
-          "status": 200,
-          "mime": "text/html; charset=utf-8",
-          "bytes": 28075,
-          "sha256": "c38b26cdf5096bc31ba1ef16efdf0cc26a110eee058de2c0eddc0500496b3be3",
-          "matches_canonical_source": true
-        },
-        {
-          "url": "/survey",
-          "source": "survey.html",
-          "status": 200,
-          "mime": "text/html; charset=utf-8",
-          "bytes": 28075,
-          "sha256": "c38b26cdf5096bc31ba1ef16efdf0cc26a110eee058de2c0eddc0500496b3be3",
-          "matches_canonical_source": true
-        },
-        {
-          "url": "/survey-tools.js",
-          "source": "survey-tools.js",
-          "status": 200,
-          "mime": "application/javascript; charset=utf-8",
-          "bytes": 29556,
-          "sha256": "675d85cbf338572884ff8fdeb4f0227b2296cf58446175faa38f7e19d9acac34",
-          "matches_canonical_source": true
-        },
-        {
-          "url": "/diagnostics",
-          "source": "diagnostics.html",
-          "status": 200,
-          "mime": "text/html; charset=utf-8",
-          "bytes": 19060,
-          "sha256": "cdc9053e85f35f3cb6c96797dd2039ca5f1af89a15ab531f94472e0ed4920372",
-          "matches_canonical_source": true
-        },
-        {
-          "url": "/debug",
-          "source": "debug.html",
-          "status": 200,
-          "mime": "text/html; charset=utf-8",
-          "bytes": 12964,
-          "sha256": "94e54e6d0164fa25a8b68e11958a869b31decedeb2d606b1606e7749bda60d0e",
-          "matches_canonical_source": true
-        },
-        {
-          "url": "/debug-nav.js",
-          "source": "debug-nav.js",
-          "status": 200,
-          "mime": "application/javascript; charset=utf-8",
-          "bytes": 1625,
-          "sha256": "a9aca3b7a87e88a6d98e4bd2652fd69a666a36ef31f9f900cb05c36b81e065c9",
-          "matches_canonical_source": true
-        },
-        {
-          "url": "/update-ui.js",
-          "source": "update-ui.js",
-          "status": 200,
-          "mime": "application/javascript; charset=utf-8",
-          "bytes": 5538,
-          "sha256": "d9e97ff5b9e346e104c730ee7846324610aa6810c54ef8de1ce812e76bfa54ee",
-          "matches_canonical_source": true
-        }
-      ],
-      "unknown_asset_status": 404
+      "url": "/",
+      "source": "survey.html",
+      "status": 200,
+      "mime": "text/html; charset=utf-8",
+      "bytes": 27759,
+      "sha256": "df4c903e3c9344cea77bb4de5812dc9cf0e0398f12dc6af3dc3f88388da6ed83",
+      "matches_canonical_source": true
     },
-    "B": {
-      "address": "192.168.100.19",
+    {
+      "unit": "A",
+      "firmware": "0.11.21-arch-r7d",
+      "role": "base",
+      "url": "/ui/v1/",
+      "source": "survey.html",
+      "status": 200,
+      "mime": "text/html; charset=utf-8",
+      "bytes": 27759,
+      "sha256": "df4c903e3c9344cea77bb4de5812dc9cf0e0398f12dc6af3dc3f88388da6ed83",
+      "matches_canonical_source": true
+    },
+    {
+      "unit": "A",
+      "firmware": "0.11.21-arch-r7d",
+      "role": "base",
+      "url": "/survey",
+      "source": "survey.html",
+      "status": 200,
+      "mime": "text/html; charset=utf-8",
+      "bytes": 27759,
+      "sha256": "df4c903e3c9344cea77bb4de5812dc9cf0e0398f12dc6af3dc3f88388da6ed83",
+      "matches_canonical_source": true
+    },
+    {
+      "unit": "A",
+      "firmware": "0.11.21-arch-r7d",
+      "role": "base",
+      "url": "/survey-tools.js",
+      "source": "survey-tools.js",
+      "status": 200,
+      "mime": "application/javascript; charset=utf-8",
+      "bytes": 29700,
+      "sha256": "70eceb5f22843a8b42474c8c6cf7023e5b8bcb9fcb6e346977f3cadbc8a4a96d",
+      "matches_canonical_source": true
+    },
+    {
+      "unit": "A",
+      "firmware": "0.11.21-arch-r7d",
+      "role": "base",
+      "url": "/diagnostics",
+      "source": "diagnostics.html",
+      "status": 200,
+      "mime": "text/html; charset=utf-8",
+      "bytes": 18729,
+      "sha256": "3b128f73bdf00e52e5f227d6ba11c1db49db6a47381621b74f925f578ee26a3d",
+      "matches_canonical_source": true
+    },
+    {
+      "unit": "A",
+      "firmware": "0.11.21-arch-r7d",
+      "role": "base",
+      "url": "/debug",
+      "source": "debug.html",
+      "status": 200,
+      "mime": "text/html; charset=utf-8",
+      "bytes": 13472,
+      "sha256": "862c84aac31f4b3837c600a3fa89a10b7e82988d4d9cc9278ce2282b16b7fbaa",
+      "matches_canonical_source": true
+    },
+    {
+      "unit": "A",
+      "firmware": "0.11.21-arch-r7d",
+      "role": "base",
+      "url": "/api.js",
+      "source": "api.js",
+      "status": 200,
+      "mime": "application/javascript; charset=utf-8",
+      "bytes": 3376,
+      "sha256": "5cd0025fc2713a259e352a6aaf8b0d303e3250c08de58d87ed6bede310e5320c",
+      "matches_canonical_source": true
+    },
+    {
+      "unit": "A",
+      "firmware": "0.11.21-arch-r7d",
+      "role": "base",
+      "url": "/navigation.js",
+      "source": "navigation.js",
+      "status": 200,
+      "mime": "application/javascript; charset=utf-8",
+      "bytes": 2654,
+      "sha256": "b7f87153147189c49d139f4a9f600c736f2282e7c9e19df28df3013af9a47a8e",
+      "matches_canonical_source": true
+    },
+    {
+      "unit": "A",
+      "firmware": "0.11.21-arch-r7d",
+      "role": "base",
+      "url": "/update-ui.js",
+      "source": "update-ui.js",
+      "status": 200,
+      "mime": "application/javascript; charset=utf-8",
+      "bytes": 6300,
+      "sha256": "a6654725d8c1c42e918979ab204308254570c6b91a82cc7f54cad11521523cd9",
+      "matches_canonical_source": true
+    },
+    {
+      "unit": "A",
+      "url": "/debug-nav.js",
+      "status": 404,
+      "retired": true,
+      "matches_canonical_source": true
+    },
+    {
+      "unit": "B",
+      "firmware": "0.11.21-arch-r7d",
       "role": "rover",
-      "firmware": "0.11.18-arch-r7",
-      "boot": "New firmware verified",
-      "assets": [
-        {
-          "url": "/",
-          "source": "status.html",
-          "status": 200,
-          "mime": "text/html; charset=utf-8",
-          "bytes": 15448,
-          "sha256": "e3a11b59c353808c941039d938b5bed21973ec82723a70fa7ce322d37b71e3a2",
-          "matches_canonical_source": true
-        },
-        {
-          "url": "/ui/v1/",
-          "source": "status.html",
-          "status": 200,
-          "mime": "text/html; charset=utf-8",
-          "bytes": 15448,
-          "sha256": "e3a11b59c353808c941039d938b5bed21973ec82723a70fa7ce322d37b71e3a2",
-          "matches_canonical_source": true
-        },
-        {
-          "url": "/survey",
-          "source": "survey.html",
-          "status": 200,
-          "mime": "text/html; charset=utf-8",
-          "bytes": 28075,
-          "sha256": "c38b26cdf5096bc31ba1ef16efdf0cc26a110eee058de2c0eddc0500496b3be3",
-          "matches_canonical_source": true
-        },
-        {
-          "url": "/survey-tools.js",
-          "source": "survey-tools.js",
-          "status": 200,
-          "mime": "application/javascript; charset=utf-8",
-          "bytes": 29556,
-          "sha256": "675d85cbf338572884ff8fdeb4f0227b2296cf58446175faa38f7e19d9acac34",
-          "matches_canonical_source": true
-        },
-        {
-          "url": "/diagnostics",
-          "source": "diagnostics.html",
-          "status": 200,
-          "mime": "text/html; charset=utf-8",
-          "bytes": 19060,
-          "sha256": "cdc9053e85f35f3cb6c96797dd2039ca5f1af89a15ab531f94472e0ed4920372",
-          "matches_canonical_source": true
-        },
-        {
-          "url": "/debug",
-          "source": "debug.html",
-          "status": 200,
-          "mime": "text/html; charset=utf-8",
-          "bytes": 12964,
-          "sha256": "94e54e6d0164fa25a8b68e11958a869b31decedeb2d606b1606e7749bda60d0e",
-          "matches_canonical_source": true
-        },
-        {
-          "url": "/debug-nav.js",
-          "source": "debug-nav.js",
-          "status": 200,
-          "mime": "application/javascript; charset=utf-8",
-          "bytes": 1625,
-          "sha256": "a9aca3b7a87e88a6d98e4bd2652fd69a666a36ef31f9f900cb05c36b81e065c9",
-          "matches_canonical_source": true
-        },
-        {
-          "url": "/update-ui.js",
-          "source": "update-ui.js",
-          "status": 200,
-          "mime": "application/javascript; charset=utf-8",
-          "bytes": 5538,
-          "sha256": "d9e97ff5b9e346e104c730ee7846324610aa6810c54ef8de1ce812e76bfa54ee",
-          "matches_canonical_source": true
-        }
-      ],
-      "unknown_asset_status": 404
+      "url": "/",
+      "source": "status.html",
+      "status": 200,
+      "mime": "text/html; charset=utf-8",
+      "bytes": 15470,
+      "sha256": "54a9a6a6e3e0f7c31d0b4576ba14ceb4e033f7461c2d63e8c6b52bbe8ec8224c",
+      "matches_canonical_source": true
+    },
+    {
+      "unit": "B",
+      "firmware": "0.11.21-arch-r7d",
+      "role": "rover",
+      "url": "/ui/v1/",
+      "source": "status.html",
+      "status": 200,
+      "mime": "text/html; charset=utf-8",
+      "bytes": 15470,
+      "sha256": "54a9a6a6e3e0f7c31d0b4576ba14ceb4e033f7461c2d63e8c6b52bbe8ec8224c",
+      "matches_canonical_source": true
+    },
+    {
+      "unit": "B",
+      "firmware": "0.11.21-arch-r7d",
+      "role": "rover",
+      "url": "/survey",
+      "source": "survey.html",
+      "status": 200,
+      "mime": "text/html; charset=utf-8",
+      "bytes": 27759,
+      "sha256": "df4c903e3c9344cea77bb4de5812dc9cf0e0398f12dc6af3dc3f88388da6ed83",
+      "matches_canonical_source": true
+    },
+    {
+      "unit": "B",
+      "firmware": "0.11.21-arch-r7d",
+      "role": "rover",
+      "url": "/survey-tools.js",
+      "source": "survey-tools.js",
+      "status": 200,
+      "mime": "application/javascript; charset=utf-8",
+      "bytes": 29700,
+      "sha256": "70eceb5f22843a8b42474c8c6cf7023e5b8bcb9fcb6e346977f3cadbc8a4a96d",
+      "matches_canonical_source": true
+    },
+    {
+      "unit": "B",
+      "firmware": "0.11.21-arch-r7d",
+      "role": "rover",
+      "url": "/diagnostics",
+      "source": "diagnostics.html",
+      "status": 200,
+      "mime": "text/html; charset=utf-8",
+      "bytes": 18729,
+      "sha256": "3b128f73bdf00e52e5f227d6ba11c1db49db6a47381621b74f925f578ee26a3d",
+      "matches_canonical_source": true
+    },
+    {
+      "unit": "B",
+      "firmware": "0.11.21-arch-r7d",
+      "role": "rover",
+      "url": "/debug",
+      "source": "debug.html",
+      "status": 200,
+      "mime": "text/html; charset=utf-8",
+      "bytes": 13472,
+      "sha256": "862c84aac31f4b3837c600a3fa89a10b7e82988d4d9cc9278ce2282b16b7fbaa",
+      "matches_canonical_source": true
+    },
+    {
+      "unit": "B",
+      "firmware": "0.11.21-arch-r7d",
+      "role": "rover",
+      "url": "/api.js",
+      "source": "api.js",
+      "status": 200,
+      "mime": "application/javascript; charset=utf-8",
+      "bytes": 3376,
+      "sha256": "5cd0025fc2713a259e352a6aaf8b0d303e3250c08de58d87ed6bede310e5320c",
+      "matches_canonical_source": true
+    },
+    {
+      "unit": "B",
+      "firmware": "0.11.21-arch-r7d",
+      "role": "rover",
+      "url": "/navigation.js",
+      "source": "navigation.js",
+      "status": 200,
+      "mime": "application/javascript; charset=utf-8",
+      "bytes": 2654,
+      "sha256": "b7f87153147189c49d139f4a9f600c736f2282e7c9e19df28df3013af9a47a8e",
+      "matches_canonical_source": true
+    },
+    {
+      "unit": "B",
+      "firmware": "0.11.21-arch-r7d",
+      "role": "rover",
+      "url": "/update-ui.js",
+      "source": "update-ui.js",
+      "status": 200,
+      "mime": "application/javascript; charset=utf-8",
+      "bytes": 6300,
+      "sha256": "a6654725d8c1c42e918979ab204308254570c6b91a82cc7f54cad11521523cd9",
+      "matches_canonical_source": true
+    },
+    {
+      "unit": "B",
+      "url": "/debug-nav.js",
+      "status": 404,
+      "retired": true,
+      "matches_canonical_source": true
     }
-  }
+  ]
 }

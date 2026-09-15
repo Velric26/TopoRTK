@@ -35,18 +35,15 @@
 <p class="muted">Only the latest report is kept on each instrument. Download it before the next test. Missing peer results mean the pair has not passed.</p>
 <p class="muted">Synthetic delivery test, not RTK accuracy. SiK: 57,600 baud. Bluetooth is not available yet.</p></section>
 <section><h2>4. Local transport fault checks</h2><p>Check loss handling, corruption rejection, reassembly and recovery on this ESP32. No data is sent to the radios or receiver. This does not qualify the radio link.</p><button id="selftest" disabled>Run local fault checks</button><button id="selfdownload" class="secondary" disabled>Download self-test report</button><p id="selfresult" aria-live="polite">No local test report loaded.</p></section>
-</main><script>
+</main><script src="/api.js"></script><script>
 'use strict';
 const $=id=>document.getElementById(id);
-const random=()=>Array.from(crypto.getRandomValues(new Uint8Array(16)),v=>v.toString(16).padStart(2,'0')).join('');
-function stored(key,fallback){try{return sessionStorage.getItem(key)||fallback}catch(e){return fallback}}
-function remember(key,value){try{sessionStorage.setItem(key,value)}catch(e){}}
-const client=stored('diagnosticClient',random());remember('diagnosticClient',client);
-let token=stored('diagnosticToken',''),state=null,online=false,owner=false,requesting=false,lastUptime=null,lastAdvance=0;
-$('run').value=stored('diagnosticRun',String(100000+crypto.getRandomValues(new Uint32Array(1))[0]%900000));
+let state=null,online=false,requesting=false,lastUptime=null,lastAdvance=0;
+$('run').value=String(100000+crypto.getRandomValues(new Uint32Array(1))[0]%900000);
 function message(s){$('message').textContent=s}
 function report(){return state?.state==='idle'?state.last_report:state?.run?state:null}
 function controls(){
+  const owner=topoOwner();
   $('control').disabled=!online||requesting||owner;$('release').disabled=!online||requesting||!owner;
   $('controlState').textContent=owner&&online?'You control this instrument':'View only · Take control to start or cancel';
   for(const id of ['arm','pairarm','probe','selftest'])$(id).disabled=!online||!owner||requesting||state?.busy||state?.corrections?.transport==='sik';
@@ -55,38 +52,28 @@ function controls(){
   for(const id of ['run','transport','mode','seconds','rate','confirm','profile'])$(id).disabled=!!state?.busy||requesting;
   $('download').disabled=!report();$('selfdownload').disabled=!state?.self_test;
 }
-async function api(url,data){
-  const abort=new AbortController(),timer=setTimeout(()=>abort.abort(),3500);
-  try{
-    const options={cache:'no-store',signal:abort.signal,headers:{Authorization:'Bearer '+token}};
-    if(data!==undefined){options.method='POST';options.headers['Content-Type']='application/json';options.body=JSON.stringify(data)}
-    const response=await fetch(url,options),body=await response.json();
-    if(!response.ok){if(response.status===401){owner=false;token='';remember('diagnosticToken','')}throw Error(response.status===401?'Control expired or changed. Take control again.':body.error||'Request failed')}
-    return {body,response};
-  }finally{clearTimeout(timer)}
-}
-async function action(fn){requesting=true;controls();try{await fn()}catch(e){message(e.name==='AbortError'?'No reply. Check the live state before retrying.':e.message)}finally{requesting=false;controls()}}
-$('control').onclick=()=>action(async()=>{
-  const {body}=await api('/api/v1/control',{client});token=body.token;remember('diagnosticToken',token);owner=true;message('Control acquired.');
-});
-$('release').onclick=()=>action(async()=>{await api('/api/v1/control/release',{});token='';owner=false;remember('diagnosticToken','');message('Control released.')});
+topoOnControl(()=>controls());
+function requestError(response){return Error(response.status===401?'Control expired or changed. Take control again.':response.body?.error||'Request failed')}
+async function action(fn){requesting=true;controls();try{await fn()}catch(e){message(e.name==='AbortError'||e.name==='TimeoutError'?'No reply. Check the live state before retrying.':e.message)}finally{requesting=false;controls()}}
+$('control').onclick=()=>action(async()=>{await topoClaim();message('Control acquired.')});
+$('release').onclick=()=>action(async()=>{await topoRelease();message('Control released.')});
 $('arm').onclick=()=>action(async()=>{
   if(!$('confirm').checked)throw Error('Confirm preparation first.');
   if(!/^[0-9]{6}$/.test($('run').value)||Number($('run').value)<100000)throw Error('Enter a test code from 100000 to 999999.');
   if(Number($('run').value)===state?.run)throw Error('Use a fresh test code for the next run.');
-  remember('diagnosticRun',$('run').value);
-  await api('/api/v1/diagnostic',{op:'arm',run:Number($('run').value),transport:$('transport').value,mode:Number($('mode').value),seconds:Number($('seconds').value),rate:Number($('rate').value),confirm:true});message('Arm request queued. Check for “Waiting for the other instrument” below.');
+  const response=await topoRequest('/api/v1/diagnostic',{op:'arm',run:Number($('run').value),transport:$('transport').value,mode:Number($('mode').value),seconds:Number($('seconds').value),rate:Number($('rate').value),confirm:true},{timeout:3500});if(!response.ok)throw requestError(response);
+  message('Arm request queued. Check for “Waiting for the other instrument” below.');
 });
-$('probe').onclick=()=>action(async()=>{if(!$('confirm').checked)throw Error('Confirm preparation first.');await api('/api/v1/diagnostic',{op:'probe',confirm:true});message('Wiring check queued. Watch the radio result below.')});
+$('probe').onclick=()=>action(async()=>{if(!$('confirm').checked)throw Error('Confirm preparation first.');const response=await topoRequest('/api/v1/diagnostic',{op:'probe',confirm:true},{timeout:3500});if(!response.ok)throw requestError(response);message('Wiring check queued. Watch the radio result below.')});
 $('pairarm').onclick=()=>action(async()=>{
   if(!$('confirm').checked)throw Error('Confirm preparation first.');
   const run=Number($('run').value);if(!/^[0-9]{6}$/.test($('run').value)||run<100000||run===state?.run)throw Error('Use a fresh test code from 100000 to 999999.');
-  remember('diagnosticRun',$('run').value);await api('/api/v1/diagnostic',{op:'pairtest',run,seconds:Number($('seconds').value),profile:$('profile').value,confirm:true});message('Arm request queued. Match the RTCM profile, test code and duration on the other instrument.');
+  const response=await topoRequest('/api/v1/diagnostic',{op:'pairtest',run,seconds:Number($('seconds').value),profile:$('profile').value,confirm:true},{timeout:3500});if(!response.ok)throw requestError(response);message('Arm request queued. Match the RTCM profile, test code and duration on the other instrument.');
 });
-$('liveRadio').onclick=()=>action(async()=>{await api('/api/v1/diagnostic',{op:'corrections',transport:'sik',confirm:true});message('Local Radio selection queued, not connection confirmation. Select Radio on the companion and check peer state below.')});
-$('liveWifi').onclick=()=>action(async()=>{await api('/api/v1/diagnostic',{op:'corrections',transport:'wifi',confirm:true});message('Local Wi-Fi selection queued, not connection confirmation. Select Wi-Fi on the companion and check peer state below.')});
-$('cancel').onclick=()=>action(async()=>{await api('/api/v1/diagnostic',{op:'cancel',run:state.run});message('Cancellation requested. Check for “Test stopped” below.')});
-$('selftest').onclick=()=>action(async()=>{await api('/api/v1/diagnostic',{op:'selftest',confirm:true});message('Local fault checks requested. See their separate report below.')});
+$('liveRadio').onclick=()=>action(async()=>{const response=await topoRequest('/api/v1/diagnostic',{op:'corrections',transport:'sik',confirm:true},{timeout:3500});if(!response.ok)throw requestError(response);message('Local Radio selection queued, not connection confirmation. Select Radio on the companion and check peer state below.')});
+$('liveWifi').onclick=()=>action(async()=>{const response=await topoRequest('/api/v1/diagnostic',{op:'corrections',transport:'wifi',confirm:true},{timeout:3500});if(!response.ok)throw requestError(response);message('Local Wi-Fi selection queued, not connection confirmation. Select Wi-Fi on the companion and check peer state below.')});
+$('cancel').onclick=()=>action(async()=>{const response=await topoRequest('/api/v1/diagnostic',{op:'cancel',run:state.run},{timeout:3500});if(!response.ok)throw requestError(response);message('Cancellation requested. Check for “Test stopped” below.')});
+$('selftest').onclick=()=>action(async()=>{const response=await topoRequest('/api/v1/diagnostic',{op:'selftest',confirm:true},{timeout:3500});if(!response.ok)throw requestError(response);message('Local fault checks requested. See their separate report below.')});
 $('selfdownload').onclick=()=>{const d=state?.self_test;if(!d)return;const a=document.createElement('a'),u=URL.createObjectURL(new Blob([JSON.stringify(d,null,2)],{type:'application/json'}));a.href=u;a.download='TopoRTK-local-transport-'+d.run+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)};
 $('download').onclick=()=>{
   const d=report();if(!d)return;
@@ -129,12 +116,17 @@ function render(){
 }
 async function poll(){
   try{
-    const {body,response}=await api('/api/v1/diagnostic');
+    const response=await topoRequest('/api/v1/diagnostic',undefined,{timeout:3500});
+    if(!response.ok)throw requestError(response);
+    const body=response.body;
     if(!Number.isFinite(body.uptime_ms))throw Error('No fresh instrument state');
     if(body.uptime_ms!==lastUptime){lastUptime=body.uptime_ms;lastAdvance=Date.now()}
     if(Date.now()-lastAdvance>3500)throw Error('Instrument state stopped updating');
-    state=body;online=true;owner=response.headers.get('X-Controller')==='true';render();
-  }catch(e){online=false;owner=false;$('connection').textContent='Disconnected or stale · Last received results shown. Reconnect to retrieve the final report.';$('routePeer').textContent='Peer state stale · Connection not confirmed. Reconnect to retrieve current state.';controls()}
+    state=body;online=true;
+    // A read never 401s, so the instrument states whether our bearer is still the controller.
+    if(topoOwner()&&response.headers.get('X-Controller')!=='true')topoForget();
+    render();
+  }catch(e){online=false;$('connection').textContent='Disconnected or stale · Last received results shown. Reconnect to retrieve the final report.';$('routePeer').textContent='Peer state stale · Connection not confirmed. Reconnect to retrieve current state.';controls()}
   finally{setTimeout(poll,1000)}
 }
 poll();

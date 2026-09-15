@@ -15,7 +15,7 @@ try{for(const ip of ['192.168.100.20','192.168.100.19']){
   const now=await(await p.request.get(url+'/api/v1/survey')).json();for(const key of ['boot_id','role','jobs','active_job','records_used'])assert.deepEqual(now[key],survey[key]);assert.deepEqual(errors,[]);
   await p.locator('#selfresult').scrollIntoViewIfNeeded();await p.screenshot({path:path.join(out,before.role.toLowerCase()+'-selftest.png')});await p.locator('#release').click();
   results.push({ip,role:before.role,boot_id:now.boot_id,self_test:after.self_test});console.log(before.role+': '+after.self_test.checks+' checks passed in '+(after.self_test.duration_us/1000)+' ms; saved; '+after.self_test.workspace_bytes+' bytes');
- }finally{await p.evaluate(async()=>{const token=sessionStorage.getItem('diagnosticToken');if(token)await fetch('/api/v1/control/release',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:'{}'})}).catch(()=>{});await context.close()}
+ }finally{await p.evaluate(async()=>{const token=sessionStorage.getItem('topoControlToken');if(token)await fetch('/api/v1/control/release',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:'{}'})}).catch(()=>{});await context.close()}
  }
  fs.writeFileSync(path.join(out,'hardware-results.json'),JSON.stringify({result:'PASS',checks:['authenticated browser action on both roles','22 fault checks on each ESP32','separate saved self-test download','previous RF report unchanged','survey records/role/boot unchanged','no page errors','controllers released'],results},null,2));
 }finally{await browser.close()}})().catch(e=>{console.error(e);process.exitCode=1});

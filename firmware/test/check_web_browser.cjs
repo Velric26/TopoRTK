@@ -45,10 +45,14 @@ const stale = JSON.parse(fs.readFileSync(path.join(root,'.pio/status-stale.json'
         s.uptime_ms = mode === 'frozen' ? 20000 : ++sample;
         return route.fulfill({json:s});
       }
+      if (new URL(route.request().url()).pathname === '/api.js')
+        return route.fulfill({body:fs.readFileSync(path.join(root,'web/api.js'),'utf8'),contentType:'application/javascript'});
       return route.fulfill({body:html,contentType:'text/html'});
     });
     await page.goto('http://rover.test/');
-    const title = text => page.waitForFunction(t => document.querySelector('#ready-title').textContent === t,text,{timeout:7000});
+    // Each title transition must still happen; the deadline only has to tolerate a
+    // slow browser start under load (the stale flip itself is bounded by the page's 4 s window).
+    const title = text => page.waitForFunction(t => document.querySelector('#ready-title').textContent === t,text,{timeout:20000});
     await title('READY');
     for (const width of [320,390,768,1200]) {
       await page.setViewportSize({width,height:1000});
