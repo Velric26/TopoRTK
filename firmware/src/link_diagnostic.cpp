@@ -119,6 +119,43 @@ void diagnostic_begin(){
 }
 bool diagnostic_busy(){portENTER_CRITICAL(&guard);bool value=cached_busy;portEXIT_CRITICAL(&guard);return value;}
 bool diagnostic_snapshot(char *out,size_t capacity){portENTER_CRITICAL(&guard);size_t n=std::strlen(cached);bool ok=n<capacity;if(ok)std::memcpy(out,cached,n+1);portEXIT_CRITICAL(&guard);return ok;}
+// The settings snapshot needs the latest report per medium without copying the
+// whole multi-kilobyte report into its bounded document: keep a small summary,
+// refreshed only when the stored report actually changes.
+char tests_summary[384]="{\"wifi\":null,\"sik\":null}";
+uint32_t summary_hash=0;
+bool summary_ready=false;
+void refresh_tests_summary(){
+  const uint32_t hash=correction::crc32(reinterpret_cast<const uint8_t*>(last_report),std::strlen(last_report));
+  if(summary_ready&&hash==summary_hash)return;
+  summary_hash=hash;summary_ready=true;
+  DynamicJsonDocument report(1024);
+  if(deserializeJson(report,static_cast<const char*>(last_report)))return;
+  const char *transport=report["transport"]|"";
+  if(std::strcmp(transport,"sik")&&std::strcmp(transport,"wifi"))return;
+  const bool sik=!std::strcmp(transport,"sik");
+  DynamicJsonDocument summary(384);
+  if(deserializeJson(summary,static_cast<const char*>(tests_summary)))return;
+  auto entry=summary[sik?"sik":"wifi"].to<JsonObject>();
+  entry["run"]=report["run"]|0u;
+  entry["state"]=report["state"]|"unknown";
+  entry["reason"]=report["reason"]|"";
+  entry["transport"]=transport;
+  entry["role"]=report["role"]|"";
+  entry["sent"]=report["sent"]|0u;
+  entry["received"]=report["received"]|0u;
+  entry["errors"]=report["errors"]|0u;
+  entry["pair_pass"]=report["pair_pass"]|false;
+  entry["local_pass"]=report["local_pass"]|false;
+  serializeJson(summary,tests_summary,sizeof(tests_summary));
+}
+void diagnostic_tests_json(JsonObject out){
+  refresh_tests_summary();
+  StaticJsonDocument<384> summary;
+  if(deserializeJson(summary,static_cast<const char*>(tests_summary))){out["wifi"]=nullptr;out["sik"]=nullptr;return;}
+  out["wifi"]=summary["wifi"];
+  out["sik"]=summary["sik"];
+}
 bool diagnostic_request(const char *json){
   StaticJsonDocument<512>d;if(!queue||deserializeJson(d,json))return false;Request r;
   const char *op=d["op"]|"";

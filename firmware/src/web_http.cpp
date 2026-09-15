@@ -9,6 +9,7 @@
 #include "debug_ui.h"
 #include "ota_service.h"
 #include "ota_ui.h"
+#include "link_service.h"
 #include <Arduino.h>
 #include <esp_http_server.h>
 #include <esp_system.h>
@@ -16,6 +17,7 @@
 
 namespace {
 httpd_handle_t server = nullptr;
+constexpr size_t kSettingsCapacity = 1536;
 portMUX_TYPE snapshot_mutex = portMUX_INITIALIZER_UNLOCKED;
 char snapshot[kWebStatusCapacity] = {};
 size_t snapshot_length = 0;
@@ -35,6 +37,27 @@ esp_err_t error(httpd_req_t *request, const char *status, const char *body) {
   httpd_resp_set_status(request, status);
   httpd_resp_set_type(request, "application/json");
   return httpd_resp_send(request, body, HTTPD_RESP_USE_STRLEN);
+}
+
+// A request refused before admission keeps its documented status code; anything
+// discovered after 202 is reported as that operation's outcome instead.
+esp_err_t settings_refusal(httpd_req_t *r, link_operation::Reason reason) {
+  switch (reason) {
+    case link_operation::Reason::StaleRevision:
+      return error(r, "409 Conflict", "{\"error\":\"stale_revision\"}");
+    case link_operation::Reason::ConflictingId:
+      return error(r, "409 Conflict", "{\"error\":\"conflicting_id\"}");
+    case link_operation::Reason::Busy:
+      return error(r, "409 Conflict", "{\"error\":\"operation_busy\"}");
+    case link_operation::Reason::Unsupported:
+      return error(r, "503 Service Unavailable", "{\"error\":\"test_operation_not_available\"}");
+    case link_operation::Reason::Cancelled:
+      return error(r, "409 Conflict", "{\"error\":\"operation_cancelled\"}");
+    case link_operation::Reason::StorageFailure:
+      return error(r, "503 Service Unavailable", "{\"error\":\"link_storage_unavailable\"}");
+    default:
+      return error(r, "400 Bad Request", "{\"error\":\"request_refused\"}");
+  }
 }
 
 esp_err_t get_status(httpd_req_t *request) {
@@ -200,6 +223,37 @@ esp_err_t post_debug(httpd_req_t *r){
   else return error(r,"400 Bad Request","{\"error\":\"operation_not_available\"}");
   return error(r,"200 OK","{\"state\":\"applied\"}");
 }
+esp_err_t get_settings(httpd_req_t *r){
+  char *data=new(std::nothrow) char[kSettingsCapacity];if(!data)return error(r,"503 Service Unavailable","{\"error\":\"memory_unavailable\"}");
+  const bool ok=link_service::settings_snapshot(data,kSettingsCapacity);
+  if(!ok){delete[] data;return error(r,"503 Service Unavailable","{\"error\":\"settings_unavailable\"}");}
+  httpd_resp_set_hdr(r,"X-Controller",auth(r)?"true":"false");
+  const auto result=error(r,"200 OK",data);delete[] data;return result;
+}
+esp_err_t post_settings(httpd_req_t *r){
+  if(!same_origin(r))return error(r,"403 Forbidden","{\"error\":\"origin_rejected\"}");
+  if(!auth(r))return error(r,"401 Unauthorized","{\"error\":\"claim_control_first\"}");
+  std::string raw;StaticJsonDocument<640>d;
+  if(!body(r,raw)||raw.size()>512||deserializeJson(d,raw))return error(r,"400 Bad Request","{\"error\":\"invalid_request\"}");
+  const char *op=d["op"]|"";
+  const char *id=d["id"]|"";
+  if(d["confirm"]!=true)return error(r,"400 Bad Request","{\"error\":\"confirm_required\"}");
+  link_operation::Reason reason=link_operation::Reason::None;
+  if(!std::strcmp(op,"link.cancel")){
+    if(!link_service::cancel_operation(id,reason))return settings_refusal(r,reason);
+    return error(r,"202 Accepted","{\"state\":\"queued\"}");
+  }
+  if(std::strcmp(op,"link.select")&&std::strcmp(op,"link.test"))return error(r,"400 Bad Request","{\"error\":\"operation_not_available\"}");
+  if(!d["revision"].is<uint32_t>())return error(r,"400 Bad Request","{\"error\":\"revision_required\"}");
+  const char *transport=d["transport"]|"";
+  link_service::Transport selected;
+  if(!std::strcmp(transport,"sik"))selected=link_service::Transport::Radio;
+  else if(!std::strcmp(transport,"wifi"))selected=link_service::Transport::WiFi;
+  else return error(r,"400 Bad Request","{\"error\":\"transport_required\"}");
+  const auto kind=!std::strcmp(op,"link.test")?link_operation::Kind::Test:link_operation::Kind::Select;
+  if(!link_service::request_operation(kind,selected,id,d["revision"].as<uint32_t>(),reason))return settings_refusal(r,reason);
+  return error(r,"202 Accepted","{\"state\":\"queued\"}");
+}
 esp_err_t rejected(httpd_req_t *request, httpd_err_code_t) {
   if (request->method != HTTP_GET) {
     httpd_resp_set_hdr(request, "Allow", "GET");
@@ -226,7 +280,7 @@ void publish_web_status(const char *json, size_t length, uint32_t now, bool rove
   last_start_attempt = now;
   httpd_config_t config = HTTPD_DEFAULT_CONFIG();
   config.stack_size = 8192;
-  config.max_uri_handlers = 22;
+  config.max_uri_handlers = 24;
   config.max_open_sockets = 3;
   config.lru_purge_enable = true;
   config.recv_wait_timeout = 2;
@@ -254,7 +308,9 @@ void publish_web_status(const char *json, size_t length, uint32_t now, bool rove
       {"/diagnostics",HTTP_GET,get_diagnostic_page,nullptr},
       {"/api/v1/diagnostic",HTTP_GET,get_diagnostic,nullptr},
       {"/api/v1/diagnostic",HTTP_POST,post_diagnostic,nullptr},
-      {"/api/v1/command",HTTP_POST,post_command,nullptr}};
+      {"/api/v1/command",HTTP_POST,post_command,nullptr},
+  {"/api/v1/settings",HTTP_GET,get_settings,nullptr},
+  {"/api/v1/settings",HTTP_POST,post_settings,nullptr}};
   bool registered = true;
   for (const auto &route : routes) registered &= httpd_register_uri_handler(server, &route) == ESP_OK;
   registered &= httpd_register_err_handler(server, HTTPD_404_NOT_FOUND, rejected) == ESP_OK;

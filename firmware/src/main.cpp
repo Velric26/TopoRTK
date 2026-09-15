@@ -2073,6 +2073,10 @@ void loop() {
   service_brightness(millis(), brightness_mode, latest_gnss_time);
   if(!ota_paused())service_sd_logging();
   service_web_status();
+  {
+    const uint32_t settings_now = millis();
+    link_service::service_settings(settings_now, status_snapshot(settings_now).corrections.fresh);
+  }
 
   const uint32_t render=millis();
   if (render - last_screen_ms >= 250) {

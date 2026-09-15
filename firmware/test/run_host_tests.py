@@ -36,6 +36,11 @@ void clear_pending(){}
 void begin(bool,uint32_t){}
 IPAddress wifi_peer(){return IPAddress(192,168,4,1);}
 void note_incompatible(uint32_t){}
+void service_settings(uint32_t,bool){}
+bool settings_snapshot(char *,size_t){return false;}
+bool request_operation(link_operation::Kind,Transport,const char *,uint32_t,link_operation::Reason &){return false;}
+bool cancel_operation(const char *,link_operation::Reason &){return false;}
+bool select(Transport,bool,uint32_t){return true;}
 }
 void ota_boot_begin(){}
 void ota_service(uint32_t,bool,bool,bool){}
