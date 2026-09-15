@@ -79,15 +79,45 @@ void interrupted_report(uint8_t medium,uint8_t node,uint8_t profile,bool was_pai
   else std::snprintf(out,capacity,"{\"run\":%lu,\"state\":\"interrupted\",\"reason\":\"instrument_restarted_during_test\",\"role\":\"%s\",\"transport\":\"%s\",\"local_pass\":false,\"pair_pass\":false}",
     static_cast<unsigned long>(run),node?"ROVER":"BASE",medium_name(medium));
 }
-// Medium a stored pre-R9 report body names, or -1 when it names none.
+// A stored body is only trusted when it is a whole report of a known shape. A
+// body overwritten mid-write still parses as JSON, so the state and role text are
+// what separate a real report from fragments: the report writer only ever stores
+// a terminal state, and every report shape carries the role. The pre-R9 crash
+// marker is the one body without a role.
+bool report_ok(JsonVariantConst report){
+  const char *state=report["state"]|"";
+  if(std::strcmp(state,"done")&&std::strcmp(state,"failed")&&std::strcmp(state,"interrupted"))return false;
+  if(!std::strcmp(state,"interrupted")&&!report.containsKey("role"))return true;
+  const char *role=report["role"]|"";
+  return !std::strcmp(role,"BASE")||!std::strcmp(role,"ROVER");
+}
+// Medium a stored pre-R9 report body names, -1 when it names none, -2 when it is
+// not a whole report at all.
 int stored_medium(const String &value){
   if(value=="null"||value.length()>=sizeof(reports[0]))return -1;
   // The stored body can be a whole multi-kilobyte report: a document smaller
   // than its content would fail to parse it and lose the migrated report.
   DynamicJsonDocument report(4096);
-  if(deserializeJson(report,value))return -1;
+  if(deserializeJson(report,value)||!report_ok(report))return -2;
   const char *name=report["transport"]|"";
   return !std::strcmp(name,"sik")?1:!std::strcmp(name,"wifi")?0:-1;
+}
+// The raw snapshot shows the newest slot that actually holds a report.
+void normalize_latest(){if(!std::strcmp(reports[latest],"null")&&std::strcmp(reports[latest?0:1],"null"))latest=latest?0:1;}
+// Loads one stored body into its RAM mirror. False means the body is not a whole
+// report: the caller drops its durable slot instead of showing fragments.
+bool load_report(uint8_t medium,const String &value){
+  if(value.length()>=sizeof(reports[0]))return false;
+  DynamicJsonDocument report(4096);
+  if(deserializeJson(report,value)||!report_ok(report))return false;
+  std::strcpy(reports[medium],value.c_str());
+  return true;
+}
+// Discards a body that is not a whole report from RAM and from its durable slot,
+// so neither the snapshot nor last_tests can print fragments of it.
+void drop_report(uint8_t medium){
+  std::strcpy(reports[medium],"null");normalize_latest();
+  Preferences p;if(p.begin("linkdiag",false)){p.remove(medium?"report_sik":"report_wifi");p.end();}
 }
 bool cached_busy=false;uint32_t published=0;
 struct Request{bool route=false;bool cancel=false,probe=false,selftest=false,paired=false;linktest::Config config;uint8_t transport=0,profile=correctiontest::Injected;};
@@ -169,18 +199,20 @@ void publish(uint32_t now){
 void diagnostic_begin(){
   queue=xQueueCreate(1,sizeof(Request));Preferences p;
   if(p.begin("linkdiag",false)){
-    if(p.isKey("report_wifi")){String value=p.getString("report_wifi","null");if(value.length()<sizeof(reports[0]))std::strcpy(reports[0],value.c_str());}
-    if(p.isKey("report_sik")){String value=p.getString("report_sik","null");if(value.length()<sizeof(reports[1]))std::strcpy(reports[1],value.c_str());}
+    // A stored body that is not a whole report is dropped here, not displayed.
+    if(p.isKey("report_wifi")){const String value=p.getString("report_wifi","null");if(!load_report(0,value))p.remove("report_wifi");}
+    if(p.isKey("report_sik")){const String value=p.getString("report_sik","null");if(!load_report(1,value))p.remove("report_sik");}
     if(p.isKey("latest")){const uint32_t index=p.getUInt("latest",0);latest=index<2?uint8_t(index):uint8_t(0);}
     // Migration: the single pre-R9 slot is read only while neither per-medium
     // slot exists, so a migrated report can never outlive a newer one. The body
     // names its own medium; a body without one cannot be attributed to a medium
-    // and stays visible in the raw snapshot only.
+    // and stays visible in the raw snapshot only, and a body that is not a whole
+    // report is ignored entirely.
     if(!p.isKey("report_wifi")&&!p.isKey("report_sik")){
       const String value=p.getString("report","null");
       const int medium=stored_medium(value);
       if(medium>=0){std::strcpy(reports[medium],value.c_str());if(!p.isKey("latest"))latest=uint8_t(medium);}
-      else if(value!="null"&&value.length()<sizeof(unattributed))std::strcpy(unattributed,value.c_str());
+      else if(medium==-1&&value!="null"&&value.length()<sizeof(unattributed))std::strcpy(unattributed,value.c_str());
     }
     if(p.getBool("active",false)){
       // The in-flight run is the newest report of its medium, interrupted by the
@@ -197,7 +229,7 @@ void diagnostic_begin(){
     }
     // Never show an empty slot as the latest report while the other medium has
     // one; the durable value is rewritten by the next save.
-    if(!std::strcmp(reports[latest],"null")&&std::strcmp(reports[latest?0:1],"null"))latest=latest?0:1;
+    normalize_latest();
     p.end();
   }
   Preferences saved;
@@ -220,20 +252,26 @@ void refresh_tests_summary(){
     if(stale[medium])++changed;
   }
   if(!changed)return;
-  DynamicJsonDocument summary(768);
+  DynamicJsonDocument summary(1024);
   if(deserializeJson(summary,static_cast<const char*>(tests_summary)))return;
   for(unsigned medium=0;medium<2;++medium){
     if(!stale[medium])continue;
+    const char *body=reports[medium];
+    if(!std::strcmp(body,"null")){summary[medium_name(uint8_t(medium))]=nullptr;continue;}
     // A full stored report needs more pool than its text: a 1022-byte paired
     // report already overflows a 1024-byte document and would show as null.
     DynamicJsonDocument report(4096);
-    if(deserializeJson(report,static_cast<const char*>(reports[medium]))||!report.is<JsonObject>()){summary[medium_name(uint8_t(medium))]=nullptr;continue;}
+    if(deserializeJson(report,body)||!report_ok(report)){summary[medium_name(uint8_t(medium))]=nullptr;drop_report(uint8_t(medium));continue;}
     auto entry=summary[medium_name(uint8_t(medium))].to<JsonObject>();
+    // The string fields are copied through String(). ArduinoJson links a
+    // `const char*` value instead of copying it, so assigning the parsed
+    // document's own pointers would leave the summary reading whatever the next
+    // medium's parse reuses those bytes for.
     entry["run"]=report["run"]|0u;
-    entry["state"]=report["state"]|"unknown";
-    entry["reason"]=report["reason"]|"";
+    entry["state"]=String(report["state"]|"unknown");
+    entry["reason"]=String(report["reason"]|"");
     entry["transport"]=medium_name(uint8_t(medium));
-    entry["role"]=report["role"]|"";
+    entry["role"]=String(report["role"]|"");
     entry["sent"]=report["sent"]|0u;
     entry["received"]=report["received"]|0u;
     entry["errors"]=report["errors"]|0u;
@@ -250,7 +288,7 @@ void refresh_tests_summary(){
 }
 void diagnostic_tests_json(JsonObject out){
   refresh_tests_summary();
-  StaticJsonDocument<768> summary;
+  StaticJsonDocument<1024> summary;
   if(deserializeJson(summary,static_cast<const char*>(tests_summary))){out["wifi"]=nullptr;out["sik"]=nullptr;return;}
   out["wifi"]=summary["wifi"];
   out["sik"]=summary["sik"];

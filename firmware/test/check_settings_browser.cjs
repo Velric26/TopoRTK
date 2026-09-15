@@ -13,16 +13,20 @@ const ID=/^[0-9a-f]{32}$/,WAIT={timeout:8000},checks=[];
 // fixture recomputes that hash from the request instead of reading page internals.
 function tag(id){let hash=2166136261,length=0;for(const c of id){const d=c>='0'&&c<='9'?c.charCodeAt(0)-48:c>='a'&&c<='f'?c.charCodeAt(0)-87:-1;if(d<0||++length>32)return 0;hash=Math.imul(hash^d,16777619)>>>0}return length===32?hash:0}
 const fixture=overrides=>Object.assign({revision:4,selected:'wifi',candidate:null,peer:true,fresh:true,operation:null,
-  token:null,claims:0,uptime:1000,gets:0,failGet:false,refuse:null,accept:null,role:null},overrides);
+  token:null,claims:0,uptime:1000,gets:0,failGet:false,refuse:null,accept:null,role:null,tests:null},overrides);
 const settingsBody=f=>{const body={version:1,boot_id:'4d2c1b0a',uptime_ms:f.uptime+=1000,revision:f.revision,selected_transport:f.selected,
-  candidate_transport:f.candidate,peer_connected:f.peer,corrections_fresh:f.fresh,operation:f.operation,last_tests:{wifi:null,sik:null}};
+  candidate_transport:f.candidate,peer_connected:f.peer,corrections_fresh:f.fresh,operation:f.operation,last_tests:f.tests||{wifi:null,sik:null}};
   if(f.role)body.role=f.role;return body};
-const startOperation=(f,data)=>{f.operation={id:data.id,tag:tag(data.id),kind:'select',transport:data.transport,previous_transport:f.selected,
-  state:'negotiating',committed:false,coordinator:false,phase_remaining_ms:9000,reason:''};f.candidate=data.transport};
+// A test is not a switch: it is reported with its own kind and never becomes the candidate route.
+const startOperation=(f,data)=>{const test=data.op==='link.test';
+  f.operation={id:data.id,tag:tag(data.id),kind:test?'test':'select',transport:data.transport,previous_transport:f.selected,
+    state:'negotiating',committed:false,coordinator:false,phase_remaining_ms:test?59000:9000,reason:''};
+  if(!test)f.candidate=data.transport};
 function answer(f,data,route){
-  if(f.refuse){const error=f.refuse;f.refuse=null;if(error==='stale_revision')f.revision=6;return route.fulfill({status:409,json:{error}})}
+  if(f.refuse){const error=f.refuse;f.refuse=null;if(error==='stale_revision')f.revision=6;
+    return route.fulfill({status:error==='test_operation_not_available'?503:409,json:{error}})}
   if(f.accept)f.accept(data);
-  if(data.op==='link.select')startOperation(f,data);
+  if(data.op==='link.select'||data.op==='link.test')startOperation(f,data);
   return route.fulfill({status:202,json:{state:'queued'}});
 }
 function handler(f,label,log){return async route=>{
@@ -82,8 +86,8 @@ assert(await page.locator('#confirmSection').isHidden());
 assert.equal(await txt(page,'controlState'),'View only · Take control');
 assert(!await page.locator('#takeControl').isDisabled());
 const locked=await writes(page);
-assert.deepEqual(locked.map(w=>w.id),['selectRadio','selectWifi','confirmSwitch','cancelOperation']);
-assert(locked.filter(w=>w.id==='selectRadio'||w.id==='selectWifi').every(w=>w.disabled),'route buttons are live without control');
+assert.deepEqual(locked.map(w=>w.id),['selectRadio','selectWifi','testRadio','testWifi','confirmSwitch','cancelOperation']);
+assert(locked.filter(w=>w.id==='selectRadio'||w.id==='selectWifi'||w.id.startsWith('test')).every(w=>w.disabled),'route or test buttons are live without control');
 checks.push('load: Wi-Fi card selected, connected/fresh pair, no operation section');
 
 // 2. Queued is not connected: explicit confirmation, one request, no premature claim.
@@ -218,8 +222,9 @@ await page.waitForFunction(()=>document.querySelector('#connection').textContent
 assert.equal(await page.locator('#connection').getAttribute('data-tone'),'bad');
 assert.match(await txt(page,'connection'),/^No live settings\. Reconnecting · last update \d+ s ago\.$/);
 const offline=await writes(page);
-assert.equal(offline.length,4);
+assert.equal(offline.length,6);
 assert(offline.every(w=>w.disabled),'a write control stayed live without settings');
+assert.deepEqual(offline.map(w=>w.id),['selectRadio','selectWifi','testRadio','testWifi','confirmSwitch','cancelOperation']);
 assert(await page.locator('#takeControl').isDisabled());
 assert(await page.locator('#release').isDisabled());
 checks.push('losing the settings stream reports no live settings and disables every write control');
@@ -297,7 +302,183 @@ assert.equal(await txt(pageC,'selectedRoute'),'Radio (SiK)');
 assert.equal(logC.filter(p=>p.path==='/api/v1/settings').length,1);
 checks.push('both roles render the same states and can perform a switch');
 
-// 9. Layout, keyboard and no PIN.
+// ---- 9. Quick tests: stored results, confirmation, injected faults, countdown, failure copy ----
+const contextD=await browser.newContext({viewport:{width:1200,height:1000}});
+const pageD=await contextD.newPage();pageD.on('pageerror',e=>errors.push('quick: '+e.message));
+const D=fixture({revision:7}),logD=[];
+await contextD.route('**/*',handler(D,'quick',logD));
+const testPosts=()=>logD.filter(p=>p.path==='/api/v1/settings');
+
+// 9a. Nothing stored yet: the section is offered and claims no verdict.
+await pageD.goto('http://settings.test/settings');
+await live(pageD);
+assert(await pageD.locator('h2').filter({hasText:'Quick tests'}).isVisible());
+assert(await pageD.locator('#testRadio').isVisible());
+assert(await pageD.locator('#testWifi').isVisible());
+assert.equal(await pageD.locator('#testInjected').isChecked(),false);
+const nothing=await txt(pageD,'testResults');
+assert.match(nothing,/Radio: not run yet/);assert.match(nothing,/Wi-Fi: not run yet/);
+assert(!/passed/.test(nothing),'a verdict was reported with no stored test: '+nothing);
+checks.push('quick tests with nothing stored offer both test buttons and report no verdict');
+
+// 9b. Stored results are the instrument's own per-medium report.
+D.tests={sik:{run:332545,state:'done',reason:'complete',transport:'sik',pair_pass:true,local_pass:true,received:15,errors:0},
+  wifi:{run:610475,state:'done',reason:'complete',transport:'wifi',pair_pass:true,local_pass:true,received:117,errors:0}};
+await pageD.waitForFunction(()=>/332545/.test(document.querySelector('#testResults').textContent),null,WAIT);
+const stored=await txt(pageD,'testResults');
+assert.match(stored,/Radio: passed, 15 frames received, 0 errors \(run 332545, done\/complete\)/);
+assert.match(stored,/Wi-Fi: passed, 117 frames received, 0 errors \(run 610475, done\/complete\)/);
+checks.push('stored results report each medium\'s verdict with its frame and error counts and run id');
+D.tests={...D.tests,sik:{run:332545,state:'done',reason:'complete',transport:'sik',pair_pass:false,local_pass:true,received:10,errors:2}};
+await pageD.waitForFunction(()=>/not passed/.test(document.querySelector('#testResults').textContent),null,WAIT);
+const partial=await txt(pageD,'testResults');
+assert.match(partial,/Radio: not passed, 10 frames received, 2 errors \(run 332545, done\/complete\)/);
+assert(!/Radio: passed/.test(partial),'a stored pair failure was reported as a pass: '+partial);
+assert.match(partial,/Wi-Fi: passed, 117 frames received/);
+checks.push('a stored pair failure reads as not passed with its own counters, never as a pass');
+
+// 9c. The test warning says what runs and what it does not change; cancelling sends nothing.
+await pageD.locator('#takeControl').click();
+await pageD.waitForFunction(()=>document.querySelector('#controlState').textContent==='You control this instrument',null,WAIT);
+await pageD.locator('#testWifi').click();
+assert(!await pageD.locator('#confirmSection').isHidden());
+assert.equal(await txt(pageD,'confirmHeading'),'Confirm quick test on Wi-Fi');
+const testWarning=await txt(pageD,'confirmWarning');
+assert.match(testWarning,/Both instruments transmit and count/);
+assert.match(testWarning,/current route stays Wi-Fi/);
+assert.equal(await txt(pageD,'confirmSwitch'),'Run the quick test');
+assert.equal(await pageD.evaluate(()=>document.activeElement.id),'confirmSwitch');
+assert.equal(testPosts().length,0);
+await pageD.locator('#cancelConfirm').click();
+assert(await pageD.locator('#confirmSection').isHidden());
+assert.match(await txt(pageD,'message'),/Nothing was sent/);
+await pageD.waitForTimeout(300);
+assert.equal(testPosts().length,0,'cancelling the test warning still submitted a request');
+assert.equal(await txt(pageD,'selectedRoute'),'Wi-Fi');
+checks.push('the test warning names both counting instruments and the unchanged route, and cancelling sends nothing');
+
+// 9d. Confirming a clean Wi-Fi test: one request, no profile, no route change.
+await pageD.locator('#testWifi').click();await pageD.locator('#confirmSwitch').click();
+await pageD.waitForFunction(()=>document.querySelector('#operationState').textContent.startsWith('Preparing the tested link on Wi-Fi'),null,WAIT);
+assert.equal(testPosts().length,1,'a quick test was submitted more than once');
+const testBody=testPosts()[0].data;
+assert.deepEqual(Object.keys(testBody).sort(),['confirm','id','op','revision','transport']);
+assert.equal(testBody.op,'link.test');assert.equal(testBody.transport,'wifi');assert.equal(testBody.confirm,true);
+assert.equal(testBody.revision,7);assert(ID.test(testBody.id));
+assert.equal(testPosts()[0].auth,'Bearer '+'a'.repeat(32));
+assert.equal(await txt(pageD,'selectedRoute'),'Wi-Fi');
+assert(await pageD.locator('#confirmSection').isHidden());
+assert(!await claimsPair(pageD),'a queued test claimed the pair switched');
+checks.push('confirming the test warning posts exactly one link.test with a fresh 32-hex id, the fixture revision and no profile');
+D.operation={...D.operation,state:'running'};
+await pageD.waitForFunction(()=>document.querySelector('#operationState').textContent==='Running the paired quick test on Wi-Fi. Corrections are paused while it runs.',null,WAIT);
+assert.equal(await txt(pageD,'selectedRoute'),'Wi-Fi');
+assert(!await claimsPair(pageD),'a running test claimed the route changed');
+D.operation={...D.operation,state:'succeeded',phase_remaining_ms:0};
+await pageD.waitForFunction(()=>document.querySelector('#operationState').textContent==='Quick test passed on Wi-Fi. The selected route is unchanged.',null,WAIT);
+assert.equal(await txt(pageD,'selectedRoute'),'Wi-Fi');
+assert.equal(await txt(pageD,'wifiState'),'Selected');
+assert.equal(await pageD.locator('#radioCard').getAttribute('data-selected'),'false');
+assert.equal(testPosts().length,1);
+checks.push('the test advances preparing/running/passed while the selected route stays Wi-Fi');
+
+// 9e. Injected faults are named on the radio test; a refused test is reported as unavailable.
+D.refuse='test_operation_not_available';
+await pageD.locator('#testInjected').check();
+await pageD.locator('#testRadio').click();
+assert.match(await txt(pageD,'confirmWarning'),/dropped and corrupted/);
+await pageD.locator('#confirmSwitch').click();
+await pageD.waitForFunction(()=>document.querySelector('#message').textContent.includes('not available'),null,WAIT);
+assert.equal(testPosts().length,2);
+const injectedBody=testPosts()[1].data;
+assert.deepEqual(Object.keys(injectedBody).sort(),['confirm','id','op','profile','revision','transport']);
+assert.equal(injectedBody.op,'link.test');assert.equal(injectedBody.transport,'sik');assert.equal(injectedBody.profile,'injected');
+assert.equal(injectedBody.confirm,true);assert.equal(injectedBody.revision,7);assert(ID.test(injectedBody.id));
+assert.match(await txt(pageD,'message'),/not available in this firmware/);
+assert.equal(await txt(pageD,'selectedRoute'),'Wi-Fi');
+assert.equal(await txt(pageD,'operationState'),'Quick test passed on Wi-Fi. The selected route is unchanged.','a refused test started an operation');
+checks.push('the injected checkbox names the injected profile on the radio test, and a refused test reads as unavailable with the route unchanged');
+
+// 9f. A running test counts down a minute of window; the bar follows it.
+D.operation={id:'',tag:0,kind:'test',transport:'wifi',previous_transport:'wifi',state:'running',committed:false,coordinator:false,phase_remaining_ms:59000,reason:''};
+await pageD.waitForFunction(()=>/up to \d+ s left/.test(document.querySelector('#operationDetail').textContent),null,WAIT);
+assert.equal(await txt(pageD,'operationState'),'Running the paired quick test on Wi-Fi. Corrections are paused while it runs.');
+const minutesLeft=Number((await txt(pageD,'operationDetail')).match(/up to (\d+) s left/)[1]);
+assert(minutesLeft>=55&&minutesLeft<=60,`the phase text does not report about a minute left: ${minutesLeft} s`);
+const barStart=await pageD.locator('#operationProgress').evaluate(n=>Number(n.value));
+assert(barStart<=5,`the phase bar is not nearly empty with a minute left: ${barStart}`);
+D.operation={...D.operation,phase_remaining_ms:1000};
+await pageD.waitForFunction(()=>document.querySelector('#operationProgress').value>=90,null,WAIT);
+assert.match(await txt(pageD,'operationDetail'),/up to 1 s left in this phase/);
+const barEnd=await pageD.locator('#operationProgress').evaluate(n=>Number(n.value));
+assert(barEnd>=95&&barEnd>barStart,`the phase bar did not fill as the test ran out: ${barStart} -> ${barEnd}`);
+checks.push('a running test shows about a minute left with a nearly empty bar that fills to nearly full as it runs out');
+
+// 9g. The three test failures are told apart, and none of them is a pass or a route change.
+D.operation={...D.operation,state:'failed',phase_remaining_ms:0,reason:'test_unavailable'};
+await pageD.waitForFunction(()=>document.querySelector('#operationState').textContent.startsWith('The quick test could not start'),null,WAIT);
+const unavailable=await txt(pageD,'operationState');
+assert.match(unavailable,/could not start on Wi-Fi/);
+assert.match(unavailable,/Nothing was tested/);
+assert.equal(await pageD.locator('#operationState').getAttribute('data-tone'),'bad');
+assert.equal(await txt(pageD,'selectedRoute'),'Wi-Fi');
+D.operation={...D.operation,reason:'peer_unreachable'};
+await pageD.waitForFunction(()=>document.querySelector('#operationState').textContent.includes('ended without the other instrument'),null,WAIT);
+const unreachable=await txt(pageD,'operationState');
+assert.match(unreachable,/ended without the other instrument reporting its own counters/);
+assert.match(unreachable,/not a pass/);
+assert(!/Nothing was tested/.test(unreachable),'a peer that never reported was described as a test that never started');
+assert.equal(await txt(pageD,'selectedRoute'),'Wi-Fi');
+D.operation={...D.operation,reason:'counter_mismatch'};
+await pageD.waitForFunction(()=>document.querySelector('#operationState').textContent.includes('counter_mismatch'),null,WAIT);
+const other=await txt(pageD,'operationState');
+assert.match(other,/did not pass on Wi-Fi/);
+assert.match(other,/unchanged/);
+assert(!/could not start|without the other instrument/.test(other),'an ordinary failure reused the copy of an unavailable or peerless test');
+assert.equal(await pageD.locator('#operationState').getAttribute('data-tone'),'bad');
+assert.equal(await txt(pageD,'selectedRoute'),'Wi-Fi');
+checks.push('test_unavailable, peer_unreachable and any other reason read distinctly and leave Wi-Fi selected');
+
+// 9h. A running test survives a takeover: the page that lost control keeps reading it and sends nothing.
+const Q=fixture({revision:5}),logQ=[];
+const contextQ1=await browser.newContext({viewport:{width:1000,height:900}}),contextQ2=await browser.newContext({viewport:{width:1000,height:900}});
+const pageQ1=await contextQ1.newPage(),pageQ2=await contextQ2.newPage();
+pageQ1.on('pageerror',e=>errors.push('test-takeover-1: '+e.message));pageQ2.on('pageerror',e=>errors.push('test-takeover-2: '+e.message));
+await contextQ1.route('**/*',handler(Q,'first',logQ));await contextQ2.route('**/*',handler(Q,'second',logQ));
+const firstTestPosts=()=>logQ.filter(p=>p.label==='first'&&p.path==='/api/v1/settings').length;
+const runningText='Running the paired quick test on Wi-Fi. Corrections are paused while it runs.';
+await pageQ1.goto('http://settings.test/settings');await live(pageQ1);
+await pageQ1.locator('#takeControl').click();
+await pageQ1.waitForFunction(()=>document.querySelector('#controlState').textContent==='You control this instrument',null,WAIT);
+await pageQ1.locator('#testWifi').click();await pageQ1.locator('#confirmSwitch').click();
+await pageQ1.waitForFunction(()=>document.querySelector('#operationState').textContent.startsWith('Preparing the tested link on Wi-Fi'),null,WAIT);
+Q.operation={...Q.operation,state:'running'};
+await pageQ1.waitForFunction(text=>document.querySelector('#operationState').textContent===text,runningText,WAIT);
+assert.equal(firstTestPosts(),1);
+await pageQ2.goto('http://settings.test/settings');await live(pageQ2);
+await pageQ2.locator('#takeControl').click();
+await pageQ2.waitForFunction(()=>document.querySelector('#controlState').textContent==='You control this instrument',null,WAIT);
+await pageQ1.waitForFunction(()=>document.querySelector('#controlState').textContent==='View only · Take control',null,WAIT);
+assert.equal(await txt(pageQ1,'operationState'),runningText,'the running test vanished when control moved');
+assert(!await pageQ1.locator('#operationSection').isHidden());
+const testWrites=(await writes(pageQ1)).filter(w=>w.id==='testRadio'||w.id==='testWifi');
+assert.equal(testWrites.length,2);
+assert(testWrites.every(w=>w.disabled),'a view-only page could still start another test');
+await pageQ1.locator('#testWifi').dispatchEvent('click');
+await pageQ1.locator('#confirmSwitch').dispatchEvent('click');
+await pageQ1.waitForTimeout(1200);
+assert(await pageQ1.locator('#confirmSection').isHidden());
+assert.equal(firstTestPosts(),1,'the invalidated page submitted another test');
+checks.push('a takeover left the running test on screen, the earlier page view only and unable to start another');
+await pageQ1.reload();await live(pageQ1);
+await pageQ1.waitForFunction(text=>document.querySelector('#operationState').textContent===text,runningText,WAIT);
+assert.match(await txt(pageQ1,'operationOwner'),/only observes/);
+assert.equal(firstTestPosts(),1,'reloading the observing page resubmitted the running test');
+assert.equal(await txt(pageQ1,'message'),'');
+checks.push('reloading the page that lost control retrieves the same running test with no request of its own');
+await contextD.close();await contextQ1.close();await contextQ2.close();
+
+// 10. Layout, keyboard and no PIN.
 await page.setViewportSize({width:1200,height:1000});
 F.operation=null;F.selected='wifi';F.candidate=null;
 await page.waitForFunction(()=>document.querySelector('#operationSection').hidden,null,WAIT);
@@ -348,5 +529,5 @@ checks.push('390 px with 200% text without horizontal overflow');
 
 assert.deepEqual(errors,[]);
 fs.writeFileSync(path.join(out,'settings-browser.json'),JSON.stringify({result:'PASS',browser:await browser.version(),checks},null,2));
-console.log('PASS: settings page states, guarded switch, refusals, reload, stream loss, takeover, both roles, layout and no-PIN');
+console.log('PASS: settings page states, guarded switch, refusals, reload, stream loss, takeover, both roles, quick tests, layout and no-PIN');
 }finally{await browser.close()}})().catch(e=>{console.error(e);process.exitCode=1});

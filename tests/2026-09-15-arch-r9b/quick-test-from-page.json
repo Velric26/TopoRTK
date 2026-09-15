@@ -1,0 +1,70 @@
+{
+  "cases": [
+    {
+      "name": "results on load",
+      "expectation": "per-medium stored results",
+      "observed": "Latest quick tests · Radio: not passed, 12 frames received, 0 sent, 0 errors (run 978395, done/complete) · Wi-Fi: not passed, 0 frames received, 0 sent, 0 errors (run 552315, failed/operation ended).",
+      "pass": true
+    },
+    {
+      "name": "warning describes the test and cancellation sends nothing",
+      "expectation": "warning mentions the run and the unchanged route; nothing starts",
+      "observed": "label=Run the quick test; warning=\"Run the paired quick test on Radio (SiK)? Both instruments transmit and count for about half a minute; correction work p…\"; operation section hidden=true; route Wi-Fi -> Wi-Fi",
+      "pass": true
+    },
+    {
+      "name": "a quick test driven from the page reports its outcome and changes nothing",
+      "expectation": "test copy with a verdict; selected route unchanged",
+      "observed": "final=\"Quick test passed on Wi-Fi. The selected route is unchanged.\"; route Wi-Fi -> Wi-Fi; results=\"Latest quick tests · Radio: not passed, 12 frames received, 0 sent, 0 errors (run 978395, done/complete) · Wi-Fi: passed, 117 frames received, 0 sent,\"",
+      "pass": true
+    }
+  ],
+  "steps": [
+    "PASS warning describes the test and cancellation sends nothing: label=Run the quick test; warning=\"Run the paired quick test on Radio (SiK)? Both instruments transmit and count for about half a minute; correction work p…\"; operation section hidden=true; route Wi-Fi -> Wi-Fi",
+    "PASS a quick test driven from the page reports its outcome and changes nothing: final=\"Quick test passed on Wi-Fi. The selected route is unchanged.\"; route Wi-Fi -> Wi-Fi; results=\"Latest quick tests · Radio: not passed, 12 frames received, 0 sent, 0 errors (run 978395, done/complete) · Wi-Fi: passed, 117 frames received, 0 sent,\""
+  ],
+  "operation_observations": [
+    "Running the paired quick test on Wi-Fi. Corrections are paused while it runs. | State running · reason none · up to 60 s left in this phase · request ",
+    "Running the paired quick test on Wi-Fi. Corrections are paused while it runs. | State running · reason none · up to 59 s left in this phase · request ",
+    "Running the paired quick test on Wi-Fi. Corrections are paused while it runs. | State running · reason none · up to 58 s left in this phase · request ",
+    "Running the paired quick test on Wi-Fi. Corrections are paused while it runs. | State running · reason none · up to 57 s left in this phase · request ",
+    "Running the paired quick test on Wi-Fi. Corrections are paused while it runs. | State running · reason none · up to 56 s left in this phase · request ",
+    "Running the paired quick test on Wi-Fi. Corrections are paused while it runs. | State running · reason none · up to 55 s left in this phase · request ",
+    "Running the paired quick test on Wi-Fi. Corrections are paused while it runs. | State running · reason none · up to 54 s left in this phase · request ",
+    "Running the paired quick test on Wi-Fi. Corrections are paused while it runs. | State running · reason none · up to 53 s left in this phase · request ",
+    "Running the paired quick test on Wi-Fi. Corrections are paused while it runs. | State running · reason none · up to 52 s left in this phase · request ",
+    "Running the paired quick test on Wi-Fi. Corrections are paused while it runs. | State running · reason none · up to 51 s left in this phase · request ",
+    "Running the paired quick test on Wi-Fi. Corrections are paused while it runs. | State running · reason none · up to 50 s left in this phase · request ",
+    "Running the paired quick test on Wi-Fi. Corrections are paused while it runs. | State running · reason none · up to 49 s left in this phase · request ",
+    "Running the paired quick test on Wi-Fi. Corrections are paused while it runs. | State running · reason none · up to 48 s left in this phase · request ",
+    "Running the paired quick test on Wi-Fi. Corrections are paused while it runs. | State running · reason none · up to 47 s left in this phase · request ",
+    "Running the paired quick test on Wi-Fi. Corrections are paused while it runs. | State running · reason none · up to 46 s left in this phase · request ",
+    "Running the paired quick test on Wi-Fi. Corrections are paused while it runs. | State running · reason none · up to 45 s left in this phase · request ",
+    "Running the paired quick test on Wi-Fi. Corrections are paused while it runs. | State running · reason none · up to 44 s left in this phase · request ",
+    "Running the paired quick test on Wi-Fi. Corrections are paused while it runs. | State running · reason none · up to 43 s left in this phase · request ",
+    "Running the paired quick test on Wi-Fi. Corrections are paused while it runs. | State running · reason none · up to 42 s left in this phase · request ",
+    "Running the paired quick test on Wi-Fi. Corrections are paused while it runs. | State running · reason none · up to 41 s left in this phase · request ",
+    "Running the paired quick test on Wi-Fi. Corrections are paused while it runs. | State running · reason none · up to 40 s left in this phase · request ",
+    "Running the paired quick test on Wi-Fi. Corrections are paused while it runs. | State running · reason none · up to 39 s left in this phase · request ",
+    "Running the paired quick test on Wi-Fi. Corrections are paused while it runs. | State running · reason none · up to 38 s left in this phase · request ",
+    "Running the paired quick test on Wi-Fi. Corrections are paused while it runs. | State running · reason none · up to 37 s left in this phase · request ",
+    "Running the paired quick test on Wi-Fi. Corrections are paused while it runs. | State running · reason none · up to 36 s left in this phase · request ",
+    "Running the paired quick test on Wi-Fi. Corrections are paused while it runs. | State running · reason none · up to 35 s left in this phase · request ",
+    "Running the paired quick test on Wi-Fi. Corrections are paused while it runs. | State running · reason none · up to 34 s left in this phase · request ",
+    "Running the paired quick test on Wi-Fi. Corrections are paused while it runs. | State running · reason none · up to 33 s left in this phase · request ",
+    "Running the paired quick test on Wi-Fi. Corrections are paused while it runs. | State running · reason none · up to 32 s left in this phase · request ",
+    "Running the paired quick test on Wi-Fi. Corrections are paused while it runs. | State running · reason none · up to 31 s left in this phase · request ",
+    "Running the paired quick test on Wi-Fi. Corrections are paused while it runs. | State running · reason none · up to 30 s left in this phase · request ",
+    "Running the paired quick test on Wi-Fi. Corrections are paused while it runs. | State running · reason none · up to 29 s left in this phase · request ",
+    "Running the paired quick test on Wi-Fi. Corrections are paused while it runs. | State running · reason none · up to 28 s left in this phase · request ",
+    "Running the paired quick test on Wi-Fi. Corrections are paused while it runs. | State running · reason none · up to 27 s left in this phase · request ",
+    "Running the paired quick test on Wi-Fi. Corrections are paused while it runs. | State running · reason none · up to 26 s left in this phase · request ",
+    "Running the paired quick test on Wi-Fi. Corrections are paused while it runs. | State running · reason none · up to 25 s left in this phase · request ",
+    "Running the paired quick test on Wi-Fi. Corrections are paused while it runs. | State running · reason none · up to 24 s left in this phase · request ",
+    "Quick test passed on Wi-Fi. The selected route is unchanged. | State succeeded · reason applied · request 10"
+  ],
+  "errors": [
+    "Failed to load resource: the server responded with a status of 404 (Not Found)"
+  ],
+  "result": "PASS"
+}

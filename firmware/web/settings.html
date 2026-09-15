@@ -13,7 +13,16 @@
 <div class="choice" id="radioCard"><h3>Radio (SiK)</h3><p id="radioState" class="chip">Unknown</p><button id="selectRadio" data-write>Switch to Radio</button></div>
 <div class="choice" id="wifiCard"><h3>Wi-Fi</h3><p id="wifiState" class="chip">Unknown</p><button id="selectWifi" data-write>Switch to Wi-Fi</button></div>
 </div>
-<p class="help" id="lastTests">Paired tests: not run yet. Link tests arrive with the autonomous test checkpoint.</p>
+<p class="help" id="lastTests">Paired tests: not run yet.</p>
+</section>
+
+<section>
+<h2>Quick tests</h2>
+<p class="muted">A quick test asks both instruments to exchange a finite burst on one medium and reports what each of them counted. It runs for about half a minute, pauses correction work while it runs, and never keeps or selects the medium it tests. Generated test frames are only exchanged between the two instruments — they are never sent to the survey receiver.</p>
+<label class="check"><input type="checkbox" id="testInjected"> Inject faults (radio only) — the radio test then drops and corrupts part of its own traffic to prove the counters notice</label>
+<button id="testRadio" data-write>Test Radio (SiK)</button>
+<button id="testWifi" data-write>Test Wi-Fi</button>
+<p class="help" id="testResults">No quick test has run yet.</p>
 </section>
 
 <section id="confirmSection" hidden>
@@ -58,7 +67,7 @@ const SESSION = 1000, REQUEST_TIMEOUT = 3500;
 // states mean one is actually in flight; a finished outcome must not lock the page.
 const IN_FLIGHT = ['negotiating', 'running', 'restoring'];
 const inFlight = () => !!state?.operation && IN_FLIGHT.includes(state.operation.state);
-let state = null, fresh = false, lastGood = 0, requesting = false, confirmTransport = null, sentTag = 0, sentRevision = null;
+let state = null, fresh = false, lastGood = 0, requesting = false, confirmAction = null, sentTag = 0, sentRevision = null;
 const MEDIA = { radio: 'sik', wifi: 'wifi' };
 const LABEL = { sik: 'Radio (SiK)', wifi: 'Wi-Fi' };
 
@@ -93,6 +102,11 @@ function controls() {
     $(id).disabled = locked() || active || state?.selected_transport === target;
     $(id).textContent = state?.selected_transport === target ? 'Selected' : 'Switch to ' + (media === 'radio' ? 'Radio' : 'Wi-Fi');
   }
+  for (const id of ['testRadio', 'testWifi']) {
+    $(id).disabled = locked() || active;
+    $(id).textContent = $(id).dataset.label || $(id).textContent;
+  }
+  $('testInjected').disabled = locked() || active;
   const mine = !!state?.operation && state.operation.tag && state.operation.tag === sentTag;
   $('cancelOperation').hidden = !active || !mine;
   $('cancelOperation').disabled = locked();
@@ -117,8 +131,20 @@ function render() {
   $('peerState').textContent = state.peer_connected ? 'Connected' : 'Not reachable';
   $('correctionsState').textContent = state.corrections_fresh ? 'Fresh' : 'Stale or waiting for a base reference';
   const tests = state.last_tests || {};
-  const describe = value => !value ? 'not run yet' : (value.pair_pass ? 'passed' : 'not passed');
+  // Results are the instrument's own stored reports, so they survive a reload and
+  // are what an operator reads after reconnecting.
+  const describe = value => {
+    if (!value) return 'not run yet';
+    const verdict = value.pair_pass ? 'passed' : 'not passed';
+    // The sender in a base-to-rover profile receives nothing, so both counters are
+    // shown; the word order keeps "N frames received" readable on its own.
+    const frames = Number.isFinite(value.received) ? ', ' + value.received + ' frames received' : '';
+    const sent = Number.isFinite(value.sent) ? ', ' + value.sent + ' sent' : '';
+    const errors = Number.isFinite(value.errors) ? ', ' + value.errors + ' errors' : '';
+    return verdict + frames + sent + errors + ' (run ' + value.run + ', ' + value.state + '/' + value.reason + ')';
+  };
   $('lastTests').textContent = 'Paired tests: Radio ' + describe(tests.sik) + ' · Wi-Fi ' + describe(tests.wifi) + '.';
+  $('testResults').textContent = 'Latest quick tests · Radio: ' + describe(tests.sik) + ' · Wi-Fi: ' + describe(tests.wifi) + '.';
   renderOperation();
   controls();
 }
@@ -157,12 +183,19 @@ function renderOperation() {
           : 'Request finished without changing the route (already selected).';
       tone = 'good';
       break;
-    case 'failed':
-      text = test
-        ? 'Quick test failed on ' + target + ' (' + (operation.reason || 'unknown reason') + '). The selected route is unchanged.'
-        : 'Switch failed (' + (operation.reason || 'unknown reason') + '). ' + previous + ' remains in use.';
+    case 'failed': {
+      // Two test outcomes are not link verdicts: a test that could not start and
+      // a test whose peer never reported.
+      const testFailure = {
+        test_unavailable: 'The quick test could not start on ' + target + ' — the instrument was busy, the medium was not available, or the requested profile is not offered there. Nothing was tested.',
+        peer_unreachable: 'The quick test on ' + target + ' ended without the other instrument reporting its own counters, so it is not a pass. Check that both instruments are powered, in range and on the same link.',
+      }[operation.reason];
+      text = !test
+        ? 'Switch failed (' + (operation.reason || 'unknown reason') + '). ' + previous + ' remains in use.'
+        : testFailure || ('Quick test did not pass on ' + target + ' (' + (operation.reason || 'unknown reason') + '). The selected route is unchanged.');
       tone = 'bad';
       break;
+    }
     case 'cancelled': text = 'Request cancelled. ' + previous + ' remains in use.'; break;
     case 'interrupted': text = 'The request was interrupted (restart or power loss), so its outcome is unconfirmed. Check the selected route above and retry if needed.'; tone = 'bad'; break;
     case 'recovery_required': text = 'Recovery required: the route could not be confirmed and readiness stays inhibited. Use the Link test page to select a medium locally on this instrument, then retry.'; tone = 'bad'; break;
@@ -172,7 +205,7 @@ function renderOperation() {
   $('operationState').dataset.tone = tone;
   $('operationHeading').textContent = operation.kind === 'test' ? 'Paired test' : 'Route switch';
   const remaining = operation.phase_remaining_ms || 0;
-  const window = operation.state === 'negotiating' ? 20000 : 10000;
+  const window = operation.kind === 'test' ? 60000 : operation.state === 'negotiating' ? 20000 : 10000;
   $('operationProgress').value = Math.max(0, Math.min(100, Math.round((1 - remaining / window) * 100)));
   $('operationDetail').textContent = 'State ' + operation.state + ' · reason ' + (operation.reason || 'none')
     + (remaining ? ' · up to ' + seconds(remaining) + ' s left in this phase' : '')
@@ -239,29 +272,60 @@ function refusalText(code) {
   }[code] || ('Request refused (' + code + ').');
 }
 
-$('selectRadio').onclick = () => ask(MEDIA.radio);
-$('selectWifi').onclick = () => ask(MEDIA.wifi);
-function ask(transport) {
+$('selectRadio').onclick = () => ask({ op: 'link.select', transport: MEDIA.radio, profile: 0 });
+$('selectWifi').onclick = () => ask({ op: 'link.select', transport: MEDIA.wifi, profile: 0 });
+$('testRadio').onclick = () => ask({ op: 'link.test', transport: MEDIA.radio, profile: $('testInjected').checked ? 1 : 0 });
+$('testWifi').onclick = () => ask({ op: 'link.test', transport: MEDIA.wifi, profile: 0 });
+
+function confirmText(action) {
+  const target = LABEL[action.transport] || action.transport;
+  if (action.op === 'link.test') {
+    // A test is not a switch: say what it does and what it does not change.
+    const faults = action.profile === 1 ? ' Some of its own frames are deliberately dropped and corrupted, so expect failures to be reported — that is the point of this profile.' : '';
+    return 'Run the paired quick test on ' + target + '? Both instruments transmit and count for about half a minute; correction work pauses while it runs, so collection should be idle and antennas should stay connected.'
+      + faults + ' The test keeps and selects nothing: the current route stays ' + (LABEL[state.selected_transport] || state.selected_transport) + '.';
+  }
+  const other = action.transport === 'sik' ? 'Wi-Fi' : 'Radio';
+  return 'Switch the pair to ' + target + '? Both instruments must reach each other on ' + target
+    + '; if they cannot, the pair returns to ' + other + '. Correction work pauses on both instruments'
+    + ' during the switch, so a Rover in the field loses corrections until it completes and collection'
+    + ' should be idle.';
+}
+
+function ask(action) {
   if (locked()) return;
-  confirmTransport = transport;
-  $('confirmHeading').textContent = 'Confirm switch to ' + (LABEL[transport] || transport);
-  $('confirmWarning').textContent = confirmWarning(transport);
+  confirmAction = action;
+  $('confirmHeading').textContent = (action.op === 'link.test' ? 'Confirm quick test on ' : 'Confirm switch to ')
+    + (LABEL[action.transport] || action.transport);
+  $('confirmWarning').textContent = confirmText(action);
+  $('confirmSwitch').textContent = action.op === 'link.test' ? 'Run the quick test' : 'Confirm switch';
   $('confirmSection').hidden = false;
   $('confirmSwitch').focus();
   controls();
 }
-$('cancelConfirm').onclick = () => { confirmTransport = null; $('confirmSection').hidden = true; };
+// Keeping the current route sends nothing at all.
+$('cancelConfirm').onclick = () => {
+  confirmAction = null;
+  $('confirmSection').hidden = true;
+  $('confirmSwitch').textContent = 'Confirm switch';
+  message('Nothing was sent; the pair is unchanged.');
+};
 
 $('confirmSwitch').onclick = async () => {
-  if (locked() || !confirmTransport || !state) return;
-  const transport = confirmTransport;
+  if (locked() || !confirmAction || !state) return;
+  const action = confirmAction;
   const id = randomId();
   const revision = state.revision;
   sentTag = tagFromHex(id); sentRevision = revision;
-  confirmTransport = null; $('confirmSection').hidden = true;
-  message('Sending the pair switch request…');
-  const result = await send('/api/v1/settings', { id, revision, op: 'link.select', transport, confirm: true });
-  if (result.ok) message('Request accepted and queued. The route above shows the outcome; a queued request is never a completed switch.');
+  confirmAction = null; $('confirmSection').hidden = true;
+  $('confirmSwitch').textContent = 'Confirm switch';
+  const body = { id, revision, op: action.op, transport: action.transport, confirm: true };
+  if (action.op === 'link.test' && action.profile === 1) body.profile = 'injected';
+  message(action.op === 'link.test' ? 'Sending the quick-test request…' : 'Sending the pair switch request…');
+  const result = await send('/api/v1/settings', body);
+  if (result.ok) message(action.op === 'link.test'
+    ? 'Request accepted. The test runs on the instrument; the results below appear when both sides have reported.'
+    : 'Request accepted and queued. The route above shows the outcome; a queued request is never a completed switch.');
   else {
     message(refusalText(result.code));
     if (result.code === 'stale_revision') sentTag = 0;
