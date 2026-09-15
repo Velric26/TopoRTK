@@ -37,6 +37,19 @@ void contact(int x, int y, int points=1, int elapsed=30) {
 void release() { contact(Wire.x, Wire.y, 0, 80); }
 void tap(int x,int y) { contact(x,y); release(); }
 
+// Navigation must leave the same visible page as a clean render, without
+// stale rows/buttons from its predecessor or repainting an unchanged page.
+void assert_clean_page(const char *preview_path = nullptr) {
+  if (preview_path) display->save(preview_path);
+  const auto navigated_pixels = display->pixels;
+  draw_static_screen();
+  draw_dynamic_screen();
+  assert(display->pixels == navigated_pixels);
+  const auto draws = display->draws;
+  draw_dynamic_screen();
+  assert(display->draws == draws);
+}
+
 int main() {
   // Same production observer: metadata/replayed epochs cannot hide an outage.
   auto msm=[](unsigned type,uint32_t epoch){std::vector<uint8_t> b(32);b[0]=0xd3;b[2]=26;b[3]=type>>4;b[4]=(type&15)<<4;b[5]=7;
@@ -95,52 +108,54 @@ int main() {
   auto bestnav=[](const std::string &body){const std::string payload="BESTNAVA,97,GPS,FINE,2435,432000000,0,0,18,16;"+body;
     char suffix[12];std::snprintf(suffix,sizeof(suffix),"*%08X",ascii_crc32(payload.c_str(),payload.c_str()+payload.size()));return "#"+payload+suffix;};
   HorizontalAccuracyData observed;
+  GnssParseStats parse_stats;
   const auto fixed=bestnav("SOL_COMPUTED,NARROW_INT,19.4,-99.1,2234.0,-30.0,WGS84,0.01,0.02,0.03,\"7\",1.200,0.000,30,25,25,0");
-  assert(parse_bestnav_accuracy(fixed.c_str(),observed)&&observed.position_valid&&observed.rtk_fixed);
+  assert(parse_bestnav_accuracy(fixed.c_str(),0,observed,parse_stats)&&observed.position_valid&&observed.rtk_fixed);
   assert(observed.position.height==2204 && observed.epoch==2435ULL*604800000+432000000 && observed.solution_station==7 && observed.differential_age_ms==1200);
-  assert(parse_bestnav_accuracy(bestnav("SOL_COMPUTED,NARROW_INT,19.4,-99.1,2234,-30,WGS84,0.01,0.02,0.03,\"7\",0.0,0.0,30,25").c_str(),observed)&&!observed.position_valid);
-  assert(parse_bestnav_accuracy(bestnav("SOL_COMPUTED,NARROW_INT,19.4,-99.1,2234,-30,WGS84,,0.02,0.03,\"7\",1.2,0.0,30,25").c_str(),observed)&&!observed.position_valid);
-  auto corrupt=fixed;corrupt.back()=corrupt.back()=='0'?'1':'0';assert(!parse_bestnav_accuracy(corrupt.c_str(),observed));
+  assert(parse_bestnav_accuracy(bestnav("SOL_COMPUTED,NARROW_INT,19.4,-99.1,2234,-30,WGS84,0.01,0.02,0.03,\"7\",0.0,0.0,30,25").c_str(),0,observed,parse_stats)&&!observed.position_valid);
+  assert(parse_bestnav_accuracy(bestnav("SOL_COMPUTED,NARROW_INT,19.4,-99.1,2234,-30,WGS84,,0.02,0.03,\"7\",1.2,0.0,30,25").c_str(),0,observed,parse_stats)&&!observed.position_valid);
+  auto corrupt=fixed;corrupt.back()=corrupt.back()=='0'?'1':'0';assert(!parse_bestnav_accuracy(corrupt.c_str(),0,observed,parse_stats));assert(parse_stats.checksum_errors==1);
   device_config.role=DeviceRole::kBase;base_settings.fixed=1;base_settings.latitude=19.4;base_settings.longitude=-99.1;base_settings.height=2201.5;
   assert(std::string(active_profile_command(1))=="MODE BASE 19.40000000000 -99.10000000000 2201.5000");
   base_settings=BaseSettings{};
   std::puts("PASS: BESTNAV epoch, ellipsoidal height, correction age/base ID, invalid data and saved fixed-base command");
+  ui_module_begin();
   display_ready = touch_ready = true;
   version_ok = gnss_startup_complete = true;
   load_config();
-  setup_backlight();
+  setup_backlight(device_config.brightness, host_now);
   assert(backlight_pwm_ready && ledcReadFreq(0) == 5000);
-  assert(automatic_brightness_target(host_now) == 255); // No clock: full brightness.
+  assert(automatic_brightness_target(host_now, latest_gnss_time) == 255); // No clock: full brightness.
   latest_gnss_time.valid = true;
   latest_gnss_time.received_ms = host_now;
   latest_gnss_time.year = 2026; latest_gnss_time.month = 9; latest_gnss_time.day = 9;
   latest_gnss_time.hour = 5; latest_gnss_time.minute = 18; // 23:18 UTC-6, previous day.
-  assert(automatic_brightness_target(host_now) == board::kNightBacklightDuty);
+  assert(automatic_brightness_target(host_now, latest_gnss_time) == board::kNightBacklightDuty);
   uint16_t year; uint8_t month, day, hour, minute, second;
-  assert(local_time_utc_minus_6(host_now, year, month, day, hour, minute, second));
+  assert(local_time_utc_minus_6(host_now, latest_gnss_time, year, month, day, hour, minute, second));
   assert(day == 8 && hour == 23 && minute == 18);
   latest_gnss_time.hour = 18; // Noon local.
-  assert(automatic_brightness_target(host_now) == 255);
+  assert(automatic_brightness_target(host_now, latest_gnss_time) == 255);
   latest_gnss_time.hour = 11; latest_gnss_time.minute = 0; // Dawn 05:00 local.
-  assert(automatic_brightness_target(host_now) == board::kNightBacklightDuty);
+  assert(automatic_brightness_target(host_now, latest_gnss_time) == board::kNightBacklightDuty);
   latest_gnss_time.hour = 12; // Mid-dawn transition.
-  assert(automatic_brightness_target(host_now) > board::kNightBacklightDuty);
-  assert(automatic_brightness_target(host_now) < 255);
-  assert(automatic_brightness_target(host_now + 3000) == 255); // Stale clock.
+  assert(automatic_brightness_target(host_now, latest_gnss_time) > board::kNightBacklightDuty);
+  assert(automatic_brightness_target(host_now, latest_gnss_time) < 255);
+  assert(automatic_brightness_target(host_now + 3000, latest_gnss_time) == 255); // Stale clock.
   latest_gnss_time = GnssTimeData{};
   brightness_mode = BrightnessMode::kNight;
-  for (int tick=0; tick<75; ++tick) { host_now += 20; service_brightness(); }
+  for (int tick=0; tick<75; ++tick) { host_now += 20; service_brightness(host_now, brightness_mode, latest_gnss_time); }
   assert(backlight_duty == board::kNightBacklightDuty && ledcRead(0) == board::kNightBacklightDuty);
   brightness_mode = BrightnessMode::kDay;
-  host_now += 500; service_brightness(); // A busy loop must catch up, not move one step.
+  host_now += 500; service_brightness(host_now, brightness_mode, latest_gnss_time); // A busy loop must catch up, not move one step.
   assert(backlight_duty > 100 && backlight_duty < 255);
-  host_now += 1000; service_brightness();
+  host_now += 1000; service_brightness(host_now, brightness_mode, latest_gnss_time);
   assert(backlight_duty == 255 && ledcRead(0) == 256);
   brightness_mode = BrightnessMode::kNight;
-  setup_backlight(); // Saved Night starts dim, without a full-brightness flash.
+  setup_backlight(brightness_mode, host_now); // Saved Night starts dim, without a full-brightness flash.
   assert(backlight_duty == board::kNightBacklightDuty && ledcRead(0) == board::kNightBacklightDuty);
   brightness_mode = BrightnessMode::kAutomatic;
-  setup_backlight();
+  setup_backlight(brightness_mode, host_now);
   assert(!is_base());
   // Failed NVS writes must leave role, Wi-Fi, and displayed brightness unchanged.
   preferences.fail = true;
@@ -168,8 +183,8 @@ int main() {
   wifi_peer_known = true;
   wifi_last_peer_ms = rtcm_last_rx_ms = host_now;
   select_role(DeviceRole::kRover);
-  assert(!wifi_peer_known && !wifi_last_peer_ms && !rtcm_last_rx_ms);
-  assert(WiFi.selected_mode == WIFI_AP_STA);
+  assert(!wifi_peer_known && !wifi_last_peer_ms && !rtcm_last_rx_ms); // Role change resets link state.
+  assert(WiFi.selected_mode == WIFI_AP_STA); // Rover: station plus its phone AP.
   complete_profile();
   apply_unit_profile();
   service_profile();
@@ -273,14 +288,28 @@ int main() {
   assert(!system_ready(host_now));
   assert(encode_config(device_config)==saved_config && gnss.output==receiver_commands);
   host_diagnostic_busy=false;
-  change_page(ScreenPage::kWifiDetails); tap(150,402);
-  assert(current_page == ScreenPage::kPhone && phone_key_shown_ms == 0);
+  change_page(ScreenPage::kWifiDetails); tap(238,402); tap(238,402); // Phone is Link page 3.
+  assert(current_page == ScreenPage::kWifiDetails && ui_detail_page() == 2 && phone_key_shown_ms == 0);
+  assert_clean_page(".pio/ui-link-phone.ppm");
   tap(75,236); assert(phone_key_shown_ms);
+  assert_clean_page(".pio/ui-link-phone-show.ppm");
   host_now += 30001; draw_dynamic_screen(); assert(!phone_key_shown_ms);
+  assert_clean_page();
+  const auto hidden_phone = display->pixels;
+  tap(75,236); tap(238,402); tap(82,402); // NEXT away, PREV back hides the key.
+  assert(display->pixels == hidden_phone && original_key == rover_ap_password());
   tap(235,236); assert(phone_key_confirm_ms && original_key == rover_ap_password());
+  assert_clean_page(".pio/ui-link-phone-confirm.ppm");
+  tap(82,402); tap(238,402); // PREV away, NEXT back cancels replacement.
+  assert(display->pixels == hidden_phone && original_key == rover_ap_password());
+  tap(235,236);
+  assert(original_key == rover_ap_password()); // Must require a new confirmation.
   tap(200,455); // Leaving cancels the pending replacement.
-  tap(150,402); tap(235,236);
+  tap(238,402); tap(238,402); tap(235,236);
+  assert(original_key == rover_ap_password()); // Active-tab reset also cancelled it.
   host_now += 10001; draw_dynamic_screen(); assert(!phone_key_confirm_ms);
+  assert_clean_page();
+  assert(display->pixels == hidden_phone);
   tap(235,236); tap(235,236);
   assert(original_key != rover_ap_password() && !phone_key_shown_ms && !phone_key_confirm_ms);
   assert(encode_config(device_config) == saved_config && gnss.output == receiver_commands && WiFi.linked);
@@ -321,17 +350,38 @@ int main() {
   debugmode::Log bounded;bounded.clear(0);for(unsigned i=0;i<1000;++i)bounded.push(debugmode::Channel::Event,"test",0);assert(bounded.size()==8&&bounded.throttled==992);
   for(unsigned t=1000;t<10000;t+=1000)for(unsigned i=0;i<8;++i)bounded.push(debugmode::Channel::Event,"line",t);assert(bounded.size()==32&&bounded.overwritten>0);
   std::puts("PASS: Debug default-on at boot, touchscreen toggle during receiver setup, persistent session over time, disable clears capture, bounded capture and unchanged COM2 output");
-  for (unsigned page=0; page<6; ++page) {
-    current_page=static_cast<ScreenPage>(page); pending_role=device_config.role;
-    draw_static_screen(); draw_dynamic_screen();
-    const auto draws=display->draws;
-    draw_dynamic_screen();
-    assert(display->draws==draws); // No repaint when nothing changed.
-    const std::string path=".pio/ui-"+std::to_string(page)+".ppm";
-    display->save(path.c_str());
+  const ScreenPage pages[] = {ScreenPage::kMain, ScreenPage::kGpsDetails,
+                             ScreenPage::kWifiDetails, ScreenPage::kSettings, ScreenPage::kDebug};
+  for (ScreenPage page : pages) {
+    change_page(page);
+    const std::string path=".pio/ui-"+std::to_string(static_cast<unsigned>(page))+".ppm";
+    assert_clean_page(path.c_str());
   }
-  current_page=ScreenPage::kSettings;
-  draw_static_screen(); draw_dynamic_screen();
+  change_page(ScreenPage::kGpsDetails);
+  assert(ui_detail_page() == 0);
+  assert_clean_page();
+  tap(160,402); // The single GPS button flips between its two pages.
+  assert(ui_detail_page() == 1);
+  assert_clean_page();
+  tap(160,402);
+  assert(ui_detail_page() == 0);
+  assert_clean_page();
+  change_page(ScreenPage::kWifiDetails);
+  // Exercise all six directed transitions, including wraparound. The old
+  // standalone Phone preview could not detect rows painted over key controls.
+  const uint8_t link_pages[] = {1, 2, 0, 2, 1, 0};
+  for (unsigned step=0; step<6; ++step) {
+    tap(step < 3 ? 238 : 82,402);
+    assert(ui_detail_page() == link_pages[step]);
+    const std::string path=".pio/ui-link-"+std::to_string(ui_detail_page())+".ppm";
+    assert_clean_page(path.c_str());
+  }
+  const auto before_unavailable_display = display->draws;
+  display_ready = false;
+  tap(238,402);
+  assert(display->draws == before_unavailable_display);
+  display_ready = true;
+  change_page(ScreenPage::kSettings);
   pending_role=DeviceRole::kBase;
   draw_dynamic_screen(); display->save(".pio/ui-base-selection.ppm");
   std::puts("PASS: production profile, NVS failures/reload, reset grace, touch actions/cancellation, UI bounds and repaint cache");

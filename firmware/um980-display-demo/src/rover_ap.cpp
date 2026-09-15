@@ -90,7 +90,10 @@ void start_rover_ap(char unit) {
   begin_ap();
 }
 void stop_rover_ap() {
-  if (enabled) WiFi.enableAP(false);
+  // Never touches the WiFi mode: an explicit WiFi.mode() call owns it, and
+  // station/AP mode transitions belong to the network lifecycle, not the
+  // phone AP helper. Only the phone AP capability itself is disabled.
+  if (enabled) WiFi.softAPdisconnect(true);
   enabled = ready = false;
   password[0] = '\0'; failure = "";
 }

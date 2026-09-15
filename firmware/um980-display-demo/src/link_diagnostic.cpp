@@ -1,4 +1,6 @@
 #include "link_diagnostic.h"
+#include "radio_transport.h"
+#include "wifi_transport.h"
 #include "debug_service.h"
 #include "peer_update.h"
 #include "ota_service.h"
@@ -9,15 +11,12 @@
 #include <esp_system.h>
 #include "survey_service.h"
 #include <ArduinoJson.h>
-#include <HardwareSerial.h>
 #include <Preferences.h>
-#include <WiFiUdp.h>
 #include <freertos/queue.h>
 
 namespace {
-linktest::Engine engine;HardwareSerial radio(2);WiFiUDP udp;
+linktest::Engine engine;
 correctiontest::Engine pair_engine;bool paired=false;
-peer_wire::Stream live_wire;
 bool live_rejoin=false;
 correction::Bridge live;char route_error[96]={};
 uint32_t live_tx_wait=0,live_output_rejected=0,live_short_writes=0;
@@ -26,7 +25,7 @@ void live_json(JsonObject d){
   d["submitted"]=live.submitted;d["envelopes"]=live.envelopes;d["received"]=live.complete;
   d["station_rejected"]=live.station_rejected;d["queue_pending"]=live.queue().size();d["queue_expired"]=live.queue().expired;
   d["queue_overflow"]=live.queue().overflow;d["queue_replaced"]=live.queue().replaced;d["sender_expired"]=live.sender_expired();
-  d["wire_errors"]=live.stats().wire_errors+live_wire.wire_errors;d["assembly_expired"]=live.stats().expired;d["wrong_session"]=live.stats().wrong_session;
+  d["wire_errors"]=live.stats().wire_errors;d["assembly_expired"]=live.stats().expired;d["wrong_session"]=live.stats().wrong_session;
   d["replays"]=live.stats().replays;d["rtcm_errors"]=live.stats().rtcm_errors;d["tx_wait"]=live_tx_wait;
   d["output_rejected"]=live_output_rejected;d["short_writes"]=live_short_writes;d["workspace_bytes"]=sizeof(live);
   const auto output=correction_output_stats();auto out=d.createNestedObject("output");out["forwarded"]=output.forwarded;
@@ -34,36 +33,17 @@ void live_json(JsonObject d){
 }
 bool test_busy(){return paired?pair_engine.busy():engine.busy();}
 bool peer_received(){return paired?pair_engine.peer_received:engine.peer_result;}
-bool radio_started=false,udp_started=false,locked=false,persisted=false,persisted_peer=false;
-uint32_t probe_start=0;uint8_t probe_phase=0;char probe_text[256]={};size_t probe_size=0;
-struct UartErrors{uint32_t fifo=0,buffer=0,frame=0,parity=0,brk=0;};
-portMUX_TYPE uart_guard=portMUX_INITIALIZER_UNLOCKED;
-UartErrors uart_errors;bool uart_monitoring=false;
-struct UartWork{uint32_t rx_bytes=0,tx_bytes=0,rx_peak=0,service_gap=0,tx_wait=0,short_writes=0,last_service=0;bool observed=false;}uart_work;
-void radio_error(hardwareSerial_error_t error){
-  // HardwareSerial event task: counters only, no UART reads, JSON or logging here.
-  portENTER_CRITICAL(&uart_guard);
-  if(uart_monitoring)switch(error){
-    case UART_FIFO_OVF_ERROR:++uart_errors.fifo;break;case UART_BUFFER_FULL_ERROR:++uart_errors.buffer;break;
-    case UART_FRAME_ERROR:++uart_errors.frame;break;case UART_PARITY_ERROR:++uart_errors.parity;break;
-    case UART_BREAK_ERROR:++uart_errors.brk;break;default:break;
-  }
-  portEXIT_CRITICAL(&uart_guard);
-}
-void start_radio(){if(!radio_started){radio.setRxBufferSize(4096);radio.setTxBufferSize(1024);radio.onReceiveError(radio_error);radio.begin(57600,SERIAL_8N1,18,17);radio_started=true;}}
-void start_uart_observation(uint32_t now){
-  uart_work=UartWork{};uart_work.last_service=now;uart_work.observed=true;
-  portENTER_CRITICAL(&uart_guard);uart_errors=UartErrors{};uart_monitoring=true;portEXIT_CRITICAL(&uart_guard);
-}
-void stop_uart_observation(){portENTER_CRITICAL(&uart_guard);uart_monitoring=false;portEXIT_CRITICAL(&uart_guard);}
+void start_uart_observation(uint32_t now){radio_transport::observe_start(now);}
+void stop_uart_observation(){radio_transport::observe_stop();}
 void uart_json(JsonObject d){
-  UartErrors e;portENTER_CRITICAL(&uart_guard);e=uart_errors;portEXIT_CRITICAL(&uart_guard);
-  d["observed"]=uart_work.observed;d["fifo_overflow"]=e.fifo;d["buffer_full"]=e.buffer;d["frame_errors"]=e.frame;d["parity_errors"]=e.parity;d["breaks"]=e.brk;
-  d["rx_bytes"]=uart_work.rx_bytes;d["tx_bytes"]=uart_work.tx_bytes;d["rx_backlog_peak"]=uart_work.rx_peak;d["max_service_gap_ms"]=uart_work.service_gap;
-  d["tx_wait_polls"]=uart_work.tx_wait;d["short_writes"]=uart_work.short_writes;
+  const auto w=radio_transport::observation();
+  d["observed"]=w.observed;d["fifo_overflow"]=w.fifo;d["buffer_full"]=w.buffer;d["frame_errors"]=w.frame;d["parity_errors"]=w.parity;d["breaks"]=w.brk;
+  d["rx_bytes"]=w.rx_bytes;d["tx_bytes"]=w.tx_bytes;d["rx_backlog_peak"]=w.rx_peak;d["max_service_gap_ms"]=w.service_gap;
+  d["tx_wait_polls"]=w.tx_wait;d["short_writes"]=w.short_writes;
 }
 uint8_t transport=0; // 0 Wi-Fi; 1 SiK
-uint8_t rx[sizeof(linktest::Packet)]={};size_t rx_size=0;
+bool locked=false,persisted=false,persisted_peer=false;
+uint32_t probe_start=0;uint8_t probe_phase=0;char probe_text[256]={};size_t probe_size=0;
 QueueHandle_t queue=nullptr;portMUX_TYPE guard=portMUX_INITIALIZER_UNLOCKED;
 char cached[kDiagnosticCapacity]="{\"state\":\"idle\"}",last_report[4096]="null";
 char self_report[1536]="null",self_error[80]={};
@@ -151,13 +131,13 @@ bool correction_radio_active(){return live.active();}
 bool correction_radio_linked(uint32_t now){return live.linked(now);}
 bool correction_radio_submit(const uint8_t *frame,size_t size,uint32_t now){return !live_rejoin&&live.enqueue(frame,size,now);}
 bool correction_radio_needs_rejoin(){return live_rejoin;}
+void correction_radio_clear_pending(){live.clear_pending();}
 uint32_t correction_radio_session(){return live.session();}
-void correction_radio_clear_pending(){live.clear_pending();live_wire.reset();}
 bool correction_radio_restore(uint32_t session,bool rover){
   if(test_busy()||probe_phase||!live.begin(session,rover))return false;
-  start_radio();live_wire.reset();live_rejoin=true;std::strcpy(route_error,"OTA restart: start a fresh Base SiK session, then join it on Rover.");return true;
+  radio_transport::begin();live_rejoin=true;std::strcpy(route_error,"OTA restart: start a fresh Base SiK session, then join it on Rover.");return true;
 }
-void correction_radio_stop(){live_rejoin=false;live.stop();live_wire.reset();correction_output_reset();}
+void correction_radio_stop(){live_rejoin=false;live.stop();correction_output_reset();}
 bool diagnostic_busy(){portENTER_CRITICAL(&guard);bool value=cached_busy;portEXIT_CRITICAL(&guard);return value;}
 bool diagnostic_snapshot(char *out,size_t capacity){portENTER_CRITICAL(&guard);size_t n=std::strlen(cached);bool ok=n<capacity;if(ok)std::memcpy(out,cached,n+1);portEXIT_CRITICAL(&guard);return ok;}
 bool diagnostic_request(const char *json){
@@ -202,7 +182,7 @@ void diagnostic_service(uint32_t now,bool rover,IPAddress peer,bool profile_busy
           paired=false;engine=linktest::Engine{};pair_engine.state=correctiontest::Idle;pair_engine.run=0;engine.node=rover?1:0;
           if(request.transport){uint32_t session=request.session;
             if(!rover){do{session=esp_random();}while(session<1000000);}
-            start_radio();live.begin(session,rover);live_tx_wait=live_output_rejected=live_short_writes=0;
+            radio_transport::begin();live.begin(session,rover);live_tx_wait=live_output_rejected=live_short_writes=0;
           }
         }
         survey_diagnostic_release();
@@ -213,7 +193,7 @@ void diagnostic_service(uint32_t now,bool rover,IPAddress peer,bool profile_busy
       if(test_busy()||probe_phase||profile_busy||!survey_diagnostic_acquire())std::strcpy(self_error,"Finish the current test, survey or receiver operation first.");
       else {run_transport_selftest();survey_diagnostic_release();}
     }
-    else if(request.probe){if(!test_busy()&&!probe_phase&&!profile_busy&&survey_diagnostic_acquire()){locked=true;start_radio();while(radio.available())radio.read();probe_size=0;probe_text[0]=0;probe_start=now;probe_phase=1;}}
+    else if(request.probe){if(!test_busy()&&!probe_phase&&!profile_busy&&survey_diagnostic_acquire()){locked=true;radio_transport::begin();radio_transport::discard_input();probe_size=0;probe_text[0]=0;probe_start=now;probe_phase=1;}}
     else if(request.cancel){if(paired){if(pair_engine.busy()&&request.config.run==pair_engine.run)pair_engine.abort(now,"cancelled");}else if(engine.busy()&&request.config.run==engine.config.run)engine.abort(now,"cancelled");}
     else if(!test_busy()&&!probe_phase&&request.config.run!=engine.config.run&&request.config.run!=pair_engine.run){
       if(profile_busy||!survey_diagnostic_acquire()){engine.reason="finish_survey_or_receiver_operation_first";}
@@ -221,11 +201,10 @@ void diagnostic_service(uint32_t now,bool rover,IPAddress peer,bool profile_busy
         locked=true;Preferences p;bool saved=false;
         if(p.begin("linkdiag",false)){saved=p.putUInt("run",request.config.run)==4&&p.putBool("active",true)==1;p.end();}
         if(!saved){survey_diagnostic_release();locked=false;engine.reason="cannot_save_test_start";}
-        else {paired=request.paired;if(paired)pair_engine.arm(request.config.run,request.config.seconds,rover?1:0,now,request.profile);else engine.arm(request.config,rover?1:0,now);transport=request.transport;persisted=persisted_peer=false;rx_size=0;
-          if(transport){start_radio();while(radio.available())radio.read();}
+        else {paired=request.paired;if(paired)pair_engine.arm(request.config.run,request.config.seconds,rover?1:0,now,request.profile);else engine.arm(request.config,rover?1:0,now);transport=request.transport;persisted=persisted_peer=false;
+          if(transport){radio_transport::begin();radio_transport::discard_input();}
           if(paired)start_uart_observation(now);
-          if(!transport&&!udp_started)udp_started=udp.begin(22346);
-          if(!transport&&!udp_started)engine.abort(now,"wifi_diagnostic_socket_unavailable");
+          if(!transport&&!wifi_transport::start(wifi_transport::Channel::Diagnostics))engine.abort(now,"wifi_diagnostic_socket_unavailable");
         }
       }
     }
@@ -234,64 +213,83 @@ void diagnostic_service(uint32_t now,bool rover,IPAddress peer,bool profile_busy
   peer_update_service(now,rover,live.session(),peer,peer_update_quality_ready());
   if(live.active()){
     live.tick(now);
-    for(unsigned budget=0;budget<2048&&radio.available();++budget){
-      correction::Packet received;
-      if(!live_wire.byte(uint8_t(radio.read()),received))continue;
+    radio_transport::Frame frame;
+    size_t budget=2048;
+    while(radio_transport::receive(frame,budget)){
+      const auto &received=frame.packet;
+      // Peer control rides RTM1 type-3 envelopes: the decoder labels every
+      // RTM1 as Rtcm, so the control test decides, not the frame family.
       if(peer_wire::control(received)){peer_update_receive(received,now);continue;}
+      if(frame.kind!=radio_transport::FrameKind::Rtcm)continue; // RTC1/RTDG are stream noise for the live bridge.
       if(!live_rejoin&&!ota_paused()&&live.packet(received,now)){debug_frame(debugmode::Channel::RadioRx,live.data(),live.size());if(!correction_radio_input(live.data(),live.size(),now-live.known_age(now)))++live_output_rejected;}
     }
     correction::Packet packet;
     const bool control=peer_update_next(packet,now);
-    if(control||(!live_rejoin&&!ota_paused()&&live.next(packet,now))){
-      if(radio.availableForWrite()>=int(sizeof(packet))){
-        const size_t written=radio.write(packet.bytes,sizeof(packet));debug_frame(debugmode::Channel::RadioTx,packet.bytes,written);
-        if(written==sizeof(packet)){if(control)peer_update_committed(packet,now);else live.committed();}
-        else {++live_short_writes;live.fail();correction_output_reset();std::strcpy(route_error,"Radio output fault; select a new session.");}
-      }else ++live_tx_wait;
+    const bool pending=control||(!live_rejoin&&!ota_paused()&&live.next(packet,now));
+    if(pending){
+      const int written=radio_transport::send(packet.bytes,sizeof(packet));
+      if(written>=0)debug_frame(debugmode::Channel::RadioTx,packet.bytes,size_t(written));
+      if(written==int(sizeof(packet))){if(control)peer_update_committed(packet,now);else live.committed();}
+      else if(written<0)++live_tx_wait;
+      else {++live_short_writes;live.fail();correction_output_reset();std::strcpy(route_error,"Radio output fault; select a new session.");}
     }
   }
   if(paired&&pair_engine.busy()&&pair_engine.node!=(rover?1:0))pair_engine.abort(now,"role_changed");
   if(!paired&&engine.busy()&&engine.node!=(rover?1:0))engine.abort(now,"role_changed");
   if(engine.state==linktest::Idle)engine.node=rover?1:0;
   if(probe_phase){
-    for(unsigned budget=0;budget<512&&radio.available();++budget){int c=radio.read();if(probe_size<sizeof(probe_text)-1&&c>=32&&c<127){probe_text[probe_size++]=char(c);probe_text[probe_size]=0;}}
+    for(unsigned budget=0;budget<512;++budget){int c=radio_transport::read_probe_byte();if(c<0)break;if(probe_size<sizeof(probe_text)-1&&c>=32&&c<127){probe_text[probe_size++]=char(c);probe_text[probe_size]=0;}}
     uint32_t elapsed=now-probe_start;
-    if(probe_phase==1&&elapsed>=1200){radio.print("+++");probe_phase=2;}
-    if(probe_phase==2&&elapsed>=2700){radio.print("\rATI\r");probe_phase=3;}
-    if(probe_phase==3&&elapsed>=4200){radio.print("ATO\r");probe_phase=4;}
+    if(probe_phase==1&&elapsed>=1200){radio_transport::send(reinterpret_cast<const uint8_t*>("+++"),3);probe_phase=2;}
+    if(probe_phase==2&&elapsed>=2700){radio_transport::send(reinterpret_cast<const uint8_t*>("\rATI\r"),5);probe_phase=3;}
+    if(probe_phase==3&&elapsed>=4200){radio_transport::send(reinterpret_cast<const uint8_t*>("ATO\r"),4);probe_phase=4;}
     if(probe_phase==4&&elapsed>=4800){probe_phase=0;if(!probe_size){std::strcpy(probe_text,"no response");probe_size=11;}survey_diagnostic_release();locked=false;}
   }
   if(paired&&!probe_phase){
     const bool observing=pair_engine.busy();
-    if(observing){uart_work.service_gap=std::max(uart_work.service_gap,now-uart_work.last_service);uart_work.last_service=now;uart_work.rx_peak=std::max(uart_work.rx_peak,uint32_t(std::max(0,radio.available())));}
+    if(observing)radio_transport::observe_tick(now);
     pair_engine.tick(now);
-    for(unsigned budget=0;budget<2048&&radio.available();++budget){pair_engine.byte(uint8_t(radio.read()),now);if(observing)++uart_work.rx_bytes;}
+    radio_transport::Frame frame;
+    size_t budget=2048;
+    while(radio_transport::receive(frame,budget)){
+      // The paired engines consume a byte stream; each validated envelope is
+      // delivered whole, so replay its full 256 bytes in wire order.
+      for(size_t i=0;i<sizeof(frame.packet.bytes);++i)pair_engine.byte(frame.packet.bytes[i],now);
+    }
     correction::Packet packet;if(pair_engine.next(packet,now)){
-      if(radio.availableForWrite()>=sizeof(packet)){
-        const size_t written=radio.write(packet.bytes,sizeof(packet));debug_frame(debugmode::Channel::RadioTx,packet.bytes,written);if(observing){uart_work.tx_bytes+=written;if(written!=sizeof(packet))++uart_work.short_writes;}
-        if(written==sizeof(packet))pair_engine.committed(packet,now);
-      }else if(observing)++uart_work.tx_wait;
+      const int written=radio_transport::send(packet.bytes,sizeof(packet));
+      if(written<0){/* tx_wait counted by owner */}
+      else if(written==int(sizeof(packet)))pair_engine.committed(packet,now);
     }
     if(!pair_engine.busy())stop_uart_observation();
   }
   if(!paired&&engine.config.run&&!probe_phase){
-    if(transport&&radio_started){
-      for(unsigned budget=0;budget<2048&&radio.available();++budget){
-        rx[rx_size++]=uint8_t(radio.read());
-        if(rx_size>=4){uint32_t marker;std::memcpy(&marker,rx,4);if(marker!=linktest::magic){std::memmove(rx,rx+1,--rx_size);if(engine.busy())++engine.errors;}}
-        if(rx_size==sizeof(rx)){linktest::Packet p;std::memcpy(&p,rx,sizeof(p));if(linktest::valid(p)){engine.receive(p,now);rx_size=0;}else{engine.receive(p,now);std::memmove(rx,rx+1,--rx_size);}}
+    if(transport&&radio_transport::started()){
+      const uint32_t before=radio_transport::decode_stats().diagnostic_errors+radio_transport::decode_stats().discarded_bytes;
+      radio_transport::Frame frame;
+      size_t budget=2048;
+      while(radio_transport::receive(frame,budget)){
+        if(frame.kind!=radio_transport::FrameKind::Diagnostic)continue;
+        linktest::Packet p;std::memcpy(&p,frame.packet.bytes,sizeof(p));
+        engine.receive(p,now); // receive() itself rejects invalid bodies.
       }
-    }else if(!transport&&udp_started){
-      for(unsigned budget=0;budget<8;++budget){int size=udp.parsePacket();if(!size)break;
-        if(size==sizeof(linktest::Packet)&&uint32_t(peer)&&udp.remoteIP()==peer){linktest::Packet p;if(udp.read(reinterpret_cast<uint8_t*>(&p),sizeof(p))==sizeof(p))engine.receive(p,now);}
-        else while(udp.available())udp.read();
+      // Raw-byte framing surfaced corruption as engine errors; the framer now
+      // consumes bad bytes internally, so keep the report semantics via its
+      // per-family counters and the discarded-byte count.
+      if(engine.busy())engine.errors+=radio_transport::decode_stats().diagnostic_errors+radio_transport::decode_stats().discarded_bytes-before;
+    }else if(!transport&&wifi_transport::started(wifi_transport::Channel::Diagnostics)){
+      for(unsigned budget=0;budget<8;++budget){
+        IPAddress sender;uint8_t bytes[sizeof(linktest::Packet)];
+        const int size=wifi_transport::receive(wifi_transport::Channel::Diagnostics,bytes,sizeof(bytes),sender);
+        if(size<=0)break;
+        if(size==int(sizeof(linktest::Packet))&&uint32_t(peer)&&sender==peer){linktest::Packet p;std::memcpy(&p,bytes,sizeof(p));engine.receive(p,now);}
       }
     }
     linktest::Packet packet;
     if(engine.next(packet,now)){
       bool sent=false;
-      if(transport){if(radio.availableForWrite()>=sizeof(packet))sent=radio.write(reinterpret_cast<uint8_t*>(&packet),sizeof(packet))==sizeof(packet);}
-      else if(uint32_t(peer)&&udp.beginPacket(peer,22346)){sent=udp.write(reinterpret_cast<uint8_t*>(&packet),sizeof(packet))==sizeof(packet)&&udp.endPacket()==1;}
+      if(transport){sent=radio_transport::send(reinterpret_cast<const uint8_t*>(&packet),sizeof(packet))==int(sizeof(packet));}
+      else if(uint32_t(peer))sent=wifi_transport::send(wifi_transport::Channel::Diagnostics,peer,reinterpret_cast<const uint8_t*>(&packet),sizeof(packet));
       if(sent)engine.transmitted(packet,now);
     }
   }

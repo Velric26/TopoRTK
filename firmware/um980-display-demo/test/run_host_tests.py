@@ -46,9 +46,23 @@ void survey_sd_unlock() {}
 void survey_revoke_control() {}
 '''
 generated.write_text('#include "host_hardware.h"\n' + source + stubs + '\n#include "firmware_cases.h"\n', encoding='utf-8')
+def adapted(name):
+    text = (root / 'src' / name).read_text(encoding='utf-8')
+    text = re.sub(r'^#include <' + hardware + r'>\n', '', text, flags=re.M)
+    return '#include "host_hardware.h"\n' + text
+
+for name in ('ui_display.cpp', 'ui_screens.cpp', 'wifi_transport.cpp',
+             'network_service.cpp'):
+    (root / f'.pio/host_{name}').write_text(adapted(name))
+subprocess.run(['g++', '-std=c++11', '-Wall', '-Wextra', '-Werror', '-Isrc',
+                'test/radio_framing_cases.cpp', '-o', '.pio/test_radio_framing.exe'], cwd=root, check=True)
+subprocess.run([str(root / '.pio/test_radio_framing.exe')], cwd=root, check=True)
 subprocess.run(['g++', '-std=c++11', '-DTOPORTK_UNIT_ID=2', '-DTOPORTK_DISPLAY_ROTATION=0',
                 '-Itest', '-Isrc', '-I.pio/libdeps/unit_b/GFX Library for Arduino/src',
-                '-I.pio/libdeps/unit_a/ArduinoJson/src', 'src/survey_engine.cpp',
+                '-I.pio/libdeps/unit_a/ArduinoJson/src', 'test/host_hardware.cpp',
+                'src/survey_engine.cpp', 'src/gnss_parser.cpp',
+                'src/touch_input.cpp', '.pio/host_ui_display.cpp', '.pio/host_ui_screens.cpp',
+                '.pio/host_wifi_transport.cpp', '.pio/host_network_service.cpp',
                 str(generated), '-o', '.pio/test_firmware.exe'], cwd=root, check=True)
 subprocess.run([str(root / '.pio/test_firmware.exe')], cwd=root, check=True)
 for name in ('ready', 'stale'):
@@ -70,4 +84,4 @@ for ppm in (root / '.pio').glob('ui-*.ppm'):
     png += chunk(b'IHDR', struct.pack('!2I5B', width, height, 8, 2, 0, 0, 0))
     png += chunk(b'IDAT', zlib.compress(rows)) + chunk(b'IEND', b'')
     ppm.with_suffix('.png').write_bytes(png)
-print('UI previews: .pio/ui-0.png through ui-5.png and ui-base-selection.png')
+print('UI previews: .pio/ui-0.png through ui-4.png, ui-link-*.png and ui-base-selection.png')

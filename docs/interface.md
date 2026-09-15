@@ -40,7 +40,7 @@ The PC/local-router checkpoint and controlled browser failure tests are recorded
 
 ### Rover phone/tablet Wi-Fi
 
-The Rover adds a WPA2 access point while retaining the station connection used for corrections, in both Local Router and Direct Link modes. **Link → Phone / Tablet** shows the per-instrument SSID, AP state, connected-device count, browser address and UI version. **Show key** reveals the saved password locally for 30 seconds; leaving the page hides it. **New key → Confirm** replaces it and disconnects phone clients without changing the receiver profile. Confirmation expires after 10 seconds or when leaving the page.
+The Rover adds a WPA2 access point while retaining the station connection used for corrections, in both Local Router and Direct Link modes. **LINK → NEXT → NEXT** opens Phone, the third Link page, showing the per-instrument SSID, AP state, connected-device count and complete browser address. **SHOW KEY** reveals the saved password locally for 30 seconds. **NEW KEY → CONFIRM** replaces it and disconnects phone clients without changing the receiver profile; confirmation expires after 10 seconds. Leaving Phone with PREV/NEXT, a tab or a swipe hides the key and cancels pending replacement. Tapping the active LINK tab returns to its first page. Base shows its own browser address and directs key operations to the Rover screen.
 
 At the user's request, keys contain eight random digits separated by a period: `dddd.dddd`. `1234.5678` is a format example, not a shared default. The initial 16-character prototype key migrates once after the update. The key remains saved across transport/role changes and startup, and is never placed in the API, USB logs, QR data or SD exports.
 
@@ -100,10 +100,11 @@ These rules apply to the onboard display and should carry forward to the phone/t
 
 - The main screen is a glanceable status overview: correction link, required GNSS fix, link quality, horizontal uncertainty, and one immediately actionable warning.
 - Detailed coordinates, satellites, GNSS time, quality metrics, and correction diagnostics belong on the GPS details screen.
-- SSID, IP address, RSSI, packet counters, and network diagnostics belong on the Wi-Fi details screen.
+- Link has three pages: connection details, packet counters, and Phone instructions/key controls. All three retain PREV/NEXT at y=380 (44 pixels high). Phone's SHOW KEY/NEW KEY targets remain side by side at y=212 (148×48 pixels each, separated by 8 pixels); browser instructions end above the pager.
 - A permanent 48-pixel bottom navigation bar exposes `HOME`, `GPS`, `LINK`, and `SETUP`. Each tab has an 80-pixel-wide touch target. Settings expose runtime role and brightness controls.
 - From the main screen, a downward swipe from the top opens GPS details and an upward swipe from the bottom opens Wi-Fi details. The opposite swipe returns to the main screen.
 - Gesture instructions are not permanently displayed. Navigation must remain discoverable through documentation and initial onboarding rather than consuming field-status space.
+- A detail-page change clears the previous layout and invalidates its repaint cache once, so old counter rows or key controls cannot remain on the next page. Unchanged periodic renders stay cached. GPS retains one full-width page-flip control for its two detail pages.
 
 ### Central status definitions
 
@@ -121,7 +122,7 @@ The main banner is green only for `READY`; otherwise it is grey. The GPS-details
 
 ### Outdoor readability
 
-- Use a near-black background, high-contrast white or bright status text, solid grey/green banners, and the built-in bitmap font at readable integer sizes.
+- Use the implemented light default: white cards/background, black primary text and two-pixel control outlines, dark secondary text, explicit grey/green readiness banners and navy selected controls. Operational text stays at size 2 or larger. This improves the software layout; actual direct-sunlight readability still requires physical-panel acceptance.
 - Equivalent labels and status values use consistent size and weight. Larger text is reserved for a genuinely more urgent function, not decoration.
 - Equivalent information cards on the same screen use the same height and spacing. A larger section requires a documented functional need.
 - The header identifies the runtime role as `Rover` or `Base`; do not use a generic `STATUS` title.

@@ -1,9 +1,10 @@
 #include "peer_update.h"
 #include "web_http.h"
+#include "wifi_transport.h"
 #include <Arduino.h>
-#include <WiFiUdp.h>
+#include <cstring>
 namespace {
-WiFiUDP socket;bool started=false,rover_=false;uint32_t route_=0,hello_at=0,remote_=0,remote_at=0;
+bool started=false,rover_=false;uint32_t route_=0,hello_at=0,remote_=0,remote_at=0;
 uint32_t resume_attempt=0,resume_target=0,resume_started=0,resume_last=0;
 bool resume_sent=false,recovery_seen=false;IPAddress address;
 update_notice::Peer peer;update_notice::Sender sender;
@@ -68,14 +69,17 @@ void peer_update_service(uint32_t now,bool rover,uint32_t route,IPAddress destin
   peer.select(TOPORTK_UNIT_ID,web_boot_id());peer.tick(now);
   peer.recovered(peer.attempt(),recovery_seen&&remote_at&&now-remote_at<4000,quality);publish();
   address=destination;
-  if(!started)started=socket.begin(22347);
+  if(!started)started=wifi_transport::start(wifi_transport::Channel::Peer);
   if(!started)return;
-  for(unsigned budget=0;budget<4;++budget){int size=socket.parsePacket();if(!size)break;
-    if(!route_&&uint32_t(address)&&socket.remoteIP()==address&&size==sizeof(correction::Packet)){
-      correction::Packet p;if(socket.read(p.bytes,sizeof(p))==sizeof(p))peer_update_receive(p,now);
-    }else {uint8_t discard[64];while(socket.available())socket.read(discard,sizeof(discard));}
+  for(unsigned budget=0;budget<4;++budget){
+    IPAddress from;uint8_t bytes[sizeof(correction::Packet)];
+    const int size=wifi_transport::receive(wifi_transport::Channel::Peer,bytes,sizeof(bytes),from);
+    if(size<=0)break;
+    if(!route_&&uint32_t(address)&&from==address&&size==int(sizeof(correction::Packet))){
+      correction::Packet p;std::memcpy(p.bytes,bytes,sizeof(p));peer_update_receive(p,now);
+    }
   }
   if(!route_&&uint32_t(address)){correction::Packet p;
-    if(peer_update_next(p,now)&&socket.beginPacket(address,22347)&&socket.write(p.bytes,sizeof(p))==sizeof(p)&&socket.endPacket()==1)peer_update_committed(p,now);
+    if(peer_update_next(p,now)&&wifi_transport::send(wifi_transport::Channel::Peer,address,p.bytes,sizeof(p)))peer_update_committed(p,now);
   }
 }

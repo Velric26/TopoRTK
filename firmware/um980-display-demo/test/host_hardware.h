@@ -37,22 +37,22 @@
 #define WIFI_AP_STA 3
 #define WL_CONNECTED 3
 
-uint32_t host_now = 10000;
-uint32_t millis() { return host_now; }
-void esp_fill_random(void *buffer,size_t length) {
+extern uint32_t host_now;
+uint32_t millis();
+static void esp_fill_random(void *buffer,size_t length) {
   static uint8_t seed = 0; auto *bytes = static_cast<uint8_t *>(buffer);
   for (size_t i=0;i<length;++i) bytes[i] = seed++;
 }
-void delay(uint32_t ms) { host_now += ms; }
-uint32_t host_pwm_duty = 0;
-uint32_t host_pwm_frequency = 0;
-uint32_t ledcSetup(int, int hz, int) { host_pwm_frequency = hz; return hz; }
-void ledcAttachPin(int, int) {}
-void ledcWrite(int, int duty) { host_pwm_duty = duty == 255 ? 256 : duty; }
-uint32_t ledcRead(int) { return host_pwm_duty; }
-uint32_t ledcReadFreq(int) { return host_pwm_frequency; }
-void pinMode(int, int) {}
-void digitalWrite(int, int) {}
+static void delay(uint32_t ms) { host_now += ms; }
+inline uint32_t &host_pwm_duty() { static uint32_t value = 0; return value; }
+inline uint32_t &host_pwm_frequency() { static uint32_t value = 0; return value; }
+inline uint32_t ledcSetup(int, int hz, int) { host_pwm_frequency() = hz; return hz; }
+inline void ledcAttachPin(int, int) {}
+inline void ledcWrite(int, int duty) { host_pwm_duty() = duty == 255 ? 256 : duty; }
+inline uint32_t ledcRead(int) { return host_pwm_duty(); }
+inline uint32_t ledcReadFreq(int) { return host_pwm_frequency(); }
+static void pinMode(int, int) {}
+static void digitalWrite(int, int) {}
 
 class HostPrint {
  public:
@@ -74,9 +74,10 @@ class HardwareSerial : public HostPrint {
   int read() { return -1; }
   size_t write(const uint8_t *p, size_t length) {size_t n=std::min(length,short_limit);binary_output.insert(binary_output.end(),p,p+n);return n;}
 };
-HardwareSerial Serial;
-int esp_reset_reason(){return 1;}
-struct HostESP {unsigned getFreeHeap(){return 100000;}unsigned getMinFreeHeap(){return 90000;}unsigned getFreePsram(){return 8000000;}} ESP;
+extern HardwareSerial Serial;
+static int esp_reset_reason(){return 1;}
+struct HostESP {unsigned getFreeHeap(){return 100000;}unsigned getMinFreeHeap(){return 90000;}unsigned getFreePsram(){return 8000000;}};
+static HostESP ESP;
 class Preferences {
  public:
   bool fail = false, exists = false;
@@ -100,9 +101,15 @@ class IPAddress {
  public:
   uint8_t bytes[4];
   IPAddress(uint8_t a=0, uint8_t b=0, uint8_t c=0, uint8_t d=0) : bytes{a,b,c,d} {}
+  IPAddress(const IPAddress &) = default;
+  IPAddress &operator=(const IPAddress &) = default;
   uint8_t operator[](size_t i) const { return bytes[i]; }
   bool operator==(const IPAddress &other)const{return !std::memcmp(bytes,other.bytes,4);}
-  std::string toString() const { return "192.168.4.2"; }
+  std::string toString() const {
+    char text[16];
+    std::snprintf(text, sizeof(text), "%u.%u.%u.%u", bytes[0], bytes[1], bytes[2], bytes[3]);
+    return text;
+  }
 };
 struct HostWiFi {
   int selected_mode = WIFI_OFF;
@@ -124,10 +131,15 @@ struct HostWiFi {
   int RSSI() { return -48; }
   void disconnect() { linked = false; }
   int softAPgetStationNum() { return linked ? 1 : 0; }
+  void softAPdisconnect(bool) { ap_enabled = false; }
   IPAddress softAPIP() { return ap_ip; }
   IPAddress localIP() { return station_ip; }
   IPAddress subnetMask() { return station_mask; }
-} WiFi;
+};
+extern HostWiFi WiFi;
+// Definitions live in test/host_hardware.cpp: every compiled translation unit
+// (main, network_service, wifi_transport, ui modules) must share ONE instance,
+// or restart/state changes in the service are invisible to the firmware.
 class WiFiUDP {
  public:
   bool begin(int) { return true; }
@@ -151,7 +163,8 @@ struct HostWire {
   size_t requestFrom(int, int length) { index = 0; return length; }
   int available() { return 0; }
   int read() { const int data[] = {0,0,points,x >> 8,x & 255,y >> 8,y & 255}; return data[index++]; }
-} Wire;
+};
+static HostWire Wire;
 class TCA9554 {
  public:
   explicit TCA9554(int) {}
@@ -175,7 +188,8 @@ struct HostSD {
   uint64_t usedBytes() { return 0; }
   bool mkdir(const char *) { return true; }
   File open(const char *,int) { return File{}; }
-} SD_MMC;
+};
+static HostSD SD_MMC;
 
 class Arduino_DataBus {};
 class Arduino_ESP32SPI : public Arduino_DataBus {
