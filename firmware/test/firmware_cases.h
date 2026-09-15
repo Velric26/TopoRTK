@@ -130,8 +130,10 @@ void assert_clean_page(const char *preview_path = nullptr) {
 
 int main() {
   // The receiver service owns UART1 and installs its observations here; every
-  // receiver fact below arrives through its own reader and sequencers.
+  // receiver fact below arrives through its own reader and sequencers. The
+  // correction service is handed the selected role it cannot read itself.
   receiver_service_begin();
+  correction_service_begin();
   // Same production observer: metadata/replayed epochs cannot hide an outage.
   auto msm=[](unsigned type,uint32_t epoch){std::vector<uint8_t> b(32);b[0]=0xd3;b[2]=26;b[3]=type>>4;b[4]=(type&15)<<4;b[5]=7;
     b[6]=epoch>>22;b[7]=epoch>>14;b[8]=epoch>>6;b[9]=epoch<<2;const auto crc=crc24q(b.data(),29);b[29]=crc>>16;b[30]=crc>>8;b[31]=crc;return b;};
@@ -151,26 +153,36 @@ int main() {
     gnss_service::apply_unit_profile();        // the correction gate needs a verified profile
     complete_profile();
     wifi_last_peer_ms=host_now;
-    correction_output_reset();debug_enable_local(true);gnss.binary_output.clear();gnss.tx_free=0;
+    correction_service::reset();debug_enable_local(true);gnss.binary_output.clear();gnss.tx_free=0;
     auto reference=msm(1006,0),observation=msm(1074,1000);
-    assert(!queue_correction(observation.data(),observation.size(),host_now));
-    assert(queue_correction(reference.data(),reference.size(),host_now));service_correction_output();assert(gnss.binary_output.empty());
-    host_now+=1500;service_correction_output();assert(!correction_output.size()&&gnss.binary_output.empty());
-    assert(queue_correction(reference.data(),reference.size(),host_now));
-    assert(queue_correction(observation.data(),observation.size(),host_now));gnss.tx_free=31;
-    service_correction_output();assert(gnss.binary_output.empty());gnss.tx_free=2048;
-    service_correction_output();assert(gnss.binary_output==reference);service_correction_output();
+    assert(!correction_service::admit(observation.data(),observation.size(),host_now,host_now));
+    assert(correction_service::admit(reference.data(),reference.size(),host_now,host_now));correction_service::service_output(host_now);assert(gnss.binary_output.empty());
+    assert(correction_service::snapshot().station==7);   // the reference latches the station
+    host_now+=1500;correction_service::service_output(host_now);assert(!correction_service::snapshot().queued&&gnss.binary_output.empty());
+    assert(correction_service::admit(reference.data(),reference.size(),host_now,host_now));
+    assert(correction_service::admit(observation.data(),observation.size(),host_now,host_now));gnss.tx_free=31;
+    correction_service::service_output(host_now);assert(gnss.binary_output.empty());gnss.tx_free=2048;
+    correction_service::service_output(host_now);assert(gnss.binary_output==reference);correction_service::service_output(host_now);
     auto expected=reference;expected.insert(expected.end(),observation.begin(),observation.end());assert(gnss.binary_output==expected);
-    assert(correction_health.arrival_age(host_now)==0);
+    // Counter meanings: whole frames written, their bytes, the age-limit drop,
+    // and TX-ring refusals that were retried rather than written partially.
+    const auto counters=correction_service::snapshot();
+    assert(counters.forwarded==2&&counters.forwarded_bytes==expected.size()&&counters.expired==1&&counters.waiting==2&&!counters.faults&&!counters.queued);
+    assert(correction_service::health().arrival_age(host_now)==0);
+    // An observation from another station cannot join the latched reference.
+    auto mismatched=observation;mismatched[5]=8;
+    const auto mismatch_crc=crc24q(mismatched.data(),29);mismatched[29]=mismatch_crc>>16;mismatched[30]=mismatch_crc>>8;mismatched[31]=mismatch_crc;
+    assert(!correction_service::admit(mismatched.data(),mismatched.size(),host_now,host_now));
     // A SiK selection excludes Wi-Fi copies, even when the old peer is online.
     WiFiRtcmHeader header{};header.magic=network::kMagic;header.version=network::kVersion;header.type=network::kRtcmPacket;
     header.rtcm_length=reference.size();header.rtcm_message=1006;header.packet_size=sizeof(header)+reference.size();
     std::vector<uint8_t> packet(header.packet_size);std::memcpy(packet.data(),&header,sizeof(header));std::memcpy(packet.data()+sizeof(header),reference.data(),reference.size());
     header.checksum=fnv1a(packet.data(),packet.size());std::memcpy(packet.data(),&header,sizeof(header));
+    assert(!correction_link_input(reference.data(),reference.size(),host_now));  // the radio is not the route yet
     host_radio_active=true;assert(!handle_wifi_rtcm_packet(packet.data(),packet.size()));
     host_radio_linked=true;
     assert(correction_link_input(reference.data(),reference.size(),host_now-1000));
-    host_now+=500;service_correction_output();assert(correction_output.size()==0); // carried age expires
+    host_now+=500;correction_service::service_output(host_now);assert(correction_service::snapshot().queued==0); // carried age expires
     host_radio_active=false;
     // Wi-Fi v3 binds every data envelope to both proven boots and the current
     // nonzero session. Replays stay rejected across an ordinary link outage.
@@ -181,11 +193,11 @@ int main() {
       std::memcpy(bytes.data()+sizeof(h),reference.data(),reference.size());
       h.checksum=fnv1a(bytes.data(),bytes.size());std::memcpy(bytes.data(),&h,sizeof(h));return bytes;
     };
-    correction_output_reset();wifi_last_peer_ms=host_now;
+    correction_service::reset();wifi_last_peer_ms=host_now;
     const auto identity=link_service::snapshot(host_now);
     auto current=wifi_frame(1,identity.session,identity.peer_boot,identity.local_boot);
     assert(handle_wifi_rtcm_packet(current.data(),current.size()));
-    service_correction_output();
+    correction_service::service_output(host_now);
     const auto delivered=gnss.binary_output.size();
     current=wifi_frame(1,identity.session,identity.peer_boot,identity.local_boot);
     assert(!handle_wifi_rtcm_packet(current.data(),current.size()));
@@ -198,28 +210,29 @@ int main() {
     auto old_version=wifi_frame(2,identity.session,identity.peer_boot,identity.local_boot,2);
     for(auto *bad:{&old_session,&old_sender,&old_receiver,&old_version})
       assert(!handle_wifi_rtcm_packet(bad->data(),bad->size()));
-    service_correction_output();assert(gnss.binary_output.size()==delivered);
+    correction_service::service_output(host_now);assert(gnss.binary_output.size()==delivered);
     current=wifi_frame(2,identity.session,identity.peer_boot,identity.local_boot);
-    assert(handle_wifi_rtcm_packet(current.data(),current.size()));service_correction_output();
+    assert(handle_wifi_rtcm_packet(current.data(),current.size()));correction_service::service_output(host_now);
     assert(gnss.binary_output.size()==delivered+reference.size());
     assert(rtcm_wifi_rx_frames==2);
     // Admitted OTA pause rejects new input and discards pending output. Preparing
     // without a pause keeps forwarding available while collection is reserved.
-    host_ota_locked=true;assert(queue_correction(reference.data(),reference.size(),host_now));
-    host_ota_paused=true;assert(!queue_correction(reference.data(),reference.size(),host_now));
-    service_correction_output();assert(correction_output.size()==0);assert(!system_ready(host_now));
+    host_ota_locked=true;assert(correction_service::admit(reference.data(),reference.size(),host_now,host_now));
+    host_ota_paused=true;assert(!correction_service::admit(reference.data(),reference.size(),host_now,host_now));
+    correction_service::service_output(host_now);assert(correction_service::snapshot().queued==0);assert(!system_ready(host_now));
     host_ota_paused=host_ota_locked=false;
     // A surfaced adapter fault latches inhibition; it never retries a suffix.
-    assert(queue_correction(reference.data(),reference.size(),host_now));gnss.short_limit=3;service_correction_output();
-    assert(correction_output_fault&&correction_health.arrival_age(host_now)==UINT32_MAX);
-    assert(!queue_correction(reference.data(),reference.size(),host_now));gnss.short_limit=2048;
+    assert(correction_service::admit(reference.data(),reference.size(),host_now,host_now));gnss.short_limit=3;correction_service::service_output(host_now);
+    const auto faulted=correction_service::snapshot();
+    assert(faulted.fault&&faulted.faults==1&&correction_service::health().arrival_age(host_now)==UINT32_MAX);
+    assert(!correction_service::admit(reference.data(),reference.size(),host_now,host_now));gnss.short_limit=2048;
     // The correction gate follows the receiver's own profile state: dropping it
     // (a role/reference reset) refuses corrections again.
-    correction_output_reset();gnss_service::reset_for_config_change();
+    correction_service::reset();gnss_service::reset_for_config_change();
     assert(!receiver().profile_applied&&!receiver().profile_running);
-    assert(!queue_correction(reference.data(),reference.size(),host_now));
+    assert(!correction_service::admit(reference.data(),reference.size(),host_now,host_now));
     host_now=before;gnss.binary_output.clear();
-    std::puts("PASS: production COM2 whole-frame admission, backpressure/expiry, carried age, exclusive route, profile gate and latched output fault");
+    std::puts("PASS: production COM2 whole-frame admission, backpressure/expiry, carried age, exclusive route, station match, profile gate, counter meanings and latched output fault");
   }
   // Five startup commands are scheduled individually; no invocation advances time.
   receiver_service_begin();                   // a fresh receiver: nothing proven yet
@@ -390,7 +403,7 @@ int main() {
   feed_line(gga_fixture(4, 28, 0.5));
   feed_line(rmc_fixture());
   feed_line(bestnav("SOL_COMPUTED,NARROW_INT,19.4,-99.1,2234.0,-30.0,WGS84,0.012,0.0,0.03,\"7\",0.500,0.000,30,25,25,0"));
-  const auto current_msm=msm(1074,3000);assert(correction_health.observe(current_msm.data(),current_msm.size(),host_now));
+  const auto current_msm=msm(1074,3000);assert(correction_service::health().observe(current_msm.data(),current_msm.size(),host_now));
   assert(gnss_service::write_frame(current_msm.data(),current_msm.size(),host_now)==current_msm.size());
   wifi_last_peer_ms=host_now;
   WiFi.linked=true;

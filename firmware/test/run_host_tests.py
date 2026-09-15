@@ -92,7 +92,8 @@ def adapted(name):
     return '#include "host_hardware.h"\n' + text
 
 for name in ('ui_display.cpp', 'ui_screens.cpp', 'wifi_transport.cpp',
-             'network_service.cpp', 'gnss_service.cpp'):
+             'network_service.cpp', 'gnss_service.cpp',
+             'correction_service.cpp'):
     (root / f'.pio/host_{name}').write_text(adapted(name))
 subprocess.run(['g++', '-std=c++11', '-Wall', '-Wextra', '-Werror', '-Isrc',
                 'test/radio_framing_cases.cpp', '-o', '.pio/test_radio_framing.exe'], cwd=root, check=True)
@@ -104,6 +105,7 @@ subprocess.run(['g++', '-std=c++11', '-DTOPORTK_UNIT_ID=2', '-DTOPORTK_DISPLAY_R
                 'src/instrument_status.cpp',
                 'src/touch_input.cpp', 'src/link_operation.cpp',
                 '.pio/host_gnss_service.cpp',
+                '.pio/host_correction_service.cpp',
                 '.pio/host_ui_display.cpp', '.pio/host_ui_screens.cpp',
                 '.pio/host_wifi_transport.cpp', '.pio/host_network_service.cpp',
                 str(generated), '-o', '.pio/test_firmware.exe'], cwd=root, check=True)

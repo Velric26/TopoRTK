@@ -27,8 +27,8 @@
 #include "web_http.h"
 #include "rover_ap.h"
 #include "survey_service.h"
-#include "correction_health.h"
-#include "correction_queue.h"
+#include "correction_service.h"
+#include "correction_transport.h"
 #include "instrument_status.h"
 #include "link_diagnostic.h"
 #include "link_service.h"
@@ -174,41 +174,23 @@ uint32_t rtcm_wifi_sequence = 0;
 uint32_t wifi_session_id = 0, wifi_session_peer = 0, wifi_rtcm_highest = 0;
 uint32_t rtcm_wifi_tx_frames = 0;
 uint32_t rtcm_wifi_rx_frames = 0;
-uint32_t rtcm_forwarded_bytes = 0;
-correction::Health correction_health;
-correction::BurstQueue correction_output;
-correction::StationGuard correction_station;
-uint32_t correction_output_forwarded=0,correction_output_waits=0,correction_output_faults=0;
-bool correction_output_fault=false;
-void correction_output_reset(){
-  correction_health.reset();correction_output.clear();correction_station.reset();
-  gnss_service::reset_reference();correction_output_fault=false;
-}
-CorrectionOutputStats correction_output_stats(){
-  CorrectionOutputStats s;s.forwarded=correction_output_forwarded;s.expired=correction_output.expired;
-  s.overflow=correction_output.overflow;s.waiting=correction_output_waits;s.faults=correction_output_faults;s.queued=correction_output.size();return s;
-}
-bool queue_correction(const uint8_t *frame,size_t size,uint32_t at){
-  if(is_base()||!gnss_service::snapshot().profile_applied||diagnostic_busy()||ota_paused()||correction_output_fault||!link_service::connected(millis()))return false;
-  if(!correction_station.accept(frame,size))return false;
-  return correction_output.enqueue(frame,size,at,millis());
-}
+// Correction output boundary (R10a). The bounded queue, the station guard, the
+// observation health, the counters and the admission policy moved into
+// correction_service.cpp behind typed requests; what stays here is the gate it
+// cannot read for itself (the selected role), the loop's call, and the three
+// functions link_service.h declares for the link owner, unchanged in meaning.
+const CorrectionGate kCorrectionGate{is_base};
+
+void correction_service_begin() { correction_service::begin(kCorrectionGate); }
+
 bool correction_link_input(const uint8_t *frame,size_t size,uint32_t at){
-  return link_service::radio_active()&&queue_correction(frame,size,at);
+  return link_service::radio_active()&&correction_service::admit(frame,size,at,millis());
 }
-void service_correction_output(){
-  const uint32_t now=millis();
-  if(is_base()||!gnss_service::snapshot().profile_applied||diagnostic_busy()||ota_paused()||correction_output_fault||!link_service::connected(now)){correction_output.clear();return;}
-  const auto *frame=correction_output.front(now);if(!frame)return;
-  // The receiver owner reports UART buffer admission, not receiver
-  // acknowledgement; a zero write means the TX ring cannot hold the whole frame.
-  const size_t written=gnss_service::write_frame(frame->data,frame->size,now);
-  if(!written){++correction_output_waits;return;}
-  debug_frame(debugmode::Channel::GnssTx,frame->data,written);
-  if(written!=frame->size){++correction_output_faults;correction_output_fault=true;correction_health.reset();correction_output.clear();return;}
-  ++correction_output_forwarded;rtcm_forwarded_bytes+=written;
-  correction_health.observe(frame->data,frame->size,frame->at);
-  correction_output.pop(frame);
+void correction_output_reset(){ correction_service::reset(); }
+CorrectionOutputStats correction_output_stats(){
+  const CorrectionSnapshot s=correction_service::snapshot();CorrectionOutputStats out;
+  out.forwarded=s.forwarded;out.expired=s.expired;out.overflow=s.overflow;
+  out.waiting=s.waiting;out.faults=s.faults;out.queued=s.queued;return out;
 }
 bool sd_ready = false;
 bool sd_test_passed = false;
@@ -477,7 +459,8 @@ bool handle_wifi_rtcm_packet(uint8_t *packet, size_t packet_length) {
   wifi_rtcm_highest = header.sequence; // Valid envelopes consume sequence even if COM2 admission is busy.
 
   debug_frame(debugmode::Channel::WifiRx,frame,header.rtcm_length);
-  if(!queue_correction(frame,header.rtcm_length,millis()))return false;
+  const uint32_t admitted_at=millis();
+  if(!correction_service::admit(frame,header.rtcm_length,admitted_at,admitted_at))return false;
   ++rtcm_wifi_rx_frames;wifi_last_peer_ms=millis();return true;
 }
 
@@ -513,7 +496,7 @@ bool select_config(const DeviceConfig &requested) {
     sd_log_event("WIFI_MODE", using_local_router() ? "LOCAL_ROUTER" : "DIRECT_LINK");
   }
   if (profile_changed || receiver.profile_failed) {
-    correction_output_reset();
+    correction_service::reset();
     gnss_service::reset_for_config_change();
     sd_log_event("CONFIG_SELECTED", is_base() ? "BASE_TEST" : "ROVER_SURVEY");
   }
@@ -651,7 +634,7 @@ void service_wifi() {
                     static_cast<unsigned long>(wifi_invalid_packets),
                     static_cast<unsigned long>(wifi_last_sequence),
                     static_cast<unsigned long>(rtcm_wifi_rx_frames),
-                    static_cast<unsigned long>(rtcm_forwarded_bytes),
+                    static_cast<unsigned long>(correction_service::snapshot().forwarded_bytes),
                     gnss_state.rtcm_last_message);
     }
   }
@@ -785,7 +768,7 @@ instrument_status::Inputs status_inputs(uint32_t now) {
 instrument_status::Status status_snapshot(uint32_t now) {
   // Pair connectivity is bidirectional current-boot proof, not data arrival.
   // Receiver correction age/fix gates remain independent and unchanged.
-  return instrument_status::status_snapshot(status_inputs(now), correction_health);
+  return instrument_status::status_snapshot(status_inputs(now), correction_service::health());
 }
 
 bool gps_required_fix() { return instrument_status::gps_required_fix(status_snapshot(millis())); }
@@ -805,11 +788,11 @@ bool fresh_gnss_time(uint32_t now) {
 }
 
 uint32_t verified_correction_age(uint32_t now) {
-  return instrument_status::verified_correction_age(solution_inputs(), now, correction_health);
+  return instrument_status::verified_correction_age(solution_inputs(), now, correction_service::health());
 }
 
 const char *correction_health_state(uint32_t now) {
-  return instrument_status::correction_health_state(solution_inputs(), now, correction_health);
+  return instrument_status::correction_health_state(solution_inputs(), now, correction_service::health());
 }
 
 const char *fix_label(int quality) {
@@ -920,7 +903,7 @@ void sd_log_solution(uint32_t now) {
                 static_cast<unsigned long>(gnss_state.rtcm_frames),
                 static_cast<unsigned long>(rtcm_wifi_tx_frames),
                 static_cast<unsigned long>(rtcm_wifi_rx_frames),
-                static_cast<unsigned long>(rtcm_forwarded_bytes),
+                static_cast<unsigned long>(correction_service::snapshot().forwarded_bytes),
                 static_cast<unsigned long>(wifi_sequence_gaps),
                 static_cast<unsigned long>(wifi_invalid_packets),
                 transport_label);
@@ -1060,7 +1043,7 @@ const char *warning_peer_notice() {
 DashboardWarning dashboard_warning(uint32_t now) {
   instrument_status::Inputs in = status_inputs(now);
   in.peer_notice = warning_peer_notice();
-  return instrument_status::dashboard_warning(in, correction_health);
+  return instrument_status::dashboard_warning(in, correction_service::health());
 }
 
 const char *current_fix_label(uint32_t now) {
@@ -1243,7 +1226,7 @@ void ui_build_frame(UiFrame &f, uint32_t now) {
                   static_cast<unsigned long>(rtcm_wifi_tx_frames),
                   static_cast<unsigned long>(rtcm_wifi_rx_frames));
     std::snprintf(f.wifi_data, sizeof(f.wifi_data), "%lu bytes  type %u",
-                  static_cast<unsigned long>(rtcm_forwarded_bytes), gnss_state.rtcm_last_message);
+                  static_cast<unsigned long>(correction_service::snapshot().forwarded_bytes), gnss_state.rtcm_last_message);
   }
 
   if (current_page == ScreenPage::kSettings) {
@@ -1541,7 +1524,7 @@ size_t format_web_status(char *output, size_t capacity, uint32_t now) {
     online ? "true" : "false", current_fix_label(now), quality, gga_age, satellites, accuracy_m, accuracy,
     linked ? "true" : "false", link.transport == instrument_status::Transport::Radio ? "SiK RADIO" : wifi_transport_label(), signal, rssi, peer_age, correction_age,correction_health_state(now),
     static_cast<unsigned long>(wifi_rx_packets), static_cast<unsigned long>(wifi_sequence_gaps),
-    static_cast<unsigned long>(wifi_invalid_packets), static_cast<unsigned long>(correction_output_forwarded), local, utc,
+    static_cast<unsigned long>(wifi_invalid_packets), static_cast<unsigned long>(correction_service::snapshot().forwarded), local, utc,
     rover_ap_ready() ? "true" : "false",rover_ap_ssid(),rover_ap_address(),rover_ap_clients(),
     warning.title, warning.detail, warning.color == colors::kError ? "error" : "warning");
   return length >= 0 && static_cast<size_t>(length) < capacity ? length : 0;
@@ -1572,7 +1555,7 @@ void receiver_log_config(const char *profile, const char *notes) {
   sd_log_config(profile, notes);
 }
 
-void receiver_reset() { correction_output_reset(); }
+void receiver_reset() { correction_service::reset(); }
 
 void receiver_forward_frame(const uint8_t *frame, size_t length,
                             uint16_t message_type) {
@@ -1667,7 +1650,7 @@ void handle_usb_command(const char *command) {
                   static_cast<unsigned long>(gnss_state.rtcm_frames),
                   static_cast<unsigned long>(rtcm_wifi_tx_frames),
                   static_cast<unsigned long>(rtcm_wifi_rx_frames),
-                  static_cast<unsigned long>(rtcm_forwarded_bytes),
+                  static_cast<unsigned long>(correction_service::snapshot().forwarded_bytes),
                   static_cast<unsigned long>(gnss_state.rtcm_bad),
                   static_cast<unsigned long>(wifi_invalid_packets),
                   gnss_state.rtcm_last_message,
@@ -1791,6 +1774,7 @@ void setup() {
   }
 
   receiver_service_begin();
+  correction_service_begin();
   print_console_help();
   start_wifi();
   setup_sd_logging();
@@ -1809,7 +1793,7 @@ void loop() {
   if(!ota_locked()){gnss_service::service_startup(millis());gnss_service::service_profile(millis());}
   service_wifi();
   diagnostic_service(millis(),!is_base(),wifi_peer_known?wifi_peer:IPAddress(),gnss_service::snapshot().profile_running);
-  service_correction_output();
+  correction_service::service_output(millis());
   service_survey();
   service_swipe_navigation();
   service_brightness(millis(), brightness_mode, gnss_service::snapshot().time);
@@ -1865,7 +1849,7 @@ void service_survey() {
 
 bool peer_update_quality_ready(){return is_base()||(!ota_paused()&&verified_correction_age(millis())<=3000&&gps_required_fix());}
 void ota_reset_corrections(){
-  correction_output_reset();gnss_service::reset_input_state();
+  correction_service::reset();gnss_service::reset_input_state();
   link_service::clear_pending();
 }
 
