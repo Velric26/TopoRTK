@@ -346,6 +346,7 @@ Default temporary role assignment: Unit A = base-test; Unit B = rover. The touch
 - Final point-quality thresholds and observation durations.
 - Phone/tablet browser compatibility and offline recovery behavior.
 - BNO085 purpose and a defensible calibration method if tilt compensation is pursued.
+- Battery state-of-charge monitoring: pick the cheapest simple option and bench-validate it ([power architecture](docs/power.md#state-of-charge-monitoring-open--find-the-cheap-simple-way)); a pack ran flat unnoticed on 2026-09-15, and the dark panel was first mistaken for a dead board.
 - Final batteries, regulators, filtering, connectors, field controls, enclosure, and pole mount.
 - Mexican homologation and permitted settings for the 915 MHz radio system.
 

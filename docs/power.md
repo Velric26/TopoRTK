@@ -52,6 +52,30 @@ For controlled bench testing only:
 
 Before field deployment, add a 3S BMS with balancing, over-charge, over-discharge, over-current, and short-circuit protection, together with a proper 12.6 V CC/CV pack charger.
 
+## State-of-charge monitoring (open — find the cheap, simple way)
+
+Motivation: on 2026-09-15 a unit's 3S pack ran flat during a bench session with no warning from the instrument or the web UI; it simply stopped, and the dark panel was initially mistaken for a dead board. Nothing on either unit measures the pack today.
+
+Constraints any solution has to respect:
+
+- The pack is **3S (12.6 V full, roughly 9-10 V near cutoff)**, so the common single-cell fuel gauges (MAX17048, MAX17055, LC709203F) do **not** apply as-is: a pack-level measurement is required.
+- An **I²C bus already exists** (the ESP32 talks to the TCA9554 expander), so an I²C sensor adds no new bus wiring.
+- The value must reach the touchscreen card and `/api/v1/status`, and the project rule holds: an unmeasured value is `null`, never a fabricated percentage.
+- USB can back-feed 5 V, so the sense point must be the pack itself (after the fuse) and a charging state must not be reported as load state.
+
+Candidate options, cheapest first:
+
+| Option | Cost | Effort | What it gives | Caveats |
+|---|---|---|---|---|
+| 3S low-voltage alarm/buzzer on the balance lead | ~US$1 | none, no firmware | audible warning below a set cell voltage | no remote reading, no logging, no percentage |
+| Resistor divider into a free ESP32-S3 **ADC1** pin | cents | small firmware change | pack voltage; rough SoC from a discharge curve | voltage-only SoC sags under radio TX/display load; ADC2 conflicts with Wi-Fi; needs a divider ≤ ~3.1 V and a calibration point |
+| **INA226** (or INA219) on the existing I²C bus, high-side shunt | ~US$2 | small firmware change | pack voltage **and** current; SoC by coulomb counting; also answers the current-draw items below | needs a shunt and a characterization run; the percentage is a compensated estimate, not a magic number |
+| Multi-cell gauge or 3S BMS with telemetry (BQ34Z100-class or a BMS with a data header) | US$5-15 | medium firmware and configuration | true SoC **and** per-cell voltages (cell imbalance is currently invisible) | more configuration and a larger part; likely overkill before the final pack and BMS are chosen |
+
+Preference, subject to the final pack and BMS choice: an **INA226 on the existing I²C bus**. It is the cheapest part that yields both a defensible SoC (coulomb counting with a voltage fallback) and the current measurements this document already needs, adds no new bus, and leaves open the per-cell BMS-with-telemetry upgrade if a pack-level estimate proves too coarse. A divider on an ADC1 pin remains the zero-cost first reading, and a low-voltage alarm is worth having regardless as a bench safety net.
+
+Report it honestly until the pack is characterized: publish voltage and current, leave the percentage `null`, and never present a voltage reading alone as a full-charge claim.
+
 ## USB and back-feed rule
 
 USB can also supply 5 V to the ESP32 and BDRTK carrier. During external-power tests, disconnect USB power or use a data-only USB cable unless the board's power-path isolation has been verified. Do not parallel an external 5 V regulator with USB 5 V unintentionally.
@@ -60,5 +84,6 @@ USB can also supply 5 V to the ESP32 and BDRTK carrier. During external-power te
 
 - Measure per-unit current at radio receive, radio transmit, display startup, Wi-Fi activity, and SD writes.
 - Measure 5 V voltage at the ESP32 and UM980 while the radio transmits.
+- Choose and bench-validate the state-of-charge measurement above: confirm the sense point at the pack, identify a free ADC1 pin if the divider route is taken, check the I²C address budget alongside the TCA9554, and characterize the pack's discharge curve (voltage and current against a controlled load) before publishing any percentage.
 - Confirm the BNO085 breakout's exact supply and logic-level requirements.
 - Select the final BMS, charger, fuse holder, switch, connectors, and enclosure strain relief.

@@ -17,7 +17,7 @@ See the [consolidated electronics architecture](../electronics-architecture.md) 
 
 ## Power system
 
-Each unit is planned around its own 3S 18650 pack, a direct battery branch for the Holybro 1 W radio, and a 12 V-to-5 V, 15 W buck converter for the ESP32 and BDRTK-980 carrier. The provisional fuse, charging, BMS, USB back-feed, and BNO085 supply requirements are recorded in the [power architecture](../power.md).
+Each unit is planned around its own 3S 18650 pack, a direct battery branch for the Holybro 1 W radio, and a 12 V-to-5 V, 15 W buck converter for the ESP32 and BDRTK-980 carrier. The provisional fuse, charging, BMS, USB back-feed, and BNO085 supply requirements are recorded in the [power architecture](../power.md), which also carries the open task to find a cheap, simple **battery state-of-charge** measurement (a pack ran flat unnoticed on 2026-09-15).
 
 ## Documentation Rules
 
