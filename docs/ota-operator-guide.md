@@ -21,7 +21,7 @@ These are last-known DHCP addresses, not guaranteed static assignments. Hardware
 4. Choose the `.tpk` package for **hardware Unit A or B**, independently of its current Base/Rover role. Select **Review package and notify peer**. This reserves the instrument and rejects active collection, queued survey mutations, receiver setup and diagnostics. Correction forwarding continues during review.
 5. Read the role-specific interruptions. Accept the interruption/power checkbox. If peer acknowledgement cannot be confirmed, explicitly choose whether to permit an unconfirmed notification. **Confirm interruption and install** pauses local processing and starts a separate Updating notice. Without the override, a missing final acknowledgement aborts before writing flash.
 6. Keep power connected. The browser shows transfer progress, then waits for a new boot and its startup verdict. HTTP/Debug polling pauses during the synchronous upload. A successful transfer alone is not reported as a successful update. If the connection is lost, reconnect and check the outcome before retrying.
-7. Debug returns On after reboot (default). Disable it on the touchscreen if not needed. For **SiK**, start a **fresh Base correction session**, then copy it to Rover. The saved old route is restored for peer-status communication only; correction traffic remains blocked until the new session is selected. This avoids resetting sequence/replay protection in the old session. Wi-Fi does not need this manual SiK rejoin.
+7. Debug returns On after reboot (default). Disable it on the touchscreen if not needed. The stored correction medium is restored at boot and the pair negotiates a fresh session automatically, so **no manual SiK rejoin is needed**. If the peer is already running a different link protocol (a protocol-breaking cutover in progress) it cannot acknowledge the notice; the explicit unconfirmed option covers that mid-cutover case, and both units inhibit production readiness until they run compatible firmware.
 
 ## Development backups and recovery
 
@@ -44,7 +44,7 @@ The selected transport carries bounded `RTM1` type-3 control envelopes. SiK shar
 
 Preparation, Updating, Cancelled and Reconnected notices are distinct. Only an observed Updating notice supplies the paused-link explanation. Unreceived notices remain ordinary link loss. Repeated notices cannot indefinitely extend the deadline. Overdue updates show **Update overdue — link unavailable**. Return notices and matching boot/attempt evidence show recovery; Rover quality still requires fresh corrections and the required GNSS fix. Informational labels never bypass survey quality gates.
 
-The old SiK session cannot safely carry restarted correction sequence counters. The preview explicitly blocks correction input/output after receipt-based radio restoration and shows **REJOIN SiK LINK**. Transparent session negotiation and cryptographic pairing remain future work.
+A restarted instrument cannot safely carry its old correction sequence counters, so pairing always negotiates a fresh session for the current boot: the old session's replay window is never reused, and a proven boot change clears queued output, assembly and health history. Sessions and notices are bound to a fresh bidirectional challenge/echo on the selected medium. Transparent negotiation is implemented (0.11.16-arch-r5); cryptographic RF authentication remains future work.
 
 ## Package and boot safeguards
 

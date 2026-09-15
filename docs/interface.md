@@ -6,7 +6,7 @@
 
 ### Debug OTA preview (0.11.0 source)
 
-The Debug tab now offers package review, role-specific interruption warnings, explicit final confirmation, peer acknowledgement/unconfirmed override and transfer/new-boot status. Peer update labels also appear on Survey tabs and the instrument dashboard. Passive Debug remains separate from the update pause. Both builds and software regressions pass; hardware deployment remains pending. See the [operator guide](ota-operator-guide.md), including the explicit fresh-session SiK rejoin after OTA.
+The Debug tab now offers package review, role-specific interruption warnings, explicit final confirmation, peer acknowledgement/unconfirmed override and transfer/new-boot status. Peer update labels also appear on Survey tabs and the instrument dashboard. Passive Debug remains separate from the update pause. Both builds and software regressions pass. See the [operator guide](ota-operator-guide.md); correction sessions renegotiate automatically after an update (0.11.16-arch-r5), so no manual rejoin step is documented or required.
 
 ### Debug (0.10.5 source; hardware validation pending)
 

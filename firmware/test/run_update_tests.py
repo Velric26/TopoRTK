@@ -31,9 +31,10 @@ generated = output / 'peer_service.cpp'
 parts = ['#include "peer_hardware.h"\n#include <string>\n']
 for unit, namespace in [(1, 'A'), (2, 'B')]:
     parts += [f'#define TOPORTK_UNIT_ID {unit}\nnamespace {namespace} {{\n',
-              f'uint32_t nonce={unit*1111},time_ms=100;uint32_t web_boot_id(){{return nonce;}}uint32_t millis(){{return time_ms;}}\n',
+              f'uint32_t time_ms=100;uint32_t millis(){{return time_ms;}}\n',
               source, '\n}\n#undef TOPORTK_UNIT_ID\n']
 generated.write_text(''.join(parts)+'#include "peer_service_cases.h"\n', encoding='utf-8')
 exe=output/'peer_service.exe'
-subprocess.run(['g++','-std=c++17','-I'+str(root/'test'),'-I'+str(root/'src'),str(generated),'-o',str(exe)],check=True)
-subprocess.run([str(exe)],check=True)
+subprocess.run(['g++','-std=c++17','-Wall','-Wextra','-Werror','-I'+str(root/'test'),'-I'+str(root/'src'),str(generated),str(root/'src/pair_session.cpp'),'-o',str(exe)],check=True)
+for medium in ('wifi', 'radio'):
+    subprocess.run([str(exe), medium], check=True)

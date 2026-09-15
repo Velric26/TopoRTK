@@ -30,6 +30,7 @@
 #include "correction_queue.h"
 #include "instrument_status.h"
 #include "link_diagnostic.h"
+#include "link_service.h"
 #include "debug_service.h"
 #include "ota_service.h"
 #include "peer_update.h"
@@ -79,7 +80,7 @@ constexpr uint32_t kGnssBaud = 115200;
 
 namespace network {
 constexpr uint32_t kMagic = 0x5452544B;
-constexpr uint8_t kVersion = 2;
+constexpr uint8_t kVersion = 3;
 constexpr uint8_t kHelloPacket = 1;
 constexpr uint8_t kTestPacket = 2;
 constexpr uint8_t kRtcmPacket = 3;
@@ -100,6 +101,9 @@ struct __attribute__((packed)) WiFiTestPacket {
   int16_t link_rssi_dbm;
   uint16_t reserved;
   char marker[16];
+  uint32_t sender_boot, receiver_boot, session;
+  uint8_t sender_unit, sender_role;
+  uint16_t identity_reserved;
   uint32_t checksum;
 };
 
@@ -112,6 +116,9 @@ struct __attribute__((packed)) WiFiRtcmHeader {
   uint32_t sender_ms;
   uint16_t rtcm_length;
   uint16_t rtcm_message;
+  uint32_t sender_boot, receiver_boot, session;
+  uint8_t sender_unit, sender_role;
+  uint16_t identity_reserved;
   uint32_t checksum;
 };
 
@@ -216,6 +223,7 @@ uint32_t rtcm_last_byte_ms = 0;
 uint32_t rtcm_uart_frames = 0;
 uint32_t rtcm_uart_bad = 0;
 uint32_t rtcm_wifi_sequence = 0;
+uint32_t wifi_session_id = 0, wifi_session_peer = 0, wifi_rtcm_highest = 0;
 uint32_t rtcm_wifi_tx_frames = 0;
 uint32_t rtcm_wifi_rx_frames = 0;
 uint32_t rtcm_forwarded_bytes = 0;
@@ -235,16 +243,16 @@ CorrectionOutputStats correction_output_stats(){
   s.overflow=correction_output.overflow;s.waiting=correction_output_waits;s.faults=correction_output_faults;s.queued=correction_output.size();return s;
 }
 bool queue_correction(const uint8_t *frame,size_t size,uint32_t at){
-  if(is_base()||!unit_profile_applied||diagnostic_busy()||ota_paused()||correction_output_fault)return false;
+  if(is_base()||!unit_profile_applied||diagnostic_busy()||ota_paused()||correction_output_fault||!link_service::connected(millis()))return false;
   if(!correction_station.accept(frame,size))return false;
   return correction_output.enqueue(frame,size,at,millis());
 }
-bool correction_radio_input(const uint8_t *frame,size_t size,uint32_t at){
-  return correction_radio_active()&&queue_correction(frame,size,at);
+bool correction_link_input(const uint8_t *frame,size_t size,uint32_t at){
+  return link_service::radio_active()&&queue_correction(frame,size,at);
 }
 void service_correction_output(){
   const uint32_t now=millis();
-  if(is_base()||!unit_profile_applied||diagnostic_busy()||ota_paused()||correction_output_fault){correction_output.clear();return;}
+  if(is_base()||!unit_profile_applied||diagnostic_busy()||ota_paused()||correction_output_fault||!link_service::connected(now)){correction_output.clear();return;}
   const auto *frame=correction_output.front(now);if(!frame)return;
   // Single main-loop writer and a TX ring larger than the largest whole frame.
   // This reports UART buffer admission, not receiver acknowledgement.
@@ -394,8 +402,46 @@ bool valid_wifi_packet(WiFiTestPacket packet) {
   return received_checksum == packet_checksum(packet);
 }
 
+void sync_wifi_session(const pair_session::Snapshot &state) {
+  if (state.session == wifi_session_id && state.peer_boot == wifi_session_peer) return;
+  // Only transport-derived counters reset here; the legacy peer address/age
+  // stay with the hello traffic that owns them, and admission reads the pair.
+  wifi_session_id = state.session; wifi_session_peer = state.peer_boot;
+  wifi_rtcm_highest = rtcm_wifi_sequence = wifi_tx_sequence = wifi_last_sequence = 0;
+  wifi_have_sequence = false;
+}
+template<class Packet> bool current_wifi_identity(const Packet &packet, uint32_t now) {
+  const auto state = link_service::snapshot(now);
+  sync_wifi_session(state);
+  return state.transport == pair_session::Transport::WiFi && state.connected &&
+         packet.session == state.session && packet.session >= 1000000 &&
+         packet.sender_boot == state.peer_boot && packet.receiver_boot == state.local_boot &&
+         packet.sender_unit == 3 - TOPORTK_UNIT_ID && packet.sender_role == (is_base() ? 1 : 0) &&
+         !packet.identity_reserved && packet.sequence;
+}
+template<class Packet> void set_wifi_identity(Packet &packet, const pair_session::Snapshot &state) {
+  packet.sender_boot = state.local_boot; packet.receiver_boot = state.peer_boot;
+  packet.session = state.session; packet.sender_unit = TOPORTK_UNIT_ID; packet.sender_role = !is_base();
+}
+
+bool legacy_wifi_packet(uint8_t *bytes, size_t size) {
+  if (size < 24 || correction::u32(bytes) != network::kMagic || bytes[4] != 2 ||
+      correction::u16(bytes + 6) != size) return false;
+  const bool control = bytes[5] == network::kHelloPacket || bytes[5] == network::kTestPacket;
+  const size_t checksum_at = control ? 36 : 20;
+  if (control ? (size != 40 || std::memcmp(bytes + 20, network::kMarker, sizeof(network::kMarker)))
+              : (bytes[5] != network::kRtcmPacket || correction::u16(bytes + 16) + 24 != size)) return false;
+  const uint32_t checksum = correction::u32(bytes + checksum_at);
+  correction::put32(bytes + checksum_at, 0);
+  const bool valid = checksum == fnv1a(bytes, size);
+  correction::put32(bytes + checksum_at, checksum);
+  return valid;
+}
+
 bool send_wifi_packet(const IPAddress &destination, uint8_t type,
                       uint32_t sequence) {
+  const auto state = link_service::snapshot(millis());
+  if (state.transport != pair_session::Transport::WiFi || !state.connected) return false;
 
   WiFiTestPacket packet = {};
   packet.magic = network::kMagic;
@@ -405,6 +451,7 @@ bool send_wifi_packet(const IPAddress &destination, uint8_t type,
   packet.sequence = sequence;
   packet.sender_ms = millis();
   packet.link_rssi_dbm = !is_base() ? network_service::rssi() : 0;
+  set_wifi_identity(packet, state);
   std::strncpy(packet.marker, network::kMarker, sizeof(packet.marker) - 1);
   packet.checksum = packet_checksum(packet);
 
@@ -415,8 +462,12 @@ bool send_wifi_packet(const IPAddress &destination, uint8_t type,
 
 bool send_rtcm_packet(const uint8_t *frame, size_t frame_length,
                       uint16_t message_type) {
-  if (!wifi_transport::started(wifi_transport::Channel::Corrections) ||
-      !wifi_peer_known || frame == nullptr || frame_length > kMaxRtcmFrameSize) {
+  const auto state = link_service::snapshot(millis());
+  sync_wifi_session(state);
+  if (state.transport != pair_session::Transport::WiFi || !state.connected ||
+      !wifi_transport::started(wifi_transport::Channel::Corrections) ||
+      !uint32_t(link_service::wifi_peer()) || frame == nullptr || frame_length > kMaxRtcmFrameSize ||
+      rtcm_wifi_sequence == UINT32_MAX) {
     return false;
   }
 
@@ -430,6 +481,7 @@ bool send_rtcm_packet(const uint8_t *frame, size_t frame_length,
   header.sender_ms = millis();
   header.rtcm_length = frame_length;
   header.rtcm_message = message_type;
+  set_wifi_identity(header, state);
   header.checksum = 0;
   std::memcpy(packet, &header, sizeof(header));
   std::memcpy(packet + sizeof(header), frame, frame_length);
@@ -437,13 +489,13 @@ bool send_rtcm_packet(const uint8_t *frame, size_t frame_length,
   std::memcpy(packet, &header, sizeof(header));
 
   debug_frame(debugmode::Channel::WifiTx, frame, frame_length);
-  return wifi_transport::send(wifi_transport::Channel::Corrections, wifi_peer,
+  return wifi_transport::send(wifi_transport::Channel::Corrections, link_service::wifi_peer(),
                               packet, header.packet_size);
 }
 
 
 bool handle_wifi_rtcm_packet(uint8_t *packet, size_t packet_length) {
-  if (correction_radio_active() || is_base() || !unit_profile_applied || packet == nullptr ||
+  if (link_service::radio_active() || is_base() || !unit_profile_applied || packet == nullptr ||
       packet_length < sizeof(WiFiRtcmHeader)) {
     return false;
   }
@@ -469,6 +521,8 @@ bool handle_wifi_rtcm_packet(uint8_t *packet, size_t packet_length) {
       header.rtcm_message != rtcm_message_type(frame, header.rtcm_length)) {
     return false;
   }
+  if (!current_wifi_identity(header, millis()) || header.sequence <= wifi_rtcm_highest) return false;
+  wifi_rtcm_highest = header.sequence; // Valid envelopes consume sequence even if COM2 admission is busy.
 
   debug_frame(debugmode::Channel::WifiRx,frame,header.rtcm_length);
   if(!queue_correction(frame,header.rtcm_length,millis()))return false;
@@ -477,20 +531,14 @@ bool handle_wifi_rtcm_packet(uint8_t *packet, size_t packet_length) {
 
 void start_wifi() {
   survey_revoke_control();
-  survey_reference_ms=0;
+  // A network restart is not a radio/session/reference reset.
   phone_key_shown_ms = phone_key_confirm_ms = 0;
   wifi_peer_known = false;
   wifi_peer = IPAddress();
   wifi_last_peer_ms = 0;
   wifi_peer_rssi_dbm = 0;
-  wifi_have_sequence = false;
-  wifi_last_sequence = 0;
-  wifi_tx_sequence = wifi_tx_packets = wifi_rx_packets = 0;
+  wifi_tx_packets = wifi_rx_packets = 0;
   wifi_sequence_gaps = wifi_invalid_packets = 0;
-  rtcm_wifi_sequence = rtcm_wifi_tx_frames = rtcm_wifi_rx_frames = 0;
-  rtcm_forwarded_bytes = rtcm_uart_frames = rtcm_uart_bad = 0;
-  rtcm_last_rx_ms = rtcm_last_message = 0;
-  correction_output_reset();
   last_wifi_send_ms = 0;
   last_wifi_connect_attempt_ms = 0;
   network_service::restart(device_config, board::kUnitLabel, millis());
@@ -561,10 +609,13 @@ void receive_wifi_packets() {
     // Phone AP clients are not correction peers. Accept Rover input only from
     // the upstream station subnet, never the independent phone subnet.
     if (!is_base() && !on_station_subnet(sender)) continue;
+    if (legacy_wifi_packet(packet_bytes, size_t(packet_length))) {
+      link_service::note_incompatible(millis()); ++wifi_invalid_packets; continue;
+    }
     if (packet_length >= static_cast<int>(sizeof(WiFiRtcmHeader)) &&
         packet_bytes[5] == network::kRtcmPacket) {
-      if(correction_radio_active())continue; // Never feed parallel Wi-Fi copies.
-      if(!wifi_peer_known||!(sender==wifi_peer)){++wifi_invalid_packets;continue;}
+      if(link_service::radio_active())continue; // Never feed parallel Wi-Fi copies.
+      if(!(sender==link_service::wifi_peer())){++wifi_invalid_packets;continue;}
       if (!handle_wifi_rtcm_packet(packet_bytes, packet_length)) {
         ++wifi_invalid_packets;
       }
@@ -578,7 +629,9 @@ void receive_wifi_packets() {
 
     WiFiTestPacket packet = {};
     std::memcpy(&packet, packet_bytes, sizeof(packet));
-    if (!valid_wifi_packet(packet)) {
+    if (!valid_wifi_packet(packet) || !current_wifi_identity(packet, millis()) ||
+        !(sender == link_service::wifi_peer()) || packet.reserved ||
+        (wifi_have_sequence && packet.sequence <= wifi_last_sequence)) {
       ++wifi_invalid_packets;
       continue;
     }
@@ -595,39 +648,35 @@ void receive_wifi_packets() {
       wifi_peer_rssi_dbm = network_service::rssi();
       wifi_last_peer_ms = millis();
       ++wifi_rx_packets;
-      if (wifi_have_sequence) {
-        if (packet.sequence > wifi_last_sequence + 1) {
-          wifi_sequence_gaps += packet.sequence - wifi_last_sequence - 1;
-        } else if (packet.sequence <= wifi_last_sequence) {
-          ++wifi_invalid_packets;
-        }
-      }
-      wifi_last_sequence = packet.sequence;
-      wifi_have_sequence = true;
+      if (wifi_have_sequence && packet.sequence > wifi_last_sequence + 1)
+        wifi_sequence_gaps += packet.sequence - wifi_last_sequence - 1;
     } else {
       ++wifi_invalid_packets;
     }
+    wifi_last_sequence = packet.sequence; wifi_have_sequence = true;
   }
 }
 
 void service_wifi() {
   const uint32_t now = millis();
   network_service::service(millis());
+  const auto state = link_service::snapshot(now);
+  sync_wifi_session(state);
   receive_wifi_packets();
 
-  if (is_base() && wifi_peer_known &&
+  if (state.connected && state.transport == pair_session::Transport::WiFi &&
+      wifi_tx_sequence != UINT32_MAX && is_base() && uint32_t(link_service::wifi_peer()) &&
       now - last_wifi_send_ms >= network::kTestIntervalMs) {
     last_wifi_send_ms = now;
-    if (send_wifi_packet(wifi_peer, network::kTestPacket, ++wifi_tx_sequence)) {
+    if (send_wifi_packet(link_service::wifi_peer(), network::kTestPacket, ++wifi_tx_sequence)) {
       ++wifi_tx_packets;
     }
-  } else if (!is_base() && station_connected() &&
+  } else if (state.connected && state.transport == pair_session::Transport::WiFi &&
+             wifi_tx_sequence != UINT32_MAX && !is_base() && station_connected() &&
              wifi_transport::started(wifi_transport::Channel::Corrections) &&
              now - last_wifi_send_ms >= network::kHelloIntervalMs) {
     last_wifi_send_ms = now;
-    const IPAddress destination = using_local_router()
-                                    ? station_broadcast()
-                                    : IPAddress(192, 168, 4, 1);
+    const IPAddress destination = link_service::wifi_peer();
     if (send_wifi_packet(destination, network::kHelloPacket, ++wifi_tx_sequence)) {
       ++wifi_tx_packets;
     }
@@ -776,19 +825,15 @@ uint16_t fix_color(int quality) {
 bool fresh_gnss_time(uint32_t now);
 uint32_t verified_correction_age(uint32_t now);
 instrument_status::Status status_snapshot(uint32_t now) {
-  // One interpretation of transport, peer, corrections, GNSS and readiness.
-  // Thresholds are the pre-R4 ones, moved verbatim into instrument_status.
+  // Pair connectivity is bidirectional current-boot proof, not data arrival.
+  // Receiver correction age/fix gates remain independent and unchanged.
+  const auto pair = link_service::snapshot(now);
   instrument_status::Inputs in;
-  in.transport = correction_radio_active() ? instrument_status::Transport::Radio
-                                           : instrument_status::Transport::WiFi;
-  in.wifi_peer_known = wifi_peer_known;
-  in.wifi_peer_age_valid = wifi_last_peer_ms != 0;
-  in.wifi_peer_age_ms = wifi_last_peer_ms ? now - wifi_last_peer_ms : 0;
-  in.base_direct_ap = is_base() && !using_local_router();
-  in.base_direct_client = network_service::clients() > 0;
-  in.wifi_station_up = station_connected();
-  in.radio_active = correction_radio_active();
-  in.radio_linked = correction_radio_linked(now);
+  in.transport = pair.transport == pair_session::Transport::Radio ? instrument_status::Transport::Radio
+                                                                 : instrument_status::Transport::WiFi;
+  in.peer_connected = pair.connected;
+  in.peer_age_valid = pair.peer_age_ms != UINT32_MAX;
+  in.peer_age_ms = pair.peer_age_ms;
   in.wifi_station_rssi_valid = station_connected();
   in.wifi_station_rssi_dbm = network_service::rssi();
   in.wifi_peer_report_valid = wifi_peer_known;
@@ -1083,7 +1128,10 @@ struct DashboardWarning {
 
 DashboardWarning dashboard_warning(uint32_t now) {
   if(ota_paused())return {"FIRMWARE UPDATE", "Local operations paused. Keep power on.",colors::kPrimary};
-  if(correction_radio_needs_rejoin())return {"REJOIN SiK LINK","New Base session, then join Rover.",colors::kPrimary};
+  const auto pair=link_service::snapshot(now);
+  if(!std::strcmp(pair.reason,"recovery_required"))return {"LINK RECOVERY","Select matching links locally.",colors::kPrimary};
+  if(!std::strcmp(pair.reason,"same_role"))return {"PAIR ROLE ERROR","Select one Base and one Rover.",colors::kPrimary};
+  if(!std::strcmp(pair.reason,"protocol_incompatible"))return {"LINK VERSION","Update both instruments.",colors::kPrimary};
   static char peer_notice[80];peer_update_label(peer_notice,sizeof(peer_notice));
   if(peer_notice[0])return {"PAIRED UNIT",peer_notice,colors::kPrimary};
   const bool uart_active = byte_count > 0 && now - last_rx_ms < 3000;
@@ -1111,8 +1159,8 @@ DashboardWarning dashboard_warning(uint32_t now) {
   } else if (is_base() && !device_config.base_rtcm) {
     alert = "CORRECTION OUTPUT OFF";
     detail = "Enable RTCM from the USB console.";
-  } else if(correction_radio_active()&&is_base()){
-    alert="SiK OUTPUT SELECTED";detail="Rover reception is unconfirmed.";
+  } else if(!linked&&!std::strcmp(pair.reason,"negotiating")){
+    alert="PAIRING";detail="Waiting for the selected link.";
   } else if (!linked) {
     alert = is_base() ? "ROVER LINK DOWN" : "BASE LINK DOWN";
     detail = is_base() ? "Set the other unit to Rover." : "Power on the base; check range.";
@@ -1615,7 +1663,7 @@ void handle_complete_rtcm(const uint8_t *frame, size_t frame_length) {
   if (is_base()) rtcm_last_rx_ms = millis();
 
   if(is_base()&&unit_profile_applied&&device_config.base_rtcm&&!diagnostic_busy()&&!ota_paused()){
-    if(correction_radio_active())correction_radio_submit(frame,frame_length,millis());
+    if(link_service::radio_active())link_service::radio_submit(frame,frame_length,millis());
     else if(send_rtcm_packet(frame,frame_length,rtcm_last_message))++rtcm_wifi_tx_frames;
   }
 }
@@ -2006,6 +2054,7 @@ void setup() {
   setup_sd_logging();
   survey_begin(sd_ready && sd_test_passed);
   diagnostic_begin();
+  link_service::begin(!is_base(),millis());
   Serial.println("BOOT COMPLETE");
 }
 
@@ -2069,7 +2118,7 @@ void service_survey() {
 bool peer_update_quality_ready(){return is_base()||(!ota_paused()&&verified_correction_age(millis())<=3000&&gps_required_fix());}
 void ota_reset_corrections(){
   correction_output_reset();rtcm_frame_length=rtcm_expected_length=rx_length=0;
-  correction_radio_clear_pending();
+  link_service::clear_pending();
   latest_horizontal_accuracy=HorizontalAccuracyData{};
 }
 

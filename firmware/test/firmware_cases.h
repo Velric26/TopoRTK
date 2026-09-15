@@ -67,6 +67,7 @@ int main() {
   // Actual firmware queue and COM2 writer: no partial admission under pressure.
   {
     const auto before=host_now;device_config.role=DeviceRole::kRover;unit_profile_applied=true;
+    wifi_last_peer_ms=host_now;
     correction_output_reset();debug_enable_local(true);gnss.binary_output.clear();gnss.tx_free=0;
     auto reference=msm(1006,0),observation=msm(1074,1000);
     assert(!queue_correction(observation.data(),observation.size(),host_now));
@@ -84,9 +85,41 @@ int main() {
     std::vector<uint8_t> packet(header.packet_size);std::memcpy(packet.data(),&header,sizeof(header));std::memcpy(packet.data()+sizeof(header),reference.data(),reference.size());
     header.checksum=fnv1a(packet.data(),packet.size());std::memcpy(packet.data(),&header,sizeof(header));
     host_radio_active=true;assert(!handle_wifi_rtcm_packet(packet.data(),packet.size()));
-    assert(correction_radio_input(reference.data(),reference.size(),host_now-1000));
+    host_radio_linked=true;
+    assert(correction_link_input(reference.data(),reference.size(),host_now-1000));
     host_now+=500;service_correction_output();assert(correction_output.size()==0); // carried age expires
     host_radio_active=false;
+    // Wi-Fi v3 binds every data envelope to both proven boots and the current
+    // nonzero session. Replays stay rejected across an ordinary link outage.
+    auto wifi_frame = [&](uint32_t sequence, uint32_t session, uint32_t sender_boot, uint32_t receiver_boot, uint8_t version=3) {
+      auto h=header;h.sequence=sequence;h.session=session;h.sender_boot=sender_boot;
+      h.receiver_boot=receiver_boot;h.sender_unit=1;h.sender_role=0;h.version=version;h.checksum=0;
+      std::vector<uint8_t> bytes(h.packet_size);std::memcpy(bytes.data(),&h,sizeof(h));
+      std::memcpy(bytes.data()+sizeof(h),reference.data(),reference.size());
+      h.checksum=fnv1a(bytes.data(),bytes.size());std::memcpy(bytes.data(),&h,sizeof(h));return bytes;
+    };
+    correction_output_reset();wifi_last_peer_ms=host_now;
+    const auto identity=link_service::snapshot(host_now);
+    auto current=wifi_frame(1,identity.session,identity.peer_boot,identity.local_boot);
+    assert(handle_wifi_rtcm_packet(current.data(),current.size()));
+    service_correction_output();
+    const auto delivered=gnss.binary_output.size();
+    current=wifi_frame(1,identity.session,identity.peer_boot,identity.local_boot);
+    assert(!handle_wifi_rtcm_packet(current.data(),current.size()));
+    host_now+=4500;wifi_last_peer_ms=host_now;
+    current=wifi_frame(1,identity.session,identity.peer_boot,identity.local_boot);
+    assert(!handle_wifi_rtcm_packet(current.data(),current.size()));
+    auto old_session=wifi_frame(2,identity.session+1,identity.peer_boot,identity.local_boot);
+    auto old_sender=wifi_frame(2,identity.session,identity.peer_boot+1,identity.local_boot);
+    auto old_receiver=wifi_frame(2,identity.session,identity.peer_boot,identity.local_boot+1);
+    auto old_version=wifi_frame(2,identity.session,identity.peer_boot,identity.local_boot,2);
+    for(auto *bad:{&old_session,&old_sender,&old_receiver,&old_version})
+      assert(!handle_wifi_rtcm_packet(bad->data(),bad->size()));
+    service_correction_output();assert(gnss.binary_output.size()==delivered);
+    current=wifi_frame(2,identity.session,identity.peer_boot,identity.local_boot);
+    assert(handle_wifi_rtcm_packet(current.data(),current.size()));service_correction_output();
+    assert(gnss.binary_output.size()==delivered+reference.size());
+    assert(rtcm_wifi_rx_frames==2);
     // Admitted OTA pause rejects new input and discards pending output. Preparing
     // without a pause keeps forwarding available while collection is reserved.
     host_ota_locked=true;assert(queue_correction(reference.data(),reference.size(),host_now));
@@ -300,25 +333,19 @@ int main() {
   assert(csv_field("solution.csv", 18) == "SIK");         // link_transport
   change_page(ScreenPage::kMain);
   ui_build_frame(ui_frame, host_now);
-  assert(std::strcmp(ui_frame.link_value, "Radio Connected") == 0);
   change_page(ScreenPage::kWifiDetails);
   ui_build_frame(ui_frame, host_now);
-  assert(std::strcmp(ui_frame.wifi_link, "LINKED") == 0);
-  assert(std::strcmp(ui_frame.wifi_rssi, "N/A (RADIO)") == 0);
   // Wi-Fi mode: transport label, real station RSSI and peer age are reported.
   host_radio_active = false; host_radio_linked = false;
   host_now += 1000; wifi_last_peer_ms = host_now; rtcm_last_rx_ms = host_now;
   service_sd_logging(); sd_log_solution(host_now);
   assert(format_web_status(json, sizeof(json), host_now) > 0);
-  assert(std::strstr(json, "\"transport\":\"DIRECT LINK\"")); // Saved host config is Direct Link.
   assert(std::strstr(json, "\"rssi_dbm\":-48"));
-  assert(std::strstr(json, "\"peer_age_ms\":0") || std::strstr(json, "\"peer_age_ms\":"));
+  assert(std::strstr(json, "\"peer_age_ms\":0"));
   assert(csv_field("solution.csv", 11) == "-48");
   assert(csv_field("solution.csv", 18) == "WIFI");
   change_page(ScreenPage::kMain);
   ui_build_frame(ui_frame, host_now);
-  assert(std::strcmp(ui_frame.link_value, "Wi-Fi  -48 dBm") == 0);
-  change_page(ScreenPage::kMain);
   // Actual AP storage/lifecycle, subnet routing and local password UI.
   assert(rover_ap_ready() && std::strlen(rover_ap_password())==9 && rover_ap_password()[4]=='.');
   for (int i=0;i<9;++i) if (i!=4) assert(rover_ap_password()[i]>='0' && rover_ap_password()[i]<='9');

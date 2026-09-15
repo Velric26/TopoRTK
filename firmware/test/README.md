@@ -8,7 +8,9 @@ g++ -std=c++11 -Wall -Wextra -Werror test/test_config.cpp -o .pio/test_config.ex
 python test/run_host_tests.py
 ```
 
-Python 3 and `g++` are required. No extra Python packages are used. These checks do not open serial ports or change connected hardware.
+Python 3 and `g++` are required. No extra Python packages are used. These checks do not open serial ports or change connected hardware. On this workstation `g++` is not on the default `PATH` and PlatformIO's bundled MinGW (5.1, missing cc1plus runtime DLLs, C++11 only) cannot compile these sources; use a modern x86_64 MinGW (for example the winget `BrechtSanders.WinLibs.POSIX.UCRT` package) with its `bin` directory on `PATH` — `.pio/run_with_toolchain.py <runner>` does that for a single run.
+
+`run_pair_session_tests.py` compiles the production `pair_session.cpp` and covers startup orders on both media, lossy proof and backpressure, strict codec/padding/opcode rejection, Hello/session replay, reboot and role isolation, same-boot outage retention and clock wrap. `run_update_tests.py` compiles the peer-notice and OTA services against the real pair core.
 
 - `test_config.cpp`: round trips for every supported setting, rejected invalid/schema values, clearing prior base outputs, role-dependent RTCM streams, and recorded UM980 response checksums.
 - `run_host_tests.py`: compiles the current production `main.cpp` against minimal hardware doubles. It exercises NVS failures/reload/no-op writes, profile acknowledgements/timeouts/retry, stale peer/correction clearing, post-profile GGA grace, actual touch polling and cancellation, and navigation.

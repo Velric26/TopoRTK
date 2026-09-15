@@ -20,12 +20,23 @@ stubs = '''
 bool host_diagnostic_busy=false;
 bool host_radio_active=false;
 bool host_radio_linked=false;
-bool correction_radio_active(){return host_radio_active;}
-bool correction_radio_linked(uint32_t){return host_radio_linked;}
-bool correction_radio_submit(const uint8_t *,size_t,uint32_t){return true;}
-void correction_radio_stop(){host_radio_active=false;}
-void correction_radio_clear_pending(){}
-bool correction_radio_needs_rejoin(){return false;}
+namespace link_service {
+bool radio_active(){return host_radio_active;}
+pair_session::Snapshot snapshot(uint32_t now){
+  pair_session::Snapshot s;
+  s.transport=host_radio_active?pair_session::Transport::Radio:pair_session::Transport::WiFi;
+  s.local_boot=web_boot_id();s.peer_boot=0x98765432;s.session=7777777;s.established=true;
+  s.peer_age_ms=wifi_last_peer_ms?now-wifi_last_peer_ms:UINT32_MAX;
+  s.connected=host_radio_active?host_radio_linked:(wifi_last_peer_ms&&now-wifi_last_peer_ms<4000);
+  s.reason=s.connected?"connected":"peer_unreachable";return s;
+}
+bool connected(uint32_t now){return snapshot(now).connected;}
+bool radio_submit(const uint8_t *,size_t,uint32_t){return true;}
+void clear_pending(){}
+void begin(bool,uint32_t){}
+IPAddress wifi_peer(){return IPAddress(192,168,4,1);}
+void note_incompatible(uint32_t){}
+}
 void ota_boot_begin(){}
 void ota_service(uint32_t,bool,bool,bool){}
 bool host_ota_locked=false,host_ota_paused=false;
@@ -70,7 +81,9 @@ for name in ('ready', 'stale'):
     snapshot = json.loads((root / f'.pio/status-{name}.json').read_text())
     assert snapshot['api_version'] == 1 and snapshot['device']['role'] == 'ROVER'
     assert snapshot['state']['ready'] == (name == 'ready')
-    assert snapshot['link']['rtcm_received_frames'] == 2  # Two actual whole-frame admissions in firmware_cases.
+    # Actual whole-frame COM2 admissions: two radio-path frames plus the two
+    # admitted Wi-Fi v3 frames in the transport-identity case.
+    assert snapshot['link']['rtcm_received_frames'] == 4
 print('PASS: JSON snapshots, unavailable values, bounded response, read-only state generation')
 
 def chunk(kind, data):

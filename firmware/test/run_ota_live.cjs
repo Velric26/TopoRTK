@@ -1,9 +1,14 @@
-// Explicit live firmware install: --install <unit A|B> <unit URL> <peer URL> <package.tpk>.
+// Explicit live firmware install: --install <unit A|B> <unit URL> <peer URL> <package.tpk> [--allow-unconfirmed].
+// The flag is only for a protocol-breaking cutover where the peer cannot
+// acknowledge the notice (e.g. the other unit already runs the new protocol).
+// Without it an unacknowledged preparation is cancelled and nothing is flashed.
 // Never retries automatically; private evidence stays under ignored .pio.
 const {chromium}=require('playwright');
 const fs=require('node:fs'), path=require('node:path'), assert=require('node:assert/strict');
-const [flag,unit,base,peer,packagePath]=process.argv.slice(2);
-if(flag!=='--install'||!['A','B'].includes(unit)||!base||!peer||!packagePath)throw Error('Usage: --install <A|B> <unit URL> <peer URL> <package.tpk>');
+const args=process.argv.slice(2);
+const allowUnconfirmed=args.includes('--allow-unconfirmed');
+const [flag,unit,base,peer,packagePath]=args.filter(a=>a!=='--allow-unconfirmed');
+if(flag!=='--install'||!['A','B'].includes(unit)||!base||!peer||!packagePath)throw Error('Usage: --install <A|B> <unit URL> <peer URL> <package.tpk> [--allow-unconfirmed]');
 const root=path.resolve(__dirname,'..'),dir=path.join(root,'.pio/ota-live-'+Date.now());fs.mkdirSync(dir,{recursive:true});
 const bytes=fs.readFileSync(packagePath);assert.equal(bytes.subarray(0,4).toString(),'TPK1');assert.equal(bytes[5],unit.charCodeAt(0)-64);assert.equal(bytes.length,128+bytes.readUInt32LE(8));assert.equal(require('node:crypto').createHash('sha256').update(bytes.subarray(128)).digest('hex'),bytes.subarray(16,48).toString('hex'));
 const evidence={started:new Date().toISOString(),peer:[],stages:[]};
@@ -26,15 +31,26 @@ const subset=s=>Object.fromEntries(['unit','role','active_job','jobs','records_u
   assert(evidence.warning.length>40);
   let last='';timer=setInterval(async()=>{try{const u=await get(peer+'/api/v1/update');if(u.peer_status!==last){last=u.peer_status;evidence.peer.push({at:new Date().toISOString(),status:last});console.log('Peer:',last)}}catch{}},350);
   await page.locator('#reviewFirmware').click();
+  let unconfirmed=false;
   try{await page.waitForFunction(()=>document.querySelector('#otaProgress').textContent.includes('Peer acknowledged preparation'),{},{timeout:20000})}catch(e){
-   evidence.stages.push('Preparation not acknowledged; cancelled without flashing');
-   if(await page.locator('#cancelFirmware').isEnabled())await page.locator('#cancelFirmware').click();
-   throw Error('Peer preparation acknowledgement missing; no override authorized');
+   if(!allowUnconfirmed){
+    evidence.stages.push('Preparation not acknowledged; cancelled without flashing');
+    if(await page.locator('#cancelFirmware').isEnabled())await page.locator('#cancelFirmware').click();
+    throw Error('Peer preparation acknowledgement missing; no override authorized');
+   }
+   unconfirmed=true;
+   evidence.stages.push('Peer acknowledgement unavailable; the operator authorized the explicit unconfirmed override');
+   if(!await page.locator('#allowUnconfirmed').isChecked())await page.locator('#allowUnconfirmed').check();
+   if(!await page.locator('#acceptInterruption').isChecked())await page.locator('#acceptInterruption').check();
+   await page.waitForFunction(()=>document.querySelector('#confirmFirmware').disabled===false&&document.querySelector('#otaState').textContent.includes('review'),{},{timeout:15000});
+   console.log('Peer cannot acknowledge under the protocol change; unconfirmed override authorized by the operator.');
   }
-  evidence.stages.push('Peer preparation acknowledged');console.log('Preparation acknowledged.');
-  assert.equal(await page.locator('#confirmFirmware').isDisabled(),true);
+  evidence.unconfirmedOverride=unconfirmed;evidence.stages.push(unconfirmed?'Preparation confirmed with the operator-authorized unconfirmed override':'Peer preparation acknowledged');
+  console.log('Preparation acknowledged.');
+  if(!unconfirmed)assert.equal(await page.locator('#confirmFirmware').isDisabled(),true);
   await page.screenshot({path:path.join(dir,'ota-review.png'),fullPage:true});
-  await page.locator('#acceptInterruption').check();assert.equal(await page.locator('#allowUnconfirmed').isChecked(),false);
+  await page.locator('#acceptInterruption').check();
+  assert.equal(await page.locator('#allowUnconfirmed').isChecked(),unconfirmed);
   await page.locator('#confirmFirmware').click();console.log('Confirmed; browser manages upload.');
   await page.waitForFunction(()=>document.querySelector('#otaState').textContent.startsWith('Update: failed')||/Update complete|Update rolled back|Upload rejected|Update stopped/.test(document.querySelector('#otaProgress').textContent),{},{timeout:360000});
   evidence.result=await page.locator('#otaProgress').innerText();console.log(evidence.result);evidence.terminal=await get(base+'/api/v1/update');

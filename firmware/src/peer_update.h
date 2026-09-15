@@ -1,9 +1,9 @@
 #pragma once
 #include "correction_transport.h"
 #include "update_notice.h"
-class IPAddress;
+namespace pair_session { struct Snapshot; }
 // All mutation is on the main loop/UART owner; HTTP reads a copied label only.
-void peer_update_service(uint32_t now,bool rover,uint32_t radio_session,IPAddress peer,bool quality_ready);
+void peer_update_service(uint32_t now,const pair_session::Snapshot &link,bool quality_ready);
 void peer_update_receive(const correction::Packet &packet,uint32_t now);
 bool peer_update_next(correction::Packet &packet,uint32_t now);
 void peer_update_committed(const correction::Packet &packet,uint32_t now);

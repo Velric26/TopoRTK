@@ -10,12 +10,11 @@ const char kDiagnosticPage[] PROGMEM=R"HTML(<!doctype html>
 
 <p id="controlState" class="muted">View only</p><button id="control" disabled>Take control</button><button id="release" class="secondary" disabled>Release control</button>
 </section>
-<section><h2>Live correction routing · bench preview</h2>
-<p>Start SiK on Base, then copy its session number to Rover. Only one correction link is used. Start a new session after a restart; Wi-Fi is the startup default. Radio tests require switching back to Wi-Fi first.</p>
-<p id="routeState" role="status">Loading correction routing…</p><p id="routeError" role="alert"></p>
-<label id="sessionLabel">Base session number<input id="liveSession" inputmode="numeric" maxlength="10" autocomplete="off"></label>
-<button id="liveStart" disabled>Start SiK session</button><button id="liveWifi" class="secondary" disabled>Use Wi-Fi corrections</button>
-<p id="routeCounters" class="muted"></p><p class="muted">COM2 counts mean bytes queued to the receiver UART. RTK readiness still requires the receiver's own fresh solution and matching base reference. SiK reception and survey accuracy are not established by starting a session.</p>
+<section><h2>Live correction link</h2>
+<p>Select the same link locally on both instruments. The dedicated pair connects automatically, including after restart. This selection changes only this instrument; a queued request is not a connection result. Only the selected link carries corrections. Advanced radio tests still require selecting Wi-Fi first.</p>
+<p id="routeState" role="status">Loading correction routing…</p><p id="routePeer" role="status">Peer connection not confirmed.</p><p id="routeError" role="alert"></p>
+<button id="liveRadio" disabled>Use Radio corrections</button><button id="liveWifi" class="secondary" disabled>Use Wi-Fi corrections</button>
+<p id="routeCounters" class="muted"></p><p class="muted">COM2 counts mean bytes queued to the receiver UART. Peer connected does not mean corrections are fresh, RTK FIXED or survey-ready. The receiver's own fresh solution and matching base reference are still required.</p>
 </section>
 <section><h2>2. Match settings on Base and Rover</h2><div class="grid">
 <label>Six-digit test code<input id="run" inputmode="numeric" pattern="[0-9]{6}" maxlength="6"></label>
@@ -52,7 +51,7 @@ function controls(){
   $('control').disabled=!online||requesting||owner;$('release').disabled=!online||requesting||!owner;
   $('controlState').textContent=owner&&online?'You control this instrument':'View only · Take control to start or cancel';
   for(const id of ['arm','pairarm','probe','selftest'])$(id).disabled=!online||!owner||requesting||state?.busy||state?.corrections?.transport==='sik';
-  for(const id of ['liveStart','liveWifi','liveSession'])$(id).disabled=!online||!owner||requesting||state?.busy;
+  for(const id of ['liveRadio','liveWifi'])$(id).disabled=!online||!owner||requesting||state?.busy;
   $('cancel').disabled=!online||!owner||requesting||!['armed','running'].includes(state?.state);
   for(const id of ['run','transport','mode','seconds','rate','confirm','profile'])$(id).disabled=!!state?.busy||requesting;
   $('download').disabled=!report();$('selfdownload').disabled=!state?.self_test;
@@ -85,12 +84,8 @@ $('pairarm').onclick=()=>action(async()=>{
   const run=Number($('run').value);if(!/^[0-9]{6}$/.test($('run').value)||run<100000||run===state?.run)throw Error('Use a fresh test code from 100000 to 999999.');
   remember('diagnosticRun',$('run').value);await api('/api/v1/diagnostic',{op:'pairtest',run,seconds:Number($('seconds').value),profile:$('profile').value,confirm:true});message('Arm request queued. Match the RTCM profile, test code and duration on the other instrument.');
 });
-$('liveStart').onclick=()=>action(async()=>{
-  const base=state?.role==='BASE',session=base?0:Number($('liveSession').value);
-  if(!base&&(!/^[0-9]{7,10}$/.test($('liveSession').value)||session<1000000||session>4294967295))throw Error('Copy the current session number from Base.');
-  await api('/api/v1/diagnostic',{op:'corrections',transport:'sik',session,confirm:true});message('Routing request queued. Check the live session shown below.');
-});
-$('liveWifi').onclick=()=>action(async()=>{await api('/api/v1/diagnostic',{op:'corrections',transport:'wifi',confirm:true});message('Wi-Fi request queued. Check the live route below.')});
+$('liveRadio').onclick=()=>action(async()=>{await api('/api/v1/diagnostic',{op:'corrections',transport:'sik',confirm:true});message('Local Radio selection queued, not connection confirmation. Select Radio on the companion and check peer state below.')});
+$('liveWifi').onclick=()=>action(async()=>{await api('/api/v1/diagnostic',{op:'corrections',transport:'wifi',confirm:true});message('Local Wi-Fi selection queued, not connection confirmation. Select Wi-Fi on the companion and check peer state below.')});
 $('cancel').onclick=()=>action(async()=>{await api('/api/v1/diagnostic',{op:'cancel',run:state.run});message('Cancellation requested. Check for “Test stopped” below.')});
 $('selftest').onclick=()=>action(async()=>{await api('/api/v1/diagnostic',{op:'selftest',confirm:true});message('Local fault checks requested. See their separate report below.')});
 $('selfdownload').onclick=()=>{const d=state?.self_test;if(!d)return;const a=document.createElement('a'),u=URL.createObjectURL(new Blob([JSON.stringify(d,null,2)],{type:'application/json'}));a.href=u;a.download='TopoRTK-local-transport-'+d.run+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)};
@@ -103,8 +98,8 @@ const descriptions={waiting_for_other_instrument:'Waiting for the other instrume
 function render(){
   $('connection').textContent='Connected · '+(state.role==='BASE'?'Base':'Rover');
   const route=state.corrections,base=state.role==='BASE';
-  $('sessionLabel').hidden=base;$('liveStart').textContent=base?'Start new SiK session':'Join Base SiK session';
-  $('routeState').textContent=route?.transport==='sik'?'SiK selected · Session '+route.session+' · '+(route.fault?'Output fault':route.station>=0?'Station '+route.station:'Waiting for a base reference'):'Wi-Fi corrections selected';
+  $('routeState').textContent=route?(route.transport==='sik'?'Radio':'Wi-Fi')+' selected locally'+(route.fault?' · Output fault':''):'Correction selection unavailable';
+  $('routePeer').textContent=route?.peer_connected===true?'Peer connected · Current bidirectional exchange confirmed.':'Peer not connected · '+(route?.pair_state||'negotiating').replaceAll('_',' ');
   $('routeError').textContent=route?.error||'';
   const output=route?.output;
   $('routeCounters').textContent=route?(base?'Base messages queued: '+route.submitted+'. Radio envelopes sent: '+route.envelopes+'. Rover reception is unconfirmed.':'Complete radio messages: '+route.received+'. COM2 frames queued: '+(output?.forwarded||0)+'.')+' Expired queue entries: '+(route.queue_expired+(output?.expired||0))+'. Radio CRC failures: '+route.wire_errors+'.':'';
@@ -140,7 +135,7 @@ async function poll(){
     if(body.uptime_ms!==lastUptime){lastUptime=body.uptime_ms;lastAdvance=Date.now()}
     if(Date.now()-lastAdvance>3500)throw Error('Instrument state stopped updating');
     state=body;online=true;owner=response.headers.get('X-Controller')==='true';render();
-  }catch(e){online=false;owner=false;$('connection').textContent='Disconnected or stale · Last received results shown. Reconnect to retrieve the final report.';controls()}
+  }catch(e){online=false;owner=false;$('connection').textContent='Disconnected or stale · Last received results shown. Reconnect to retrieve the final report.';$('routePeer').textContent='Peer state stale · Connection not confirmed. Reconnect to retrieve current state.';controls()}
   finally{setTimeout(poll,1000)}
 }
 poll();

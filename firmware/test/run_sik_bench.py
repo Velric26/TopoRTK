@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""SiK bench driver: radio probes, paired synthetic radio test, live SiK session
-selection and correction-counter observation over the instrument HTTP APIs.
+"""SiK bench driver: radio probes, paired synthetic radio test, automatic live
+SiK pairing and correction-counter observation over the instrument HTTP APIs.
 No firmware flashing, no receiver commands outside the existing profiles.
 
 Usage:
@@ -47,6 +47,26 @@ def snapshot(base):
     cor["peer_status"] = dbg.get("peer_status", "")
     return cor
 
+def select_pair(base, base_token, rover, rover_token, transport):
+    for name, url, token in (("base", base, base_token), ("rover", rover, rover_token)):
+        status, result = req(url, "/api/v1/diagnostic", "POST",
+                             {"op": "corrections", "transport": transport, "confirm": True}, token)
+        assert status == 202, f"{name} local {transport} selection rejected: {status} {result}"
+    deadline = time.monotonic() + 20
+    latest = {}
+    while time.monotonic() < deadline:
+        for name, url in (("base", base), ("rover", rover)):
+            status, result = req(url, "/api/v1/diagnostic")
+            assert status == 200, f"{name} pairing snapshot failed: {status} {result}"
+            latest[name] = result.get("corrections") or {}
+        b, r = latest["base"], latest["rover"]
+        if (all(c.get("transport") == transport and c.get("peer_connected") is True
+                for c in (b, r)) and b.get("session", 0) >= 1000000
+                and b["session"] == r.get("session")):
+            return latest
+        time.sleep(0.5)
+    raise AssertionError(f"Automatic {transport} pair not established: {latest}")
+
 def pairtest_report(base):
     st, d = req(base, "/api/v1/diagnostic")
     return {"state": d.get("state"), "reason": d.get("reason")}, d.get("last_report") or {}
@@ -82,6 +102,9 @@ def main():
 
     bt, rt = claim(a.base), claim(a.rover)
     print(f"claimed control on both (run {a.run})")
+    if not a.skip_probe or not a.skip_pairtest:
+        # Advanced synthetic diagnostics retain their Wi-Fi-selected admission gate.
+        select_pair(a.base, bt, a.rover, rt, "wifi")
 
     if not a.skip_probe:
         for name, url, tok in (("base", a.base, bt), ("rover", a.rover, rt)):
@@ -111,32 +134,11 @@ def main():
 
     # Fresh leases: the pairtest wait can exceed the 120-second control lease.
     bt, rt = claim(a.base), claim(a.rover)
-    print("re-claimed control on both for the live session")
-
-    st, _ = req(a.base, "/api/v1/diagnostic", "POST", {"op": "corrections", "transport": "sik", "confirm": True}, bt)
-    assert st == 202, f"base live session start failed: {st}"
-    session = 0
-    for _ in range(20):
-        st, d = req(a.base, "/api/v1/diagnostic")
-        c = d.get("corrections") or {}
-        if c.get("transport") == "sik" and c.get("session", 0) >= 1000000:
-            session = c["session"]; break
-        time.sleep(0.5)
-    assert session, "base did not report a live SiK session"
-    out["session"] = session
-    print(f"base live SiK session: {session}")
-
-    st, _ = req(a.rover, "/api/v1/diagnostic", "POST", {"op": "corrections", "transport": "sik", "session": session, "confirm": True}, rt)
-    assert st == 202, f"rover join failed: {st}"
-    joined = False
-    for _ in range(20):
-        st, d = req(a.rover, "/api/v1/diagnostic")
-        c = d.get("corrections") or {}
-        if c.get("transport") == "sik" and c.get("session") == session:
-            joined = True; break
-        time.sleep(0.5)
-    assert joined, "rover did not join the session"
-    print(f"rover joined session {session}")
+    print("re-claimed control on both for local Radio selection")
+    paired = select_pair(a.base, bt, a.rover, rt, "sik")
+    out["pair_established"] = paired
+    out["session"] = paired["base"]["session"]
+    print(f"automatic Radio pair connected: session {out['session']}")
 
     print(f"observing both units for {a.seconds}s ...")
     snaps = []

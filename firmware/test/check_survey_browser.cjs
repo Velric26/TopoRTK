@@ -2,7 +2,7 @@
 // lease/takeover behavior is covered by native Control and physical two-browser tests.
 const {chromium}=require('playwright');
 const fs=require('node:fs'),path=require('node:path'),http=require('node:http'),{spawn}=require('node:child_process'),readline=require('node:readline'),assert=require('node:assert/strict');
-const root=path.resolve(__dirname,'..'),output=path.resolve(root,'../..',process.env.TOPORTK_TEST_RECORD||'tests/2026-09-10-survey-workflow');fs.mkdirSync(output,{recursive:true});
+const root=path.resolve(__dirname,'..'),output=path.resolve(root,'..',process.env.TOPORTK_TEST_RECORD||'tests/2026-09-10-survey-workflow');fs.mkdirSync(output,{recursive:true});
 const html=fs.readFileSync(path.join(root,'src/survey_ui.h'),'utf8').split('R"SURVEY(')[1].split(')SURVEY"')[0];
 const debugNav=fs.readFileSync(path.join(root,'src/debug_ui.h'),'utf8').split('R"JS(')[1].split(')JS"')[0];
 const extras=fs.readFileSync(path.join(root,'src/survey_tools_ui.h'),'utf8').split('R"TOOLS(')[1].split(')TOOLS"')[0];

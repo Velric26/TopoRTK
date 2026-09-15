@@ -3,6 +3,7 @@
 #include "debug_service.h"
 #include "survey_service.h"
 #include "link_diagnostic.h"
+#include "link_service.h"
 #include "web_http.h"
 #include <Arduino.h>
 #include <ArduinoJson.h>
@@ -39,7 +40,7 @@ void fail(const char *reason,uint32_t now){
 }
 bool save_receipt(bool rover){
   receipt={};receipt.magic=0x31544f54;receipt.attempt=attempt;receipt.target=peer_update_target();
-  receipt.route=correction_radio_session();receipt.partition=partition->address;receipt.rover=rover;
+  receipt.route=link_service::radio_active()?1:0;receipt.partition=partition->address;receipt.rover=rover;
   std::memcpy(receipt.version,header.bytes+48,32);
   receipt.crc=correction::crc32(reinterpret_cast<const uint8_t*>(&receipt),offsetof(Receipt,crc));
   Preferences p;Receipt check{};if(!p.begin("topoota",false))return false;
@@ -97,9 +98,8 @@ void ota_service(uint32_t now,bool rover,bool profile_busy,bool healthy){
       }else if(now-boot_at>=30000){std::strcpy(boot_text,"Startup failed - rolling back");esp_ota_mark_app_invalid_rollback_and_reboot();}
     }else boot_done=true;
     if(boot_done&&have_receipt){
-      // Only an update receipt may restore the saved live SiK session. It is an
-      // explicit continuation of the update, not automatic radio provisioning.
-      if(receipt.route&&receipt.rover==rover)correction_radio_restore(receipt.route,rover);
+      // The checked local link preference drives fresh automatic pairing.
+      // Legacy receipt.route is transport intent only, never a live session.
       peer_update_resume(receipt.attempt,receipt.target,rover);
     }
   }

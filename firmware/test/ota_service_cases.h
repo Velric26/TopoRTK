@@ -7,8 +7,9 @@ bool survey_diagnostic_acquire(){return admission;}
 void survey_diagnostic_release(){++release_count;}
 bool diagnostic_busy(){return busy;}
 void ota_reset_corrections(){++reset_count;}
-uint32_t correction_radio_session(){return 7777777;}
-bool correction_radio_restore(uint32_t,bool){return true;}
+namespace link_service {
+bool radio_active(){return true;}
+}
 uint32_t web_boot_id(){return 1234;}
 bool peer_update_prepare(uint32_t,uint32_t){return true;}
 bool peer_update_phase(update_notice::Kind kind,uint32_t){phases.push_back(kind);return true;}

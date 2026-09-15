@@ -18,7 +18,7 @@ Peer transport integration, the guarded package uploader, role-specific confirma
 
 **0.11.1 recovery follow-up:** Unit B is USB-installed and verified with bounded transient-timeout retries and rejected-upload socket closure. Debug requests are cancelled/paused during the transfer. Unit A remains 0.11.0. HTTP handler fault tests, OTA/Debug browser regressions, existing service tests and both builds pass. A real OTA retry remains pending physical Debug enable. See [evidence](../tests/2026-09-14-ota-recovery/README.md).
 
-SiK restoration after OTA deliberately carries peer-status traffic only: corrections require a fresh Base session and Rover rejoin, so restarted counters cannot reuse the old session's replay window. This implements the explicit manual-rejoin option below; seamless session negotiation remains deferred. The earlier increment sections retain their historical checkpoints and the original design requirements.
+The stored correction medium is restored at boot and the pair negotiates a fresh session automatically: corrections stay blocked until a current-boot bidirectional exchange proves the peer, so restarted counters cannot reuse the old session's replay window. Seamless session negotiation is implemented in 0.11.16-arch-r5. The earlier increment sections retain their historical checkpoints and the original design requirements.
 
 ## Accepted operator requirements
 

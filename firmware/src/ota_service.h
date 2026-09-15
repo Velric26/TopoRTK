@@ -15,7 +15,5 @@ bool ota_upload_finish();
 void ota_upload_abort(const char *reason);
 // Main-loop adapter: clears forwarding/partial GNSS buffers at both boundaries.
 void ota_reset_corrections();
-uint32_t correction_radio_session();
-bool correction_radio_restore(uint32_t session,bool rover);
 bool survey_service_ready();
 bool web_service_ready();

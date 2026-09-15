@@ -4,11 +4,9 @@
 // consumed by the LCD frame, the web JSON and the CSV logger so the surfaces
 // can never disagree on transport, freshness or readiness.
 //
-// Policy moved here verbatim from main.cpp (thresholds unchanged):
-//   - Wi-Fi peer freshness: peer contact within 3000 ms; Base direct link
-//     additionally requires an associated client; otherwise a station link.
-//   - Radio link: Bridge::linked semantics (Rover-side reception within its
-//     window; a Base's transmit-only bridge never reports receiver freshness).
+// Pair connectivity is current-boot bidirectional proof (R5), supplied by the
+// sole link owner. It is independent of correction observations or GNSS time.
+// Remaining receiver/readiness thresholds are unchanged:
 //   - Correction freshness: Rover age <= 3000 ms; Base = its RTCM output flag.
 //   - GNSS required fix: receiver profile applied, role-matched GGA fresh
 //     within 3000 ms, quality 7 for Base / 4 for Rover.
@@ -57,17 +55,10 @@ struct Readiness {
 struct Inputs {
   Transport transport = Transport::None;
 
-  // Wi-Fi peer facet (transport WiFi).
-  bool wifi_peer_known = false;
-  bool wifi_peer_age_valid = false;
-  uint32_t wifi_peer_age_ms = 0;
-  bool base_direct_ap = false;        // Base in Direct Link mode
-  bool base_direct_client = false;    // an associated client exists
-  bool wifi_station_up = false;
-
-  // Radio facet.
-  bool radio_active = false;
-  bool radio_linked = false;
+  // Selected-medium, boot-proven peer facet.
+  bool peer_connected = false;
+  bool peer_age_valid = false;
+  uint32_t peer_age_ms = 0;
 
   // Signal inputs.
   bool wifi_station_rssi_valid = false;  // Rover with an associated station
@@ -124,28 +115,19 @@ inline Status evaluate(const Inputs &in) {
                         (in.base_role ? in.fix_quality == 7 : in.fix_quality == 4);
   s.gnss.time_valid = in.time_valid;
 
-  // Transport-specific peer and signal facets.
-  if (in.transport == Transport::Radio) {
-    s.peer.connected = in.radio_linked;      // Rover-side reception; Base stays disconnected
-    s.peer.age_valid = false;
-    s.signal.valid = false;                  // radio reports no RSSI: unknown, never Wi-Fi dBm
-  } else {
-    s.peer.age_valid = in.wifi_peer_age_valid;
-    s.peer.age_ms = in.wifi_peer_age_ms;
-    s.peer.connected = in.wifi_peer_age_valid && in.wifi_peer_age_ms <= 3000 &&
-                       (in.base_direct_ap ? (in.wifi_peer_known && in.base_direct_client)
-                                          : in.wifi_station_up);
-    if (!in.base_role && in.wifi_station_up) {
+  s.peer.connected = in.peer_connected;
+  s.peer.age_valid = in.peer_age_valid;
+  s.peer.age_ms = in.peer_age_ms;
+  if (in.transport == Transport::WiFi) {
+    if (!in.base_role && in.wifi_station_rssi_valid) {
       s.signal.valid = true;
       s.signal.rssi_dbm = in.wifi_station_rssi_dbm;
-    } else if (in.base_direct_ap && in.wifi_peer_known) {
-      s.signal.valid = true;                 // peer-reported RSSI from the Rover hello
+    } else if (in.base_role && in.wifi_peer_report_valid) {
+      s.signal.valid = true;
       s.signal.rssi_dbm = in.wifi_peer_report_dbm;
     }
   }
-
-  // Transport-aware link state (the correction_link_connected semantics).
-  s.link_connected = in.transport == Transport::Radio ? s.peer.connected : s.peer.connected;
+  s.link_connected = s.peer.connected;
 
   // Readiness (thresholds identical to the previous system_ready).
   s.readiness.profile_applied = in.profile_applied;
