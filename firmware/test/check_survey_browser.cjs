@@ -3,9 +3,11 @@
 const {chromium}=require('playwright');
 const fs=require('node:fs'),path=require('node:path'),http=require('node:http'),{spawn}=require('node:child_process'),readline=require('node:readline'),assert=require('node:assert/strict');
 const root=path.resolve(__dirname,'..'),output=path.resolve(root,'..',process.env.TOPORTK_TEST_RECORD||'tests/2026-09-10-survey-workflow');fs.mkdirSync(output,{recursive:true});
-const html=fs.readFileSync(path.join(root,'src/survey_ui.h'),'utf8').split('R"SURVEY(')[1].split(')SURVEY"')[0];
-const debugNav=fs.readFileSync(path.join(root,'src/debug_ui.h'),'utf8').split('R"JS(')[1].split(')JS"')[0];
-const extras=fs.readFileSync(path.join(root,'src/survey_tools_ui.h'),'utf8').split('R"TOOLS(')[1].split(')TOOLS"')[0];
+// UI sources are the canonical files under web/ (see web/assets.json).
+const web=name=>fs.readFileSync(path.join(root,'web',name),'utf8');
+const html=web('survey.html');
+const debugNav=web('debug-nav.js');
+const extras=web('survey-tools.js');
 const fixture=JSON.parse(fs.readFileSync(path.join(root,'test/test_survey.cpp'),'utf8').split('fixture=R"(')[1].split(')";')[0]);
 const engine=spawn(path.join(root,'.pio/test_survey.exe'),['--serve'],{cwd:root,stdio:['pipe','pipe','inherit']});let waiting=[],chain=Promise.resolve(),offline=false,controller=false,leaseToken='',claims=0;
 readline.createInterface({input:engine.stdout}).on('line',line=>waiting.shift()?.(JSON.parse(line)));

@@ -1,9 +1,9 @@
 // Production UI with read-only sample data; no physical commands.
 const {chromium}=require('playwright'),fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
 const root=path.resolve(__dirname,'..'),repository=path.resolve(root,'..'),output=path.resolve(repository,process.env.TOPORTK_TEST_RECORD||'tests/2026-09-11-gui-redesign');
-const html=fs.readFileSync(path.join(root,'src/survey_ui.h'),'utf8').split('R"SURVEY(')[1].split(')SURVEY"')[0];
-const js=fs.readFileSync(path.join(root,'src/survey_tools_ui.h'),'utf8').split('R"TOOLS(')[1].split(')TOOLS"')[0];
-const debugNav=fs.readFileSync(path.join(root,'src/debug_ui.h'),'utf8').split('R"JS(')[1].split(')JS"')[0];
+// UI sources are the canonical files under web/ (see web/assets.json).
+const web=name=>fs.readFileSync(path.join(root,'web',name),'utf8');
+const html=web('survey.html'),js=web('survey-tools.js'),debugNav=web('debug-nav.js');
 const state=JSON.parse(fs.readFileSync(path.join(repository,'tests/2026-09-11-manual-lines/hardware-final.json'))).A;
 state.unit='Preview';state.jobs=[{id:'sample',name:'North field',revision:0,points:0}];state.active_job='sample';state.operation={id:'',state:'idle',message:''};
 (async()=>{const browser=await chromium.launch({channel:'msedge',headless:true});try{const page=await browser.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));

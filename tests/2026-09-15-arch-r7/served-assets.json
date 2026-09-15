@@ -1,0 +1,168 @@
+{
+  "date": "2026-09-15",
+  "firmware": "0.11.18-arch-r7",
+  "units": {
+    "A": {
+      "address": "192.168.100.20",
+      "role": "base",
+      "firmware": "0.11.18-arch-r7",
+      "boot": "New firmware verified",
+      "assets": [
+        {
+          "url": "/",
+          "source": "survey.html",
+          "status": 200,
+          "mime": "text/html; charset=utf-8",
+          "bytes": 28075,
+          "sha256": "c38b26cdf5096bc31ba1ef16efdf0cc26a110eee058de2c0eddc0500496b3be3",
+          "matches_canonical_source": true
+        },
+        {
+          "url": "/ui/v1/",
+          "source": "survey.html",
+          "status": 200,
+          "mime": "text/html; charset=utf-8",
+          "bytes": 28075,
+          "sha256": "c38b26cdf5096bc31ba1ef16efdf0cc26a110eee058de2c0eddc0500496b3be3",
+          "matches_canonical_source": true
+        },
+        {
+          "url": "/survey",
+          "source": "survey.html",
+          "status": 200,
+          "mime": "text/html; charset=utf-8",
+          "bytes": 28075,
+          "sha256": "c38b26cdf5096bc31ba1ef16efdf0cc26a110eee058de2c0eddc0500496b3be3",
+          "matches_canonical_source": true
+        },
+        {
+          "url": "/survey-tools.js",
+          "source": "survey-tools.js",
+          "status": 200,
+          "mime": "application/javascript; charset=utf-8",
+          "bytes": 29556,
+          "sha256": "675d85cbf338572884ff8fdeb4f0227b2296cf58446175faa38f7e19d9acac34",
+          "matches_canonical_source": true
+        },
+        {
+          "url": "/diagnostics",
+          "source": "diagnostics.html",
+          "status": 200,
+          "mime": "text/html; charset=utf-8",
+          "bytes": 19060,
+          "sha256": "cdc9053e85f35f3cb6c96797dd2039ca5f1af89a15ab531f94472e0ed4920372",
+          "matches_canonical_source": true
+        },
+        {
+          "url": "/debug",
+          "source": "debug.html",
+          "status": 200,
+          "mime": "text/html; charset=utf-8",
+          "bytes": 12964,
+          "sha256": "94e54e6d0164fa25a8b68e11958a869b31decedeb2d606b1606e7749bda60d0e",
+          "matches_canonical_source": true
+        },
+        {
+          "url": "/debug-nav.js",
+          "source": "debug-nav.js",
+          "status": 200,
+          "mime": "application/javascript; charset=utf-8",
+          "bytes": 1625,
+          "sha256": "a9aca3b7a87e88a6d98e4bd2652fd69a666a36ef31f9f900cb05c36b81e065c9",
+          "matches_canonical_source": true
+        },
+        {
+          "url": "/update-ui.js",
+          "source": "update-ui.js",
+          "status": 200,
+          "mime": "application/javascript; charset=utf-8",
+          "bytes": 5538,
+          "sha256": "d9e97ff5b9e346e104c730ee7846324610aa6810c54ef8de1ce812e76bfa54ee",
+          "matches_canonical_source": true
+        }
+      ],
+      "unknown_asset_status": 404
+    },
+    "B": {
+      "address": "192.168.100.19",
+      "role": "rover",
+      "firmware": "0.11.18-arch-r7",
+      "boot": "New firmware verified",
+      "assets": [
+        {
+          "url": "/",
+          "source": "status.html",
+          "status": 200,
+          "mime": "text/html; charset=utf-8",
+          "bytes": 15448,
+          "sha256": "e3a11b59c353808c941039d938b5bed21973ec82723a70fa7ce322d37b71e3a2",
+          "matches_canonical_source": true
+        },
+        {
+          "url": "/ui/v1/",
+          "source": "status.html",
+          "status": 200,
+          "mime": "text/html; charset=utf-8",
+          "bytes": 15448,
+          "sha256": "e3a11b59c353808c941039d938b5bed21973ec82723a70fa7ce322d37b71e3a2",
+          "matches_canonical_source": true
+        },
+        {
+          "url": "/survey",
+          "source": "survey.html",
+          "status": 200,
+          "mime": "text/html; charset=utf-8",
+          "bytes": 28075,
+          "sha256": "c38b26cdf5096bc31ba1ef16efdf0cc26a110eee058de2c0eddc0500496b3be3",
+          "matches_canonical_source": true
+        },
+        {
+          "url": "/survey-tools.js",
+          "source": "survey-tools.js",
+          "status": 200,
+          "mime": "application/javascript; charset=utf-8",
+          "bytes": 29556,
+          "sha256": "675d85cbf338572884ff8fdeb4f0227b2296cf58446175faa38f7e19d9acac34",
+          "matches_canonical_source": true
+        },
+        {
+          "url": "/diagnostics",
+          "source": "diagnostics.html",
+          "status": 200,
+          "mime": "text/html; charset=utf-8",
+          "bytes": 19060,
+          "sha256": "cdc9053e85f35f3cb6c96797dd2039ca5f1af89a15ab531f94472e0ed4920372",
+          "matches_canonical_source": true
+        },
+        {
+          "url": "/debug",
+          "source": "debug.html",
+          "status": 200,
+          "mime": "text/html; charset=utf-8",
+          "bytes": 12964,
+          "sha256": "94e54e6d0164fa25a8b68e11958a869b31decedeb2d606b1606e7749bda60d0e",
+          "matches_canonical_source": true
+        },
+        {
+          "url": "/debug-nav.js",
+          "source": "debug-nav.js",
+          "status": 200,
+          "mime": "application/javascript; charset=utf-8",
+          "bytes": 1625,
+          "sha256": "a9aca3b7a87e88a6d98e4bd2652fd69a666a36ef31f9f900cb05c36b81e065c9",
+          "matches_canonical_source": true
+        },
+        {
+          "url": "/update-ui.js",
+          "source": "update-ui.js",
+          "status": 200,
+          "mime": "application/javascript; charset=utf-8",
+          "bytes": 5538,
+          "sha256": "d9e97ff5b9e346e104c730ee7846324610aa6810c54ef8de1ce812e76bfa54ee",
+          "matches_canonical_source": true
+        }
+      ],
+      "unknown_asset_status": 404
+    }
+  }
+}

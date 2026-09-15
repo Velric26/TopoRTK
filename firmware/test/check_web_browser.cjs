@@ -7,7 +7,8 @@ const assert = require('node:assert/strict');
 const root = path.resolve(__dirname, '..');
 const output = path.resolve(root, '../..', process.env.TOPORTK_TEST_RECORD || 'tests/2026-09-10-rover-web-status');
 fs.mkdirSync(output, {recursive:true});
-const html = fs.readFileSync(path.join(root,'src/web_ui.h'),'utf8').split('R"TOPOHTML(')[1].split(')TOPOHTML"')[0];
+// The Rover status page is the canonical source the build embeds (see web/assets.json).
+const html = fs.readFileSync(path.join(root,'web/status.html'),'utf8');
 const ready = JSON.parse(fs.readFileSync(path.join(root,'.pio/status-ready.json'),'utf8'));
 const stale = JSON.parse(fs.readFileSync(path.join(root,'.pio/status-stale.json'),'utf8'));
 (async () => {

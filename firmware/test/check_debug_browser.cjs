@@ -1,7 +1,8 @@
 const {chromium}=require('playwright'),fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
 const root=path.resolve(__dirname,'../..'),out=path.join(root,process.env.TOPORTK_TEST_RECORD||'tests/2026-09-14-ota');
-const otaJs=fs.readFileSync(path.join(__dirname,'../src/ota_ui.h'),'utf8').split('R"JS(')[1].split(')JS"')[0];
-const source=fs.readFileSync(path.join(__dirname,'../src/debug_ui.h'),'utf8'),html=source.split('R"HTML(')[1].split(')HTML"')[0],nav=source.split('R"JS(')[1].split(')JS"')[0];
+// UI sources are the canonical files under web/ (see web/assets.json).
+const web=name=>fs.readFileSync(path.join(__dirname,'../web',name),'utf8');
+const otaJs=web('update-ui.js'),html=web('debug.html'),nav=web('debug-nav.js');
 (async()=>{fs.mkdirSync(out,{recursive:true});const browser=await chromium.launch({channel:'msedge',headless:true});try{
  const context=await browser.newContext({viewport:{width:390,height:844},acceptDownloads:true}),page=await context.newPage(),errors=[],posts=[];
  let enabled=false,owner=false,offline=false,frozen=false,uptime=0,role='ROVER',token='',peerConnected=false;
