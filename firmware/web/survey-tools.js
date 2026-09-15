@@ -1,5 +1,4 @@
-#pragma once
-static const char kSurveyTools[] = R"TOOLS(
+
 'use strict';
 const toolsNav=document.createElement('button');toolsNav.textContent='4 \u00b7 Points';toolsNav.dataset.tab='points';toolsNav.setAttribute('aria-selected','false');toolsNav.onclick=()=>switchTab('points');document.querySelector('nav').append(toolsNav);
 const toolsPanel=document.createElement('section');toolsPanel.dataset.panel='points';toolsPanel.hidden=true;
@@ -91,4 +90,3 @@ const closeInspector=document.createElement('button');closeInspector.type='butto
 // Keep ordinary navigation buttons accessible without incomplete ARIA tab semantics.
 const layoutTab=switchTab;switchTab=function(name){const changed=tab!==name;layoutTab(name);document.querySelectorAll('[data-tab]').forEach(button=>{if(button.dataset.tab===name)button.setAttribute('aria-current','page');else button.removeAttribute('aria-current')});if(changed)window.scrollTo(0,0)};
 const storageTools=document.createElement('details');const storageTitle=document.createElement('summary');storageTitle.textContent='Storage & recovery';$('storage').before(storageTools);storageTools.append(storageTitle,$('storage'),$('recover'));
-)TOOLS";

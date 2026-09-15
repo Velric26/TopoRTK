@@ -1,14 +1,9 @@
 #include "web_http.h"
-#include "web_ui.h"
-#include "survey_ui.h"
-#include "survey_tools_ui.h"
+#include "web_assets.h"
 #include "survey_service.h"
 #include "link_diagnostic.h"
-#include "link_diagnostic_ui.h"
 #include "debug_service.h"
-#include "debug_ui.h"
 #include "ota_service.h"
-#include "ota_ui.h"
 #include "link_service.h"
 #include <Arduino.h>
 #include <esp_http_server.h>
@@ -79,14 +74,25 @@ esp_err_t get_status(httpd_req_t *request) {
   return httpd_resp_send(request, copy, length);
 }
 
-esp_err_t get_page(httpd_req_t *request) {
+// Every page and script is a generated flash asset with its manifest MIME type.
+esp_err_t send_asset(httpd_req_t *request, const char *data, size_t length, const char *mime) {
   headers(request);
-  httpd_resp_set_type(request, "text/html; charset=utf-8");
-  return rover_enabled?httpd_resp_send(request, kWebStatusPage, sizeof(kWebStatusPage) - 1):httpd_resp_send(request,kSurveyPage,sizeof(kSurveyPage)-1);
+  httpd_resp_set_type(request, mime);
+  return httpd_resp_send(request, data, length);
 }
-
-esp_err_t get_survey_page(httpd_req_t *r){headers(r);httpd_resp_set_type(r,"text/html; charset=utf-8");return httpd_resp_send(r,kSurveyPage,sizeof(kSurveyPage)-1);}
-esp_err_t get_survey_tools(httpd_req_t *r){headers(r);httpd_resp_set_type(r,"application/javascript; charset=utf-8");return httpd_resp_send(r,kSurveyTools,sizeof(kSurveyTools)-1);}
+// The root page depends on the role: the Rover hosts the status page, the Base
+// the survey page.
+esp_err_t get_root(httpd_req_t *request) {
+  return rover_enabled
+             ? send_asset(request, kAsset_status_html, kAsset_status_html_length, "text/html; charset=utf-8")
+             : send_asset(request, kAsset_survey_html, kAsset_survey_html_length, "text/html; charset=utf-8");
+}
+esp_err_t get_asset(httpd_req_t *request) {
+  for (size_t index = 0; index < kWebAssetCount; ++index)
+    if (!std::strcmp(kWebAssets[index].url, request->uri))
+      return send_asset(request, kWebAssets[index].data, kWebAssets[index].length, kWebAssets[index].mime);
+  return error(request, "404 Not Found", "{\"error\":\"not_found\"}");
+}
 bool auth(httpd_req_t *r){char value[48]={};return httpd_req_get_hdr_value_str(r,"Authorization",value,sizeof(value))==ESP_OK && std::strncmp(value,"Bearer ",7)==0 && survey_authorized(value+7);}
 bool same_origin(httpd_req_t *r){
   if(!httpd_req_get_hdr_value_len(r,"Origin"))return true;
@@ -142,7 +148,6 @@ esp_err_t release_control(httpd_req_t *r){
   return error(r,"200 OK","{\"state\":\"released\"}");
 }
 
-esp_err_t get_diagnostic_page(httpd_req_t *r){headers(r);httpd_resp_set_type(r,"text/html; charset=utf-8");return httpd_resp_send(r,kDiagnosticPage,sizeof(kDiagnosticPage)-1);}
 esp_err_t get_diagnostic(httpd_req_t *r){
   auto *data=new(std::nothrow) char[kDiagnosticCapacity];if(!data)return error(r,"503 Service Unavailable","{\"error\":\"memory_unavailable\"}");
   if(!diagnostic_snapshot(data,kDiagnosticCapacity)){delete[] data;return error(r,"503 Service Unavailable","{\"error\":\"diagnostic_unavailable\"}");}
@@ -155,8 +160,6 @@ esp_err_t post_diagnostic(httpd_req_t *r){
   std::string raw;if(!body(r,raw)||raw.size()>512||!diagnostic_request(raw.c_str()))return error(r,"409 Conflict","{\"error\":\"invalid_settings_or_diagnostic_queue_busy\"}");
   return error(r,"202 Accepted","{\"state\":\"queued\"}");
 }
-esp_err_t get_debug_page(httpd_req_t *r){headers(r);httpd_resp_set_type(r,"text/html; charset=utf-8");return httpd_resp_send(r,kDebugPage,sizeof(kDebugPage)-1);}
-esp_err_t get_update_ui(httpd_req_t *r){headers(r);httpd_resp_set_type(r,"application/javascript; charset=utf-8");return httpd_resp_send(r,kOtaUi,sizeof(kOtaUi)-1);}
 esp_err_t get_update(httpd_req_t *r){char out[1536];if(!ota_status(out,sizeof(out)))return error(r,"503 Service Unavailable","{\"error\":\"update_status_unavailable\"}");return error(r,"200 OK",out);}
 esp_err_t post_update(httpd_req_t *r){
   if(!same_origin(r)||!auth(r))return error(r,"403 Forbidden","{\"error\":\"current_controller_required\"}");
@@ -204,7 +207,6 @@ esp_err_t upload_update(httpd_req_t *r){
   Serial.printf("OTA HTTP: verified bytes=%u retries=%u elapsed_ms=%lu\n",unsigned(r->content_len),retries,static_cast<unsigned long>(millis()-started));
   return error(r,"200 OK","{\"state\":\"restarting\"}");
 }
-esp_err_t get_debug_nav(httpd_req_t *r){headers(r);httpd_resp_set_type(r,"application/javascript; charset=utf-8");return httpd_resp_send(r,kDebugNav,sizeof(kDebugNav)-1);}
 esp_err_t get_debug_status(httpd_req_t *r){char data[512];if(!debug_status(data,sizeof(data)))return error(r,"503 Service Unavailable","{\"error\":\"debug_unavailable\"}");httpd_resp_set_hdr(r,"X-Controller",auth(r)?"true":"false");return error(r,"200 OK",data);}
 esp_err_t get_debug_log(httpd_req_t *r){
   if(!auth(r))return error(r,"401 Unauthorized","{\"error\":\"claim_control_first\"}");
@@ -267,6 +269,27 @@ uint32_t web_boot_id() {
   static const uint32_t id = esp_random();
   return id;
 }
+// Explicit API routes; the generated asset table covers every page and script.
+static const httpd_uri_t kApiRoutes[] = {
+    {"/api/v1/update", HTTP_GET, get_update, nullptr},
+    {"/api/v1/update", HTTP_POST, post_update, nullptr},
+    {"/api/v1/update/upload", HTTP_POST, upload_update, nullptr},
+    {"/api/v1/debug", HTTP_GET, get_debug_status, nullptr},
+    {"/api/v1/debug", HTTP_POST, post_debug, nullptr},
+    {"/api/v1/debug/log", HTTP_GET, get_debug_log, nullptr},
+    {"/api/v1/status", HTTP_GET, get_status, nullptr},
+    {"/api/v1/survey", HTTP_GET, get_survey, nullptr},
+    {"/api/v1/data", HTTP_GET, get_data, nullptr},
+    {"/api/v1/control", HTTP_POST, claim_control, nullptr},
+    {"/api/v1/control/release", HTTP_POST, release_control, nullptr},
+    {"/api/v1/diagnostic", HTTP_GET, get_diagnostic, nullptr},
+    {"/api/v1/diagnostic", HTTP_POST, post_diagnostic, nullptr},
+    {"/api/v1/command", HTTP_POST, post_command, nullptr},
+    {"/api/v1/settings", HTTP_GET, get_settings, nullptr},
+    {"/api/v1/settings", HTTP_POST, post_settings, nullptr},
+};
+static constexpr size_t kWebRouteCount = kWebAssetCount + sizeof(kApiRoutes) / sizeof(kApiRoutes[0]);
+
 
 void publish_web_status(const char *json, size_t length, uint32_t now, bool rover) {
   portENTER_CRITICAL(&snapshot_mutex);
@@ -278,41 +301,29 @@ void publish_web_status(const char *json, size_t length, uint32_t now, bool rove
 
   if (server || (last_start_attempt && now - last_start_attempt < 5000)) return;
   last_start_attempt = now;
+  // Static assets come from the generated manifest table and the two root URLs
+  // are role-dependent; API routes are explicit. Handler capacity is derived
+  // from both tables rather than guessed.
   httpd_config_t config = HTTPD_DEFAULT_CONFIG();
   config.stack_size = 8192;
-  config.max_uri_handlers = 24;
+  config.max_uri_handlers = kWebRouteCount;
   config.max_open_sockets = 3;
   config.lru_purge_enable = true;
   config.recv_wait_timeout = 2;
   config.send_wait_timeout = 2;
   if (httpd_start(&server, &config) != ESP_OK) { server = nullptr; Serial.println("WEB: start failed"); return; }
-  const httpd_uri_t routes[] = {
-      {"/", HTTP_GET, get_page, nullptr},
-      {"/update-ui.js",HTTP_GET,get_update_ui,nullptr},
-      {"/api/v1/update",HTTP_GET,get_update,nullptr},
-      {"/api/v1/update",HTTP_POST,post_update,nullptr},
-      {"/api/v1/update/upload",HTTP_POST,upload_update,nullptr},
-      {"/debug",HTTP_GET,get_debug_page,nullptr},
-      {"/debug-nav.js",HTTP_GET,get_debug_nav,nullptr},
-      {"/api/v1/debug",HTTP_GET,get_debug_status,nullptr},
-      {"/api/v1/debug",HTTP_POST,post_debug,nullptr},
-      {"/api/v1/debug/log",HTTP_GET,get_debug_log,nullptr},
-      {"/ui/v1/", HTTP_GET, get_page, nullptr},
-      {"/api/v1/status", HTTP_GET, get_status, nullptr},
-      {"/survey",HTTP_GET,get_survey_page,nullptr},
-      {"/survey-tools.js",HTTP_GET,get_survey_tools,nullptr},
-      {"/api/v1/survey",HTTP_GET,get_survey,nullptr},
-      {"/api/v1/data",HTTP_GET,get_data,nullptr},
-      {"/api/v1/control",HTTP_POST,claim_control,nullptr},
-      {"/api/v1/control/release",HTTP_POST,release_control,nullptr},
-      {"/diagnostics",HTTP_GET,get_diagnostic_page,nullptr},
-      {"/api/v1/diagnostic",HTTP_GET,get_diagnostic,nullptr},
-      {"/api/v1/diagnostic",HTTP_POST,post_diagnostic,nullptr},
-      {"/api/v1/command",HTTP_POST,post_command,nullptr},
-  {"/api/v1/settings",HTTP_GET,get_settings,nullptr},
-  {"/api/v1/settings",HTTP_POST,post_settings,nullptr}};
   bool registered = true;
-  for (const auto &route : routes) registered &= httpd_register_uri_handler(server, &route) == ESP_OK;
+  for (size_t index = 0; index < kWebAssetCount; ++index) {
+    const bool root = !std::strcmp(kWebAssets[index].url, "/") || !std::strcmp(kWebAssets[index].url, "/ui/v1/");
+    const httpd_uri_t route = {kWebAssets[index].url, HTTP_GET, root ? get_root : get_asset, nullptr};
+    registered &= httpd_register_uri_handler(server, &route) == ESP_OK;
+  }
+  for (const auto &route : kApiRoutes) registered &= httpd_register_uri_handler(server, &route) == ESP_OK;
+  registered &= httpd_register_err_handler(server, HTTPD_404_NOT_FOUND, rejected) == ESP_OK;
+  registered &= httpd_register_err_handler(server, HTTPD_405_METHOD_NOT_ALLOWED, rejected) == ESP_OK;
+  if (!registered) { httpd_stop(server); server = nullptr; Serial.println("WEB: routes failed"); return; }
+  Serial.printf("WEB: %u assets and %u API routes on port 80; /survey\n", unsigned(kWebAssetCount),
+                unsigned(sizeof(kApiRoutes) / sizeof(kApiRoutes[0])));
   registered &= httpd_register_err_handler(server, HTTPD_404_NOT_FOUND, rejected) == ESP_OK;
   registered &= httpd_register_err_handler(server, HTTPD_405_METHOD_NOT_ALLOWED, rejected) == ESP_OK;
   if (!registered) { httpd_stop(server); server = nullptr; Serial.println("WEB: routes failed"); return; }

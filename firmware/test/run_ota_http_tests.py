@@ -4,7 +4,10 @@ import subprocess
 root=Path(__file__).resolve().parents[1]
 out=root/'.pio/update-tests';out.mkdir(parents=True,exist_ok=True)
 source=(root/'src/web_http.cpp').read_text(encoding='utf-8')
-handler=source[source.index('esp_err_t reject_upload('):source.index('esp_err_t get_debug_nav(')]
+# Slice the upload handlers (reject_upload .. upload_update) and stop at the next
+# handler, so renaming an unrelated handler cannot break this test.
+start=source.index('esp_err_t reject_upload(')
+handler=source[start:source.index('\nesp_err_t ',source.index('esp_err_t upload_update('))]
 stubs=r'''
 #include <algorithm>
 #include <cassert>

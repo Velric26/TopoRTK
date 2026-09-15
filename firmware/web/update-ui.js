@@ -1,5 +1,4 @@
-#pragma once
-const char kOtaUi[] PROGMEM=R"JS((()=>{
+(()=>{
 'use strict';
 let selected=null,update=null,armed=false,oldBoot=null,targetVersion='',awaitingBoot=false;
 window.otaUploading=false;
@@ -61,4 +60,4 @@ async function pollUpdate(){
  finally{updateControls();setTimeout(pollUpdate,1000)}
 }
 pollUpdate();
-})();)JS";
+})();

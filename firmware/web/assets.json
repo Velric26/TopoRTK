@@ -1,0 +1,39 @@
+{
+  "assets": [
+    {
+      "source": "status.html",
+      "mime": "text/html; charset=utf-8",
+      "urls": ["/", "/ui/v1/"]
+    },
+    {
+      "source": "survey.html",
+      "mime": "text/html; charset=utf-8",
+      "urls": ["/survey"]
+    },
+    {
+      "source": "survey-tools.js",
+      "mime": "application/javascript; charset=utf-8",
+      "urls": ["/survey-tools.js"]
+    },
+    {
+      "source": "diagnostics.html",
+      "mime": "text/html; charset=utf-8",
+      "urls": ["/diagnostics"]
+    },
+    {
+      "source": "debug.html",
+      "mime": "text/html; charset=utf-8",
+      "urls": ["/debug"]
+    },
+    {
+      "source": "debug-nav.js",
+      "mime": "application/javascript; charset=utf-8",
+      "urls": ["/debug-nav.js"]
+    },
+    {
+      "source": "update-ui.js",
+      "mime": "application/javascript; charset=utf-8",
+      "urls": ["/update-ui.js"]
+    }
+  ]
+}

@@ -1,7 +1,4 @@
-#pragma once
-
-// Self-contained, flash-resident UI: no CDN, external font, or browser storage.
-static const char kWebStatusPage[] = R"TOPOHTML(<!doctype html>
+<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -122,4 +119,4 @@ setInterval(() => {
 }, 250);
 setInterval(() => { if (!document.hidden) refresh(); }, 1000);
 refresh();
-</script></body></html>)TOPOHTML";
+</script></body></html>
