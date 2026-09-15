@@ -253,7 +253,15 @@ esp_err_t post_settings(httpd_req_t *r){
   else if(!std::strcmp(transport,"wifi"))selected=link_service::Transport::WiFi;
   else return error(r,"400 Bad Request","{\"error\":\"transport_required\"}");
   const auto kind=!std::strcmp(op,"link.test")?link_operation::Kind::Test:link_operation::Kind::Select;
-  if(!link_service::request_operation(kind,selected,id,d["revision"].as<uint32_t>(),reason))return settings_refusal(r,reason);
+  // Optional test profile: the injected-fault profile exists only for the radio engine.
+  const char *profile=d["profile"]|"";
+  uint8_t profile_value=0;
+  if(*profile){
+    if(!std::strcmp(profile,"clean"))profile_value=0;
+    else if(!std::strcmp(profile,"injected"))profile_value=1;
+    else return error(r,"400 Bad Request","{\"error\":\"profile_required\"}");
+  }
+  if(!link_service::request_operation(kind,selected,id,d["revision"].as<uint32_t>(),reason,profile_value))return settings_refusal(r,reason);
   return error(r,"202 Accepted","{\"state\":\"queued\"}");
 }
 esp_err_t rejected(httpd_req_t *request, httpd_err_code_t) {

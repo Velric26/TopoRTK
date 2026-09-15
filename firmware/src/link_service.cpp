@@ -23,6 +23,9 @@ link_operation::Engine operation;
 Transport selected_ = Transport::WiFi;
 bool initialized = false, rover_ = false, storage_ok = false;
 bool staging_active = false, reserved = false, radio_reserved_ = false;
+// A Test owns the tested medium for its run window: production work stays out of
+// it and the engines' verdict is reported back to the operation.
+bool test_armed = false;
 Transport staging_transport = Transport::WiFi;
 uint32_t applied_session = 0, applied_peer = 0;
 link_operation::Confirmed confirmed{};
@@ -38,6 +41,7 @@ struct QueuedRequest {
   bool valid = false, cancel = false;
   link_operation::Kind kind = link_operation::Kind::None;
   Transport transport = Transport::WiFi;
+  uint8_t profile = 0;
   uint32_t tag = 0, revision = 0;
   char id[33] = {};
 };
@@ -52,7 +56,7 @@ struct View {
 };
 View view;
 portMUX_TYPE guard = portMUX_INITIALIZER_UNLOCKED;
-constexpr size_t kSettingsCapacity = 1536;
+constexpr size_t kSettingsCapacity = 2048;
 char settings[kSettingsCapacity] = {};
 size_t settings_length = 0;
 uint32_t settings_ms = 0;
@@ -214,6 +218,12 @@ bool transmit(const correction::Packet &packet, Transport transport, bool discov
   return wifi_transport::send(wifi_transport::Channel::Peer, to, packet.bytes, sizeof(packet));
 }
 
+// True while a Test owns the tested medium, whichever medium that is.
+bool test_running(uint32_t now) {
+  const auto op = operation.snapshot(now);
+  return op.kind == link_operation::Kind::Test && op.active;
+}
+
 bool operation_expected_connected(uint32_t now) {
   const auto op = operation.snapshot(now);
   if (!op.active) return false;
@@ -268,6 +278,21 @@ void apply_actions(uint32_t now) {
     stored = persist_confirmed() && stored;
     if (!stored) operation.persisted(false);
   }
+  if (actions.run_test) {
+    // The engines own the tested medium for the run: drop queued production work
+    // so nothing of ours interleaves with the generated frames.
+    correction_output_reset();
+    const auto running = operation.snapshot(now);
+    // The engines only pair when both instruments arm the same run id, and the
+    // tag is the identifier both sides already share; a fresh request brings a
+    // fresh tag, so the run id stays unique per operation.
+    const uint32_t run = 100000u + (running.tag % 900000u);
+    if (!diagnostic_quick_test_start(uint8_t(running.transport), actions.profile, run, now)) {
+      // Not a link verdict: the tested medium refused to run the test at all.
+      operation.test_unavailable(now);
+    }
+    test_armed = true;
+  }
   if (actions.stage && stored) {
     if (!reserved && survey_diagnostic_acquire()) reserved = true;
     start_staging(now);
@@ -307,9 +332,11 @@ void drain_queue(uint32_t now) {
     accepted = operation.cancel(request.tag, now);
     if (!accepted) reason = link_operation::Reason::Conflict;
   } else if (rover_) {
-    accepted = operation.request(request.kind, request.transport, request.tag, request.revision, now, reason);
+    accepted = operation.request(request.kind, request.transport, request.tag, request.revision, now, reason,
+                                    request.profile);
   } else {
-    accepted = operation.forward(request.kind, request.transport, request.tag, request.revision, now, reason);
+    accepted = operation.forward(request.kind, request.transport, request.tag, request.revision, now, reason,
+                                    request.profile);
   }
   if (!accepted) operation.refuse(request.tag, request.kind, request.transport, reason, now);
 }
@@ -403,7 +430,7 @@ void service(uint32_t now, bool rover, bool radio_reserved) {
         ++radio_rx;
         if (!std::memcmp(packet.bytes + 12, "TPH1", 4)) pair.incompatible(now);
         else route_control(packet, now);
-      } else if (selected_ == Transport::Radio && connected(now) && !ota_paused() && live.packet(packet, now)) {
+      } else if (!test_running(now) && selected_ == Transport::Radio && connected(now) && !ota_paused() && live.packet(packet, now)) {
         debug_frame(debugmode::Channel::RadioRx, live.data(), live.size());
         if (!correction_link_input(live.data(), live.size(), now - live.known_age(now))) ++output_rejected;
       }
@@ -418,7 +445,13 @@ void service(uint32_t now, bool rover, bool radio_reserved) {
   inputs.rover = rover;
   inputs.busy = diagnostic_busy() || ota_locked() || ota_paused() || reserved;
   inputs.storage_ok = storage_ok;
-  inputs.staging_ready = staging_active && staging.snapshot(now).connected;
+  {
+    const auto op = operation.snapshot(now);
+    inputs.staging_ready = staging_active ? staging.snapshot(now).connected
+        // A Test on the medium already carrying production has nothing to stage:
+        // the running session is the proof both peers are on the tested link.
+        : (op.kind == link_operation::Kind::Test && op.active && selected_ == op.transport && connected(now));
+  }
   inputs.production_on_target = operation_expected_connected(now);
   {
     const auto op = operation.snapshot(now);
@@ -426,6 +459,23 @@ void service(uint32_t now, bool rover, bool radio_reserved) {
   }
   operation.tick(inputs);
   apply_actions(now);
+
+  {
+    // The engines are device-owned: this publishes their verdict to the operation
+    // once, and releases the tested medium when the operation is over.
+    const auto op = operation.snapshot(now);
+    if (test_armed) {
+      if (op.kind == link_operation::Kind::Test && op.active) {
+        if (diagnostic_quick_test_finished(now)) {
+          operation.test_result(diagnostic_quick_test_pass(now), now);
+          test_armed = false;
+        }
+      } else {
+        diagnostic_quick_test_cancel("operation ended", now);
+        test_armed = false;
+      }
+    }
+  }
 
   if (!storage_ok) return;
   // One packet per turn: operation control, candidate proof, production
@@ -445,19 +495,23 @@ void service(uint32_t now, bool rover, bool radio_reserved) {
     if (transmit(packet, selected_)) peer_update_committed(packet, now);
     return;
   }
-  if (selected_ == Transport::Radio && !ota_paused() && live.next(packet, now)) {
+  if (!test_running(now) && selected_ == Transport::Radio && !ota_paused() && live.next(packet, now)) {
     if (transmit(packet, Transport::Radio)) live.committed();
   }
 }
 
 bool request_operation(link_operation::Kind kind, Transport transport, const char *id,
-                       uint32_t revision, link_operation::Reason &reason) {
+                       uint32_t revision, link_operation::Reason &reason, uint8_t profile) {
   const uint32_t tag = link_operation::tag_from_hex(id);
   if (!tag) { reason = link_operation::Reason::Conflict; return false; }
   if (kind == link_operation::Kind::Test) {
-    // Automated quick tests are the R9 checkpoint; never accept silently.
-    reason = link_operation::Reason::Unsupported;
-    return false;
+    // A Test proves a medium without adopting it. Only the radio engine can inject
+    // faults, so the injected profile is refused for Wi-Fi rather than silently run
+    // as a clean test.
+    if (profile > 1 || (profile == 1 && transport != Transport::Radio)) {
+      reason = link_operation::Reason::Unsupported;
+      return false;
+    }
   }
   View current;
   portENTER_CRITICAL(&guard);
@@ -474,7 +528,8 @@ bool request_operation(link_operation::Kind kind, Transport transport, const cha
   if (revision != current.revision) { reason = link_operation::Reason::StaleRevision; return false; }
   portENTER_CRITICAL(&guard);
   queued = QueuedRequest{};
-  queued.valid = true; queued.kind = kind; queued.transport = transport; queued.tag = tag; queued.revision = revision;
+  queued.valid = true; queued.kind = kind; queued.transport = transport; queued.profile = profile;
+  queued.tag = tag; queued.revision = revision;
   std::memcpy(queued.id, id, 32);
   portEXIT_CRITICAL(&guard);
   return true;
@@ -532,6 +587,7 @@ void service_settings(uint32_t now, bool corrections_fresh) {
     entry["coordinator"] = op.coordinator;
     entry["phase_remaining_ms"] = op.active ? op.phase_remaining_ms : static_cast<uint32_t>(0);
     entry["reason"] = link_operation::reason_text(op.reason);
+    entry["profile"] = op.profile;   // 0 clean, 1 injected faults (Test only)
   }
   diagnostic_tests_json(document.createNestedObject("last_tests"));
   if (document.overflowed()) return;

@@ -20,16 +20,21 @@ enum class Reason : uint8_t {
   None = 0, PeerUnreachable = 1, Busy = 2, StaleRevision = 3, ConflictingId = 4,
   StorageFailure = 5, Cancelled = 6, Interrupted = 7, RestoreFailed = 8,
   Unsupported = 9, Applied = 10, Restored = 11, Conflict = 12,
+  // A finished test that did not pass, and a test that could not be started on
+  // the tested medium at all.
+  TestFailed = 13, TestUnavailable = 14,
 };
 
 // PLC1 operation kinds, above the negotiation kinds pair_session owns (1..6).
-enum Msg : uint8_t { Request = 7, Prepare = 8, Ready = 9, Commit = 10, Done = 11 };
+enum Msg : uint8_t { Request = 7, Prepare = 8, Ready = 9, Commit = 10, Done = 11, Run = 12 };
 // Body byte for Request/Prepare: the requested operation kind.
 // Body byte for Done: the outcome code below.
+// For a Test, Request/Prepare/Run also carry the requested profile in the byte
+// after the kind: 0 clean, 1 injected faults.
 enum Done : uint8_t { kApplied = 1, kFailed = 2, kDenied = 3, kCancelled = 4 };
 
 struct Message {
-  uint8_t kind = 0, from = 0, to = 0, role = 0, transport = 0, code = 0;
+  uint8_t kind = 0, from = 0, to = 0, role = 0, transport = 0, code = 0, profile = 0;
   uint32_t boot = 0, peer_boot = 0, tag = 0, revision = 0;
 };
 // Validates one complete PLC1 envelope carrying an operation kind.
@@ -57,6 +62,10 @@ struct Snapshot {
   uint32_t tag = 0, revision = 0, phase_remaining_ms = 0;
   Reason reason = Reason::None;
   bool coordinator = false, active = false, committed = false;
+  // A Test never adopts the tested medium: committed stays false and the
+  // verdict is reported here instead.
+  uint8_t profile = 0;
+  bool test_passed = false;
 };
 
 // Observed facts supplied by the link owner each service turn.
@@ -77,6 +86,10 @@ struct Actions {
   bool restore = false;   // return to the previous confirmed selection
   bool stage = false;     // start/adopt candidate-medium staging
   bool unstage = false;   // release staging, candidate abandoned
+  // A Test operation: arm the local test engine on the staged medium with this
+  // profile. The link owner reports the verdict back through test_result().
+  bool run_test = false;
+  uint8_t profile = 0;
   bool send = false;
   Message message{};
 };
@@ -87,9 +100,11 @@ class Engine {
   // interrupted and the confirmed selection stays authoritative.
   void begin(bool rover, bool storage_ok, const Confirmed *confirmed, const Pending *pending);
   // Coordinator admission for a request (local or forwarded by a delegate).
-  bool request(Kind kind, Transport transport, uint32_t tag, uint32_t revision, uint32_t now, Reason &reason);
+  bool request(Kind kind, Transport transport, uint32_t tag, uint32_t revision, uint32_t now, Reason &reason,
+               uint8_t profile = 0);
   // Delegate initiation: forward a client request to the coordinator.
-  bool forward(Kind kind, Transport transport, uint32_t tag, uint32_t revision, uint32_t now, Reason &reason);
+  bool forward(Kind kind, Transport transport, uint32_t tag, uint32_t revision, uint32_t now, Reason &reason,
+               uint8_t profile = 0);
   bool receive(const Message &message, uint32_t now);
   bool cancel(uint32_t tag, uint32_t now);
   // After a local (recovery) selection the interrupted record is settled and the
@@ -107,15 +122,21 @@ class Engine {
   // published against that operation id instead of a retroactive HTTP status.
   void refuse(uint32_t tag, Kind kind, Transport transport, Reason reason, uint32_t now);
   // Durable-write outcomes reported by the link owner.
+  // The local test engine finished: pass or fail. Only the coordinator decides
+  // the pair-wide outcome; a delegate reports its own verdict to the coordinator.
+  void test_result(bool pass, uint32_t now);
+  // The tested medium could not run the test at all (engine busy, transport
+  // unavailable). Reported separately from a test that ran and did not pass.
+  void test_unavailable(uint32_t now);
   void persisted(bool ok);
   void commit_result(bool ok);
   void restore_result(bool ok);
 
  private:
-  enum class Phase : uint8_t { None = 0, Prepare, Commit, Restore };
+  enum class Phase : uint8_t { None = 0, Prepare, Commit, Run, Restore };
   void send(uint8_t kind, uint8_t code, uint32_t now);
   void settle(State state, Reason reason, uint32_t now);
-  void reserve(Kind kind, Transport transport, uint32_t tag, uint32_t revision, uint32_t now);
+  void reserve(Kind kind, Transport transport, uint32_t tag, uint32_t revision, uint32_t now, uint8_t profile);
 
   State state_ = State::Idle;
   Reason reason_ = Reason::None;
@@ -124,6 +145,8 @@ class Engine {
   bool rover_ = false, storage_ok_ = true, forwarding_ = false;
   bool peer_ready_ = false, commit_received_ = false, committed_ = false, committed_commit_pending_ = false;
   uint32_t tag_ = 0, revision_ = 0, now_ = 0, started_ = 0, sent_ = 0, advance_ = 0;
+  uint8_t profile_ = 0;
+  bool test_passed_ = false, test_result_known_ = false, peer_test_passed_ = false, peer_test_known_ = false;
   uint32_t settled_tag_ = 0, tombstone_tag_ = 0, tombstone_at_ = 0;
   Kind settled_kind_ = Kind::None;
   Transport settled_target_ = Transport::WiFi;

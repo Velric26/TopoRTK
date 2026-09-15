@@ -1,0 +1,26 @@
+{
+  "result": "PASS",
+  "browser": "153.0.4234.32",
+  "checks": [
+    "load: Wi-Fi card selected, connected/fresh pair, no operation section",
+    "an explicit select click opens the confirm step, which warns about both media",
+    "exactly one link.select carrying the fixture revision, transport sik, confirm:true and a 32-hex id",
+    "negotiating and running never report the new medium as connected",
+    "committed success advances negotiating/restoring-free to the completed switch and Radio selected",
+    "a reported outcome does not lock the route selector",
+    "peer_unreachable restores nothing and reports the failed switch with Wi-Fi still selected",
+    "stale_revision asks for a review of the refreshed state and starts nothing",
+    "operation_busy reports the running operation, starts nothing and keeps the recovery hint hidden",
+    "a fresh reload renders the peer operation without any POST, before and after it completes",
+    "losing the settings stream reports no live settings and disables every write control",
+    "the reviewed outcome is read back from the instrument with no repeat request",
+    "takeover leaves the earlier browser view only with every write control disabled",
+    "the invalidated browser observes the new controller operation and never sends one",
+    "both roles render the same states and can perform a switch",
+    "320/390/768/1280 px without horizontal overflow",
+    "Take control and Confirm switch stay visible at 200% text",
+    "Tab focus reaches Take control and Confirm switch at 200% text",
+    "no password field and no PIN request apart from the claim explanation",
+    "390 px with 200% text without horizontal overflow"
+  ]
+}

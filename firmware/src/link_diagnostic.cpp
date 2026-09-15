@@ -30,11 +30,65 @@ void uart_json(JsonObject d){
   d["tx_wait_polls"]=w.tx_wait;d["short_writes"]=w.short_writes;
 }
 uint8_t transport=0; // 0 Wi-Fi; 1 SiK
+uint8_t node_role=0; // local role of the last service turn; engines are armed with it
 bool locked=false,persisted=false,persisted_peer=false;
 uint32_t probe_start=0;uint8_t probe_phase=0;char probe_text[256]={};size_t probe_size=0;
 QueueHandle_t queue=nullptr;portMUX_TYPE guard=portMUX_INITIALIZER_UNLOCKED;
-char cached[kDiagnosticCapacity]="{\"state\":\"idle\"}",last_report[4096]="null";
+char cached[kDiagnosticCapacity]="{\"state\":\"idle\"}";
+// Latest stored report per medium, so a run on one link never hides the other
+// link's result: index 0 is Wi-Fi, 1 is SiK, each with its own NVS slot.
+char reports[2][4096]={"null","null"};
+uint8_t latest=0;                 // medium slot the raw snapshot's last_report shows
+char unattributed[256]="null";    // pre-R9 report whose medium was never recorded
+char cancel_reason[48]={};
+char quick_error[96]={};          // why the last quick-test start was refused
+bool quick_locked=false;          // a quick run owns its report settle, not the reservation
+// Records why a quick-test start was refused, for the snapshot and the operator.
+bool refuse_quick(const char *medium,const char *why){
+  std::snprintf(quick_error,sizeof(quick_error),"%s:%s",medium,why);
+  return false;
+}
 char self_report[1536]="null",self_error[80]={};
+bool any_engine_busy(){return engine.busy()||pair_engine.busy();}
+const char *medium_name(uint8_t medium){return medium?"sik":"wifi";}
+// The engines refuse a repeated run id, so the generated id skips the target
+// engine's current one and the other engine's, which keeps a stale slot from
+// colliding with a later run. One pass, always in range.
+uint32_t fresh_run(uint32_t first,uint32_t second){
+  uint32_t run=100000u+esp_random()%900000u;
+  while(run==first||run==second)run=run<999999u?run+1u:100000u;
+  return run;
+}
+// Start marker: the medium (and the paired profile and shape) of the run in
+// flight, so a reboot during the run can report it as interrupted for the link
+// it was actually using.
+bool save_start_marker(uint32_t run,uint8_t medium,uint8_t node,uint8_t profile,bool was_paired){
+  Preferences p;if(!p.begin("linkdiag",false))return false;
+  const bool saved=p.putUInt("run",run)==4&&p.putBool("active",true)==1&&p.putUInt("medium",medium)==4&&
+    p.putUInt("role",node)==4&&p.putUInt("profile",profile)==4&&p.putBool("paired",was_paired)==1;
+  p.end();return saved;
+}
+void clear_start_marker(){Preferences p;if(p.begin("linkdiag",false)){p.putBool("active",false);p.end();}}
+// The raw diagnostic snapshot's last_report: the unattributable pre-R9 report
+// while it is all we have, otherwise the newest per-medium report.
+const char *latest_report(){return std::strcmp(unattributed,"null")?unattributed:reports[latest];}
+// Crash marker of a run whose medium the start marker recorded.
+void interrupted_report(uint8_t medium,uint8_t node,uint8_t profile,bool was_paired,uint32_t run,char *out,size_t capacity){
+  if(was_paired)std::snprintf(out,capacity,"{\"kind\":\"paired_rtcm_faults\",\"suite_version\":2,\"profile\":\"%s\",\"run\":%lu,\"state\":\"interrupted\",\"reason\":\"instrument_restarted_during_test\",\"role\":\"%s\",\"transport\":\"sik\",\"local_pass\":false,\"pair_pass\":false}",
+    profile==correctiontest::Clean?"clean":"injected",static_cast<unsigned long>(run),node?"ROVER":"BASE");
+  else std::snprintf(out,capacity,"{\"run\":%lu,\"state\":\"interrupted\",\"reason\":\"instrument_restarted_during_test\",\"role\":\"%s\",\"transport\":\"%s\",\"local_pass\":false,\"pair_pass\":false}",
+    static_cast<unsigned long>(run),node?"ROVER":"BASE",medium_name(medium));
+}
+// Medium a stored pre-R9 report body names, or -1 when it names none.
+int stored_medium(const String &value){
+  if(value=="null"||value.length()>=sizeof(reports[0]))return -1;
+  // The stored body can be a whole multi-kilobyte report: a document smaller
+  // than its content would fail to parse it and lose the migrated report.
+  DynamicJsonDocument report(4096);
+  if(deserializeJson(report,value))return -1;
+  const char *name=report["transport"]|"";
+  return !std::strcmp(name,"sik")?1:!std::strcmp(name,"wifi")?0:-1;
+}
 bool cached_busy=false;uint32_t published=0;
 struct Request{bool route=false;bool cancel=false,probe=false,selftest=false,paired=false;linktest::Config config;uint8_t transport=0,profile=correctiontest::Injected;};
 const char *state_name(){switch(engine.state){case linktest::Armed:return "armed";case linktest::Running:return "running";case linktest::Done:return "done";case linktest::Failed:return "failed";default:return "idle";}}
@@ -65,11 +119,16 @@ void result_json(JsonObject d){
 }
 void save_result(){
   DynamicJsonDocument d(4096);result_json(d.to<JsonObject>());
-  if(d.overflowed()||measureJson(d)>=sizeof(last_report)){persisted=false;return;}
-  serializeJson(d,last_report,sizeof(last_report));
+  const uint8_t medium=transport?1:0;
+  if(d.overflowed()||measureJson(d)>=sizeof(reports[0])){persisted=false;return;}
+  char *text=reports[medium];serializeJson(d,text,sizeof(reports[medium]));
+  latest=medium;std::strcpy(unattributed,"null");
   Preferences p;if(p.begin("linkdiag",false)){
-    persisted=p.putString("report",last_report)>0&&p.getString("report")==last_report;
-    if(persisted)p.putBool("active",false);p.end();
+    const char *key=medium?"report_sik":"report_wifi";
+    persisted=p.putString(key,text)>0&&p.getString(key)==text;
+    // The run is no longer in flight, and the stored report is this medium's
+    // latest whatever the outcome was.
+    if(persisted){p.putBool("active",false);p.putUInt("latest",medium);}p.end();
   }
   persisted_peer=peer_received();
 }
@@ -98,9 +157,9 @@ void publish(uint32_t now){
   if(probe_phase){d["state"]="probing";d["busy"]=true;}
   d["uptime_ms"]=now;d["remaining_seconds"]=engine.state==linktest::Running&&int32_t(now-engine.start_at)>=0?std::max(0,int(engine.config.seconds)-(int(now-engine.start_at)/1000)):0;
   if(paired)d["remaining_seconds"]=pair_engine.state==correctiontest::Running&&int32_t(now-pair_engine.start_at)>=0?std::max(0,int(pair_engine.seconds)-int((now-pair_engine.start_at)/1000)):0;
-  DynamicJsonDocument previous(4096);if(!deserializeJson(previous,static_cast<const char*>(last_report)))d["last_report"]=previous.as<JsonVariant>();
+  DynamicJsonDocument previous(4096);if(!deserializeJson(previous,static_cast<const char*>(latest_report())))d["last_report"]=previous.as<JsonVariant>();
   DynamicJsonDocument self(2048);if(!deserializeJson(self,static_cast<const char*>(self_report)))d["self_test"]=self.as<JsonVariant>();
-  d["self_test_error"]=self_error;auto corrections=d.createNestedObject("corrections");
+  d["self_test_error"]=self_error;d["quick_test_error"]=quick_error;auto corrections=d.createNestedObject("corrections");
   link_service::write_json(corrections,now);
   if(route_error[0])corrections["error"]=route_error;
   static char out[kDiagnosticCapacity];size_t n=serializeJson(d,out,sizeof(out));
@@ -110,8 +169,36 @@ void publish(uint32_t now){
 void diagnostic_begin(){
   queue=xQueueCreate(1,sizeof(Request));Preferences p;
   if(p.begin("linkdiag",false)){
-    if(p.getBool("active",false)){std::snprintf(last_report,sizeof(last_report),"{\"state\":\"interrupted\",\"run\":%lu,\"pair_pass\":false,\"reason\":\"instrument_restarted_during_test\"}",static_cast<unsigned long>(p.getUInt("run",0)));p.putString("report",last_report);p.putBool("active",false);}
-    else {String saved=p.getString("report","null");if(saved.length()<sizeof(last_report))std::strcpy(last_report,saved.c_str());}p.end();
+    if(p.isKey("report_wifi")){String value=p.getString("report_wifi","null");if(value.length()<sizeof(reports[0]))std::strcpy(reports[0],value.c_str());}
+    if(p.isKey("report_sik")){String value=p.getString("report_sik","null");if(value.length()<sizeof(reports[1]))std::strcpy(reports[1],value.c_str());}
+    if(p.isKey("latest")){const uint32_t index=p.getUInt("latest",0);latest=index<2?uint8_t(index):uint8_t(0);}
+    // Migration: the single pre-R9 slot is read only while neither per-medium
+    // slot exists, so a migrated report can never outlive a newer one. The body
+    // names its own medium; a body without one cannot be attributed to a medium
+    // and stays visible in the raw snapshot only.
+    if(!p.isKey("report_wifi")&&!p.isKey("report_sik")){
+      const String value=p.getString("report","null");
+      const int medium=stored_medium(value);
+      if(medium>=0){std::strcpy(reports[medium],value.c_str());if(!p.isKey("latest"))latest=uint8_t(medium);}
+      else if(value!="null"&&value.length()<sizeof(unattributed))std::strcpy(unattributed,value.c_str());
+    }
+    if(p.getBool("active",false)){
+      // The in-flight run is the newest report of its medium, interrupted by the
+      // restart: report it there instead of dropping it from last_tests.
+      const uint32_t run=p.getUInt("run",0);
+      if(p.isKey("medium")){
+        const uint8_t medium=p.getUInt("medium",0)?1:0;
+        char text[384];
+        interrupted_report(medium,p.getUInt("role",0)?1:0,uint8_t(p.getUInt("profile",0)&1),p.getBool("paired",false),run,text,sizeof(text));
+        std::strcpy(reports[medium],text);latest=medium;
+        p.putUInt("latest",medium);p.putString(medium?"report_sik":"report_wifi",text);
+      }else std::snprintf(unattributed,sizeof(unattributed),"{\"state\":\"interrupted\",\"run\":%lu,\"pair_pass\":false,\"reason\":\"instrument_restarted_during_test\"}",static_cast<unsigned long>(run));
+      p.putBool("active",false);
+    }
+    // Never show an empty slot as the latest report while the other medium has
+    // one; the durable value is rewritten by the next save.
+    if(!std::strcmp(reports[latest],"null")&&std::strcmp(reports[latest?0:1],"null"))latest=latest?0:1;
+    p.end();
   }
   Preferences saved;
   if(saved.begin("linkdiag",true)){String value=saved.getString("selftest","null");if(value.length()<sizeof(self_report))std::strcpy(self_report,value.c_str());saved.end();}
@@ -121,37 +208,49 @@ bool diagnostic_busy(){portENTER_CRITICAL(&guard);bool value=cached_busy;portEXI
 bool diagnostic_snapshot(char *out,size_t capacity){portENTER_CRITICAL(&guard);size_t n=std::strlen(cached);bool ok=n<capacity;if(ok)std::memcpy(out,cached,n+1);portEXIT_CRITICAL(&guard);return ok;}
 // The settings snapshot needs the latest report per medium without copying the
 // whole multi-kilobyte report into its bounded document: keep a small summary,
-// refreshed only when the stored report actually changes.
-char tests_summary[384]="{\"wifi\":null,\"sik\":null}";
-uint32_t summary_hash=0;
-bool summary_ready=false;
+// refreshed only when a medium's stored report actually changes.
+char tests_summary[640]="{\"wifi\":null,\"sik\":null}";
+uint32_t summary_hash[2]={0,0};
+bool summary_ready[2]={false,false};
 void refresh_tests_summary(){
-  const uint32_t hash=correction::crc32(reinterpret_cast<const uint8_t*>(last_report),std::strlen(last_report));
-  if(summary_ready&&hash==summary_hash)return;
-  summary_hash=hash;summary_ready=true;
-  DynamicJsonDocument report(1024);
-  if(deserializeJson(report,static_cast<const char*>(last_report)))return;
-  const char *transport=report["transport"]|"";
-  if(std::strcmp(transport,"sik")&&std::strcmp(transport,"wifi"))return;
-  const bool sik=!std::strcmp(transport,"sik");
-  DynamicJsonDocument summary(384);
+  uint32_t hash[2];bool stale[2]={false,false};unsigned changed=0;
+  for(unsigned medium=0;medium<2;++medium){
+    hash[medium]=correction::crc32(reinterpret_cast<const uint8_t*>(reports[medium]),std::strlen(reports[medium]));
+    stale[medium]=!summary_ready[medium]||summary_hash[medium]!=hash[medium];
+    if(stale[medium])++changed;
+  }
+  if(!changed)return;
+  DynamicJsonDocument summary(768);
   if(deserializeJson(summary,static_cast<const char*>(tests_summary)))return;
-  auto entry=summary[sik?"sik":"wifi"].to<JsonObject>();
-  entry["run"]=report["run"]|0u;
-  entry["state"]=report["state"]|"unknown";
-  entry["reason"]=report["reason"]|"";
-  entry["transport"]=transport;
-  entry["role"]=report["role"]|"";
-  entry["sent"]=report["sent"]|0u;
-  entry["received"]=report["received"]|0u;
-  entry["errors"]=report["errors"]|0u;
-  entry["pair_pass"]=report["pair_pass"]|false;
-  entry["local_pass"]=report["local_pass"]|false;
-  serializeJson(summary,tests_summary,sizeof(tests_summary));
+  for(unsigned medium=0;medium<2;++medium){
+    if(!stale[medium])continue;
+    // A full stored report needs more pool than its text: a 1022-byte paired
+    // report already overflows a 1024-byte document and would show as null.
+    DynamicJsonDocument report(4096);
+    if(deserializeJson(report,static_cast<const char*>(reports[medium]))||!report.is<JsonObject>()){summary[medium_name(uint8_t(medium))]=nullptr;continue;}
+    auto entry=summary[medium_name(uint8_t(medium))].to<JsonObject>();
+    entry["run"]=report["run"]|0u;
+    entry["state"]=report["state"]|"unknown";
+    entry["reason"]=report["reason"]|"";
+    entry["transport"]=medium_name(uint8_t(medium));
+    entry["role"]=report["role"]|"";
+    entry["sent"]=report["sent"]|0u;
+    entry["received"]=report["received"]|0u;
+    entry["errors"]=report["errors"]|0u;
+    entry["pair_pass"]=report["pair_pass"]|false;
+    entry["local_pass"]=report["local_pass"]|false;
+  }
+  // A summary that does not fit is kept as it was and retried next turn rather
+  // than published truncated, which would be unreadable JSON.
+  char text[sizeof(tests_summary)];
+  const size_t length=serializeJson(summary,text,sizeof(text));
+  if(summary.overflowed()||length>=sizeof(text))return;
+  std::memcpy(tests_summary,text,length+1);
+  for(unsigned medium=0;medium<2;++medium)if(stale[medium]){summary_hash[medium]=hash[medium];summary_ready[medium]=true;}
 }
 void diagnostic_tests_json(JsonObject out){
   refresh_tests_summary();
-  StaticJsonDocument<384> summary;
+  StaticJsonDocument<768> summary;
   if(deserializeJson(summary,static_cast<const char*>(tests_summary))){out["wifi"]=nullptr;out["sik"]=nullptr;return;}
   out["wifi"]=summary["wifi"];
   out["sik"]=summary["sik"];
@@ -180,6 +279,7 @@ bool diagnostic_request(const char *json){
   return xQueueSend(queue,&r,0)==pdTRUE;
 }
 void diagnostic_service(uint32_t now,bool rover,IPAddress peer,bool profile_busy){
+  node_role=rover?1:0; // a quick test admitted this turn is armed with this role
   Request request;
   if(queue&&xQueueReceive(queue,&request,0)==pdTRUE){
     if(ota_locked()){std::strcpy(route_error,"Firmware update owns the instrument; diagnostic request rejected.");}
@@ -195,7 +295,8 @@ void diagnostic_service(uint32_t now,bool rover,IPAddress peer,bool profile_busy
         survey_diagnostic_release();
       }
     }
-    else if(link_service::radio_active()){std::strcpy(route_error,"Select Wi-Fi locally before running advanced diagnostics.");}
+    // Advanced diagnostics and quick tests take the medium they are started on;
+    // which medium production is using is not an admission condition.
     else if(request.selftest){
       if(test_busy()||probe_phase||profile_busy||!survey_diagnostic_acquire())std::strcpy(self_error,"Finish the current test, survey or receiver operation first.");
       else {run_transport_selftest();survey_diagnostic_release();}
@@ -205,9 +306,8 @@ void diagnostic_service(uint32_t now,bool rover,IPAddress peer,bool profile_busy
     else if(!test_busy()&&!probe_phase&&request.config.run!=engine.config.run&&request.config.run!=pair_engine.run){
       if(profile_busy||!survey_diagnostic_acquire()){engine.reason="finish_survey_or_receiver_operation_first";}
       else {
-        locked=true;Preferences p;bool saved=false;
-        if(p.begin("linkdiag",false)){saved=p.putUInt("run",request.config.run)==4&&p.putBool("active",true)==1;p.end();}
-        if(!saved){survey_diagnostic_release();locked=false;engine.reason="cannot_save_test_start";}
+        locked=true;
+        if(!save_start_marker(request.config.run,request.transport,rover?1:0,request.profile,request.paired)){survey_diagnostic_release();locked=false;engine.reason="cannot_save_test_start";}
         else {paired=request.paired;if(paired)pair_engine.arm(request.config.run,request.config.seconds,rover?1:0,now,request.profile);else engine.arm(request.config,rover?1:0,now);transport=request.transport;persisted=persisted_peer=false;
           if(transport){radio_transport::begin();radio_transport::discard_input();}
           if(paired)start_uart_observation(now);
@@ -277,8 +377,67 @@ void diagnostic_service(uint32_t now,bool rover,IPAddress peer,bool profile_busy
       if(sent)engine.transmitted(packet,now);
     }
   }
-  if(!test_busy()&&!probe_phase&&locked){save_result();survey_diagnostic_release();locked=false;}
+  if(!test_busy()&&!probe_phase&&(locked||quick_locked)){
+    save_result();
+    // Only the reservation this layer took is released here; a quick test inside a
+    // link operation leaves the link owner's reservation to the link owner.
+    if(locked){survey_diagnostic_release();locked=false;}
+    quick_locked=false;
+  }
   if((paired?pair_engine.state==correctiontest::Done:engine.state==linktest::Done)&&peer_received()&&!persisted_peer)save_result();
   portENTER_CRITICAL(&guard);cached_busy=test_busy()||probe_phase;portEXIT_CRITICAL(&guard);
   if(now-published>=200)publish(now);
+}
+// The quick test is the existing engine for that medium, armed on the canonical
+// quick profile. /transport/ (0 Wi-Fi, 1 SiK) is also the medium whose stored
+// report and start marker the run belongs to.
+bool diagnostic_quick_test_start(uint8_t medium,uint8_t profile,uint32_t run,uint32_t now){
+  if(medium>1)return refuse_quick("transport","unsupported");
+  // The classic packet engine has one canonical profile: base-to-rover, 30 s,
+  // 1000 ms, clean. Fault injection exists only in the paired RTCM engine.
+  if(medium?profile>correctiontest::Injected:profile!=0)return refuse_quick(medium_name(medium),"profile_unsupported");
+  if(any_engine_busy())return refuse_quick(medium_name(medium),"engine_busy");
+  if(probe_phase)return refuse_quick(medium_name(medium),"probe_running");
+  if(ota_locked())return refuse_quick(medium_name(medium),"ota_active");
+  linktest::Config config;config.run=run;config.seconds=30;config.rate=1000;config.mode=0;
+  if(!linktest::valid_config(config))return refuse_quick(medium_name(medium),"run_id_rejected");
+  // The tested medium is brought up here: a quick test is the moment to start it,
+  // so no prior probe, route selection or medium state is required. UART2 begin()
+  // is idempotent and reports started() immediately.
+  if(medium){radio_transport::begin();if(!radio_transport::started())return refuse_quick("sik","radio_unavailable");}
+  else if(!wifi_transport::start(wifi_transport::Channel::Diagnostics))return refuse_quick("wifi","socket_unavailable");
+  // The operation that asked for this test already reserved the instrument for
+  // its own staging, and the reservation is one flag: acquiring it again fails by
+  // design. Hold it only when this call is the one that took it, so a quick test
+  // never releases a reservation the link owner still owns.
+  if(!locked&&survey_diagnostic_acquire())locked=true;
+  if(!save_start_marker(run,medium,node_role,profile,medium==1)){
+    if(locked){survey_diagnostic_release();locked=false;}
+    return refuse_quick(medium_name(medium),"cannot_save_test_start");
+  }
+  if(!(medium?pair_engine.arm(run,config.seconds,node_role,now,profile):engine.arm(config,node_role,now))){
+    clear_start_marker();
+    if(locked){survey_diagnostic_release();locked=false;}
+    return refuse_quick(medium_name(medium),"engine_arm_rejected");
+  }
+  paired=medium==1;transport=medium;persisted=persisted_peer=false;quick_locked=true;quick_error[0]=0;
+  if(medium){radio_transport::discard_input();start_uart_observation(now);}
+  return true;
+}
+bool diagnostic_quick_test_start(uint8_t medium,uint8_t profile,uint32_t now){
+  // A lone instrument generates its own id; a pair operation passes one shared
+  // id to the overload above, because a mismatched peer id is never accepted.
+  return diagnostic_quick_test_start(medium,profile,fresh_run(medium?pair_engine.run:engine.config.run,medium?engine.config.run:pair_engine.run),now);
+}
+// The service turn advances both engines and settles a finished run's report, so
+// the queries below never advance engine state themselves.
+bool diagnostic_quick_test_busy(uint32_t){return any_engine_busy();}
+bool diagnostic_quick_test_finished(uint32_t){return engine.state==linktest::Done||engine.state==linktest::Failed||pair_engine.state==correctiontest::Done||pair_engine.state==correctiontest::Failed;}
+bool diagnostic_quick_test_pass(uint32_t){return paired?pair_engine.pair_pass():engine.pair_pass();}
+void diagnostic_quick_test_cancel(const char *why,uint32_t now){
+  if(!why||!*why)why="cancelled";
+  // The engines keep the pointer, so the text lives until the report is saved.
+  std::snprintf(cancel_reason,sizeof(cancel_reason),"%s",why);
+  if(engine.busy())engine.abort(now,cancel_reason);
+  if(pair_engine.busy())pair_engine.abort(now,cancel_reason);
 }

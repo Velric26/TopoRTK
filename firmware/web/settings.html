@@ -133,15 +133,36 @@ function renderOperation() {
     : 'This request was coordinated by the ' + (operation.coordinator ? 'Rover (this instrument)' : 'other instrument') + '; this browser only observes it.';
   const target = LABEL[operation.transport] || operation.transport;
   const previous = LABEL[operation.previous_transport] || operation.previous_transport;
+  const test = operation.kind === 'test';
+  const faults = test && operation.profile === 1 ? ' with injected faults' : '';
   let text, tone = '';
   switch (operation.state) {
-    case 'negotiating': text = 'Contacting the other instrument on ' + target + '…'; tone = 'busy'; break;
-    case 'running': text = 'Applying ' + target + '. Corrections are paused.'; tone = 'busy'; break;
+    case 'negotiating':
+      text = test ? 'Preparing the tested link on ' + target + '…' : 'Contacting the other instrument on ' + target + '…';
+      tone = 'busy';
+      break;
+    case 'running':
+      // A test proves the medium; it never becomes the selected route.
+      text = test
+        ? 'Running the paired quick test on ' + target + faults + '. Corrections are paused while it runs.'
+        : 'Applying ' + target + '. Corrections are paused.';
+      tone = 'busy';
+      break;
     case 'restoring': text = target + ' could not be confirmed; restoring ' + previous + '…'; tone = 'bad'; break;
-    case 'succeeded': text = operation.committed
-      ? 'Switch complete. Both instruments selected ' + target + '.'
-      : 'Request finished without changing the route (already selected).'; tone = 'good'; break;
-    case 'failed': text = 'Switch failed (' + (operation.reason || 'unknown reason') + '). ' + previous + ' remains in use.'; tone = 'bad'; break;
+    case 'succeeded':
+      text = test
+        ? 'Quick test passed on ' + target + faults + '. The selected route is unchanged.'
+        : operation.committed
+          ? 'Switch complete. Both instruments selected ' + target + '.'
+          : 'Request finished without changing the route (already selected).';
+      tone = 'good';
+      break;
+    case 'failed':
+      text = test
+        ? 'Quick test failed on ' + target + ' (' + (operation.reason || 'unknown reason') + '). The selected route is unchanged.'
+        : 'Switch failed (' + (operation.reason || 'unknown reason') + '). ' + previous + ' remains in use.';
+      tone = 'bad';
+      break;
     case 'cancelled': text = 'Request cancelled. ' + previous + ' remains in use.'; break;
     case 'interrupted': text = 'The request was interrupted (restart or power loss), so its outcome is unconfirmed. Check the selected route above and retry if needed.'; tone = 'bad'; break;
     case 'recovery_required': text = 'Recovery required: the route could not be confirmed and readiness stays inhibited. Use the Link test page to select a medium locally on this instrument, then retry.'; tone = 'bad'; break;

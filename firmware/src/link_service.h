@@ -31,7 +31,7 @@ bool select(Transport transport, bool rover, uint32_t now);
 // performs the authoritative admission and reports the outcome in the settings
 // snapshot. Returns false with a reason when the request is refused outright.
 bool request_operation(link_operation::Kind kind, Transport transport, const char *id,
-                       uint32_t revision, link_operation::Reason &reason);
+                       uint32_t revision, link_operation::Reason &reason, uint8_t profile = 0);
 bool cancel_operation(const char *id, link_operation::Reason &reason);
 // Published settings snapshot: written on the main loop, read by the HTTP task.
 void service_settings(uint32_t now, bool corrections_fresh);

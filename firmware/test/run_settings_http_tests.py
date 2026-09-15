@@ -53,11 +53,13 @@ link_operation::Kind last_kind = link_operation::Kind::None;
 Transport last_transport = Transport::WiFi;
 std::string last_id;
 uint32_t last_revision = 0;
+uint8_t last_profile = 255;
 bool request_result = true, cancel_result = true;
 link_operation::Reason forced_reason = link_operation::Reason::None;
 bool request_operation(link_operation::Kind kind, Transport transport, const char *id, uint32_t revision,
-                       link_operation::Reason &reason) {
+                       link_operation::Reason &reason, uint8_t profile) {
   last_kind = kind; last_transport = transport; last_id = id ? id : ""; last_revision = revision;
+  last_profile = profile;
   reason = forced_reason;
   return request_result;
 }
@@ -89,6 +91,22 @@ int main(int argc, char **argv) {
     request.body_text = select_body("link.select", "wifi", "");
     assert(post_settings(&request) == 0);
     assert(link_service::last_transport == link_service::Transport::WiFi);
+  } else if (test == "test_profile_injected") {
+    request.body_text = select_body("link.test", "sik", ",\"profile\":\"injected\"");
+    assert(post_settings(&request) == 0);
+    assert(status == "202 Accepted");
+    assert(link_service::last_kind == link_operation::Kind::Test);
+    assert(link_service::last_transport == link_service::Transport::Radio);
+    assert(link_service::last_profile == 1);
+  } else if (test == "test_profile_default") {
+    request.body_text = select_body("link.test", "sik", "");
+    assert(post_settings(&request) == 0);
+    assert(status == "202 Accepted" && link_service::last_profile == 0);
+  } else if (test == "test_profile_unsupported") {
+    request.body_text = select_body("link.test", "sik", ",\"profile\":\"wild\"");
+    assert(post_settings(&request) == 0);
+    assert(status == "400 Bad Request" && response == "{\"error\":\"profile_required\"}");
+    assert(link_service::last_profile == 255);   // refused before any operation was queued
   } else if (test == "cancel") {
     request.body_text = "{\"id\":\"" + id + "\",\"op\":\"link.cancel\",\"confirm\":true}";
     assert(post_settings(&request) == 0);
@@ -190,7 +208,8 @@ exe = out / 'settings_http.exe'
 json_include = '-I' + str(root / '.pio/libdeps/unit_a/ArduinoJson/src')
 subprocess.run(['g++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-I' + str(root / 'src'), json_include,
                 str(generated), '-o', str(exe)], check=True)
-for case in ['select', 'select_wifi', 'cancel', 'test_op_unavailable', 'stale', 'busy', 'conflict', 'cancelled',
+for case in ['select', 'select_wifi', 'test_profile_injected', 'test_profile_default', 'test_profile_unsupported',
+             'cancel', 'test_op_unavailable', 'stale', 'busy', 'conflict', 'cancelled',
              'storage', 'origin', 'unauthorized', 'malformed', 'oversize', 'unreadable', 'no_confirm',
              'no_revision', 'no_transport', 'unknown_op', 'get', 'get_unavailable']:
     subprocess.run([str(exe), case], check=True)

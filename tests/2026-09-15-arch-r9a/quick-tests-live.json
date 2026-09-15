@@ -1,0 +1,123 @@
+{
+  "steps": [
+    "claimed control",
+    "before: selected=wifi revision=10 peer=true",
+    "link.test sik/clean: HTTP 202 {\"state\":\"queued\"}",
+    "sik/clean settled: failed/conflict committed=false selected=wifi revision=10 quick_test_error=(none) tests={\"wifi\":null,\"sik\":{\"run\":424242,\"state\":\"failed\",\"reason\":\"cancelled\",\"transport\":\"sik\",\"role\":\"ROVER\",\"sent\":0,\"received\":0,\"errors\":0,\"pair_pass\":false,\"local_pass\":false}}",
+    "link.test wifi/clean: HTTP 202 {\"state\":\"queued\"}",
+    "wifi/clean settled: failed/peer_unreachable committed=false selected=wifi revision=10 quick_test_error=(none) tests={\"wifi\":{\"run\":842155,\"state\":\"done\",\"reason\":\"complete\",\"transport\":\"wifi\",\"role\":\"ROVER\",\"sent\":0,\"received\":117,\"errors\":0,\"pair_pass\":true,\"local_pass\":true},\"sik\":{\"run\":424242,\"state\":\"failed\",\"reason\":\"cancelled\",\"transport\":\"sik\",\"role\":\"ROVER\",\"sent\":0,\"received\":0,\"errors\":0,\"pair_pass\":false,\"local_pass\":false}}",
+    "link.test sik/injected: HTTP 202 {\"state\":\"queued\"}",
+    "sik/injected settled: failed/peer_unreachable committed=false selected=wifi revision=10 quick_test_error=(none) tests={\"wifi\":{\"run\":842155,\"state\":\"done\",\"reason\":\"complete\",\"transport\":\"wifi\",\"role\":\"ROVER\",\"sent\":0,\"received\":117,\"errors\":0,\"pair_pass\":true,\"local_pass\":true},\"sik\":{\"run\":424242,\"state\":\"failed\",\"reason\":\"cancelled\",\"transport\":\"sik\",\"role\":\"ROVER\",\"sent\":0,\"received\":0,\"errors\":0,\"pair_pass\":false,\"local_pass\":false}}"
+  ],
+  "sequences": [
+    {
+      "test": "sik/clean",
+      "transport": "sik",
+      "profile": "clean",
+      "observations": [
+        "negotiating/ selected=wifi",
+        "failed/conflict selected=wifi"
+      ]
+    },
+    {
+      "test": "wifi/clean",
+      "transport": "wifi",
+      "profile": "clean",
+      "observations": [
+        "negotiating/ selected=wifi",
+        "running/ selected=wifi",
+        "failed/peer_unreachable selected=wifi"
+      ]
+    },
+    {
+      "test": "sik/injected",
+      "transport": "sik",
+      "profile": "injected",
+      "observations": [
+        "negotiating/ selected=wifi",
+        "running/ selected=wifi",
+        "failed/peer_unreachable selected=wifi"
+      ]
+    }
+  ],
+  "receiver_traffic": {
+    "entries": 32,
+    "synthetic_on_receiver_channels": 0,
+    "sample": []
+  },
+  "before": {
+    "version": 1,
+    "boot_id": "b64aba3b",
+    "uptime_ms": 17539,
+    "revision": 10,
+    "selected_transport": "wifi",
+    "candidate_transport": null,
+    "peer_connected": true,
+    "corrections_fresh": false,
+    "operation": null,
+    "last_tests": {
+      "wifi": null,
+      "sik": {
+        "run": 424242,
+        "state": "failed",
+        "reason": "cancelled",
+        "transport": "sik",
+        "role": "ROVER",
+        "sent": 0,
+        "received": 0,
+        "errors": 0,
+        "pair_pass": false,
+        "local_pass": false
+      }
+    }
+  },
+  "after": {
+    "version": 1,
+    "boot_id": "b64aba3b",
+    "uptime_ms": 102644,
+    "revision": 10,
+    "selected_transport": "wifi",
+    "candidate_transport": null,
+    "peer_connected": true,
+    "corrections_fresh": false,
+    "operation": {
+      "id": "498724061aa5f025e3b864f9f1108e3d",
+      "tag": 2843855966,
+      "kind": "test",
+      "transport": "sik",
+      "previous_transport": "wifi",
+      "state": "failed",
+      "committed": false,
+      "coordinator": true,
+      "phase_remaining_ms": 0,
+      "reason": "peer_unreachable",
+      "profile": 1
+    },
+    "last_tests": {
+      "wifi": {
+        "run": 842155,
+        "state": "done",
+        "reason": "complete",
+        "transport": "wifi",
+        "role": "ROVER",
+        "sent": 0,
+        "received": 117,
+        "errors": 0,
+        "pair_pass": true,
+        "local_pass": true
+      },
+      "sik": {
+        "run": 424242,
+        "state": "failed",
+        "reason": "cancelled",
+        "transport": "sik",
+        "role": "ROVER",
+        "sent": 0,
+        "received": 0,
+        "errors": 0,
+        "pair_pass": false,
+        "local_pass": false
+      }
+    }
+  }
+}

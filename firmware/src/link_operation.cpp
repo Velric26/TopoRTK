@@ -3,9 +3,12 @@
 namespace link_operation {
 namespace {
 constexpr uint32_t negotiate_ms = 20000, commit_ms = 10000, restore_ms = 10000, retry_ms = 500;
+// A Test runs the canonical 30 s profile; this window is the coordinator's bound
+// on waiting for both verdicts, not the run length itself.
+constexpr uint32_t test_run_ms = 40000;
 constexpr uint32_t tombstone_ms = 60000;
 bool expired(uint32_t now, uint32_t since, uint32_t limit) { return uint32_t(now - since) >= limit; }
-bool kind_valid(uint8_t kind) { return kind >= Request && kind <= Done; }
+bool kind_valid(uint8_t kind) { return kind >= Request && kind <= Run; }
 }  // namespace
 
 bool decode(const correction::Packet &packet, Message &message) {
@@ -14,9 +17,9 @@ bool decode(const correction::Packet &packet, Message &message) {
   if (p[4] != 1 || p[5] != 3 || p[6] || p[7] || correction::u32(p + 8)) return false;
   if (std::memcmp(b, "PLC1", 4) || b[4] != 1) return false;
   for (unsigned i = 52; i < 252; ++i) if (p[i]) return false;
-  if (b[10] || b[11] || correction::u32(b + 28) || b[33] || b[34] || b[35] || correction::u32(b + 36)) return false;
+  if (b[10] || b[11] || correction::u32(b + 28) || b[34] || b[35] || correction::u32(b + 36)) return false;
   message.kind = b[5]; message.from = b[6]; message.to = b[7]; message.role = b[8]; message.transport = b[9];
-  message.code = b[32];
+  message.code = b[32]; message.profile = b[33];
   message.boot = correction::u32(b + 12); message.peer_boot = correction::u32(b + 16);
   message.tag = correction::u32(b + 20); message.revision = correction::u32(b + 24);
   if (!kind_valid(message.kind)) return false;
@@ -25,15 +28,17 @@ bool decode(const correction::Packet &packet, Message &message) {
   if (message.peer_boot) return false;   // reserved: the operation is identified by tag/revision
   if (message.kind == Request || message.kind == Prepare) {
     if (message.code < uint8_t(Kind::Select) || message.code > uint8_t(Kind::Test)) return false;
+    if (message.profile > 1) return false;   // 0 clean, 1 injected faults
     // A forwarded request carries the client's expected revision, which is 0 on
     // an instrument that has never committed a selection. Every other operation
     // message carries the coordinator-assigned revision.
     if (message.kind != Request && !message.revision) return false;
   } else if (message.kind == Done) {
+    if (message.profile) return false;
     if (message.code < kApplied || message.code > kCancelled) return false;
     // A denial echoes the forwarded request, which may carry no revision yet.
     if (message.code != kDenied && !message.revision) return false;
-  } else if (message.code || !message.revision) {
+  } else if (message.code || message.profile || !message.revision) {
     return false;
   }
   return true;
@@ -44,7 +49,7 @@ void encode(correction::Packet &packet, uint8_t unit, bool rover, const Message 
   uint8_t *p = packet.bytes, *b = p + 12;
   std::memcpy(p, "RTM1", 4); p[4] = 1; p[5] = 3;
   std::memcpy(b, "PLC1", 4); b[4] = 1; b[5] = message.kind; b[6] = unit; b[7] = uint8_t(3 - unit);
-  b[8] = rover ? 1 : 0; b[9] = message.transport; b[32] = message.code;
+  b[8] = rover ? 1 : 0; b[9] = message.transport; b[32] = message.code; b[33] = message.profile;
   correction::put32(b + 12, message.boot);
   correction::put32(b + 20, message.tag);
   correction::put32(b + 24, message.revision);
@@ -97,6 +102,8 @@ const char *reason_text(Reason reason) {
     case Reason::Applied: return "applied";
     case Reason::Restored: return "restored";
     case Reason::Conflict: return "conflict";
+    case Reason::TestFailed: return "test_failed";
+    case Reason::TestUnavailable: return "test_unavailable";
     default: return "";
   }
 }
@@ -140,9 +147,10 @@ void Engine::begin(bool rover, bool storage_ok, const Confirmed *confirmed, cons
   }
 }
 
-void Engine::reserve(Kind kind, Transport transport, uint32_t tag, uint32_t revision, uint32_t now) {
+void Engine::reserve(Kind kind, Transport transport, uint32_t tag, uint32_t revision, uint32_t now, uint8_t profile) {
   kind_ = kind; target_ = transport; previous_ = static_cast<Transport>(confirmed_.transport);
-  tag_ = tag; revision_ = revision;
+  tag_ = tag; revision_ = revision; profile_ = profile;
+  test_passed_ = test_result_known_ = peer_test_passed_ = false;
   pending_ = Pending{};
   pending_.kind = uint8_t(kind); pending_.target = uint8_t(transport);
   pending_.previous = uint8_t(previous_); pending_.tag = tag; pending_.revision = revision;
@@ -153,9 +161,11 @@ void Engine::reserve(Kind kind, Transport transport, uint32_t tag, uint32_t revi
   actions_.persist_pending = true; actions_.stage = true;
 }
 
-bool Engine::request(Kind kind, Transport transport, uint32_t tag, uint32_t revision, uint32_t now, Reason &reason) {
+bool Engine::request(Kind kind, Transport transport, uint32_t tag, uint32_t revision, uint32_t now, Reason &reason,
+                     uint8_t profile) {
   now_ = now;
   if (!tag || kind == Kind::None) { reason = Reason::Conflict; return false; }
+  if (kind == Kind::Test && profile > 1) { reason = Reason::Unsupported; return false; }
   if (!storage_ok_) { reason = Reason::StorageFailure; return false; }
   if (tombstone_tag_ && tag == tombstone_tag_ && uint32_t(now - tombstone_at_) < tombstone_ms) { reason = Reason::Cancelled; return false; }
   if (settled_tag_ && tag == settled_tag_ && !(state_ == State::Idle)) {
@@ -164,11 +174,12 @@ bool Engine::request(Kind kind, Transport transport, uint32_t tag, uint32_t revi
   }
   if (busy()) { reason = Reason::Busy; return false; }
   if (revision != confirmed_.revision) { reason = Reason::StaleRevision; return false; }
-  reserve(kind, transport, tag, revision + 1, now);
+  reserve(kind, transport, tag, revision + 1, now, profile);
   return true;
 }
 
-bool Engine::forward(Kind kind, Transport transport, uint32_t tag, uint32_t revision, uint32_t now, Reason &reason) {
+bool Engine::forward(Kind kind, Transport transport, uint32_t tag, uint32_t revision, uint32_t now, Reason &reason,
+                     uint8_t profile) {
   now_ = now;
   if (rover_) return request(kind, transport, tag, revision, now, reason);
   if (!tag || kind == Kind::None) { reason = Reason::Conflict; return false; }
@@ -181,7 +192,7 @@ bool Engine::forward(Kind kind, Transport transport, uint32_t tag, uint32_t revi
   if (busy()) { reason = Reason::Busy; return false; }
   if (revision != confirmed_.revision) { reason = Reason::StaleRevision; return false; }
   kind_ = kind; target_ = transport; previous_ = static_cast<Transport>(confirmed_.transport);
-  tag_ = tag; revision_ = revision;   // carried as the expected revision; the answer assigns the real one
+  tag_ = tag; revision_ = revision; profile_ = profile;   // revision is expected only; the answer assigns the real one
   state_ = State::Negotiating; reason_ = Reason::None; phase_ = Phase::Prepare;
   started_ = now; sent_ = 0; forwarding_ = true; commit_received_ = false;
   committed_ = committed_commit_pending_ = false;
@@ -212,6 +223,16 @@ bool Engine::receive(const Message &message, uint32_t now) {
         if (message.tag != tag_) return false;
         if (message.code == kDenied) { settle(State::Failed, Reason::Conflict, now); return true; }
         if (message.code == kCancelled) { settle(State::Cancelled, Reason::Cancelled, now); return true; }
+        if (kind_ == Kind::Test) {
+          // A test never adopts the tested medium: the delegate reports its own
+          // verdict and both sides must pass for the operation to succeed.
+          peer_test_passed_ = message.code == kApplied; peer_test_known_ = true;
+          if (test_result_known_) {
+            const bool both = test_passed_ && peer_test_passed_;
+            settle(both ? State::Succeeded : State::Failed, both ? Reason::Applied : Reason::TestFailed, now);
+          }
+          return true;
+        }
         if (message.code == kFailed) { settle(State::Failed, Reason::RestoreFailed, now); return true; }
         if (committed_ && state_ == State::Succeeded) return true;   // repeated acknowledgement
         if (state_ == State::Negotiating) { state_ = State::Applying; phase_ = Phase::Commit; advance_ = now; }
@@ -262,6 +283,8 @@ bool Engine::receive(const Message &message, uint32_t now) {
       // request: the delegate stops asking and follows the coordinator.
       forwarding_ = false;
       tag_ = message.tag; revision_ = message.revision; kind_ = kind; target_ = transport;
+      profile_ = message.profile;
+      test_passed_ = test_result_known_ = peer_test_passed_ = peer_test_known_ = false;
       previous_ = static_cast<Transport>(confirmed_.transport);
       state_ = State::Negotiating; reason_ = Reason::None; phase_ = Phase::Prepare;
       peer_ready_ = commit_received_ = false;
@@ -290,6 +313,13 @@ bool Engine::receive(const Message &message, uint32_t now) {
         return true;
       }
       if (!busy()) return false;
+      if (kind_ == Kind::Test) {
+        // Run phase: the tested medium is staged and proven, never selected, so
+        // the confirmed record and the durable revision stay untouched.
+        state_ = State::Applying; phase_ = Phase::Run; advance_ = now;
+        actions_.run_test = true; actions_.profile = profile_;
+        return true;
+      }
       phase_ = Phase::Commit; state_ = State::Applying; advance_ = now;
       committed_ = true; committed_commit_pending_ = true;
       pending_.committed = 1;
@@ -372,9 +402,8 @@ void Engine::tick(const Inputs &inputs) {
         }
         // Coordinator: the requested medium is already proven, so the accepted
         // operation completes without a cutover. The durable revision advances
-        // only when a selection actually commits.
-        settle(State::Succeeded, Reason::Applied, inputs.now);
-        return;
+        // only when a selection actually commits. A Test still has to run.
+        if (kind_ != Kind::Test) { settle(State::Succeeded, Reason::Applied, inputs.now); return; }
       }
       if (forwarding_) {
         if (!sent_ || expired(inputs.now, sent_, retry_ms)) send(Request, uint8_t(kind_), inputs.now);
@@ -385,13 +414,29 @@ void Engine::tick(const Inputs &inputs) {
         return;
       }
       if (inputs.staging_ready && peer_ready_) {
-        state_ = State::Applying; phase_ = Phase::Commit; advance_ = inputs.now;
+        state_ = State::Applying;
+        phase_ = kind_ == Kind::Test ? Phase::Run : Phase::Commit;
+        advance_ = inputs.now;
+        if (kind_ == Kind::Test) { actions_.run_test = true; actions_.profile = profile_; }
         send(Commit, 0, inputs.now);
         return;
       }
       if (!sent_ || expired(inputs.now, sent_, retry_ms)) send(Prepare, uint8_t(kind_), inputs.now);
       return;
     case State::Applying:
+      if (kind_ == Kind::Test) {
+        // The engines report their own verdicts; this window only bounds the wait.
+        if (expired(inputs.now, advance_, test_run_ms)) {
+          if (rover_) settle(State::Failed, Reason::PeerUnreachable, inputs.now);
+          else {
+            actions_.send = true;
+            actions_.message = Message{}; actions_.message.kind = Done; actions_.message.code = kFailed;
+            actions_.message.transport = uint8_t(target_); actions_.message.tag = tag_; actions_.message.revision = revision_;
+            settle(State::Failed, Reason::TestFailed, inputs.now);
+          }
+        }
+        return;
+      }
       if (committed_commit_pending_) { actions_.commit = true; committed_commit_pending_ = false; }
       if (inputs.production_on_target) {
         if (!rover_) {
@@ -424,9 +469,11 @@ Snapshot Engine::snapshot(uint32_t now) const {
   out.state = state_; out.kind = kind_; out.tag = tag_; out.revision = revision_;
   out.transport = target_; out.previous = previous_; out.reason = reason_;
   out.coordinator = rover_; out.committed = committed_;
+  out.profile = profile_; out.test_passed = test_result_known_ && test_passed_;
   out.active = state_ == State::Negotiating || state_ == State::Applying || state_ == State::Restoring;
   if (out.active) {
-    const uint32_t limit = state_ == State::Negotiating ? negotiate_ms : state_ == State::Applying ? commit_ms : restore_ms;
+    const uint32_t limit = phase_ == Phase::Run ? test_run_ms
+        : state_ == State::Negotiating ? negotiate_ms : state_ == State::Applying ? commit_ms : restore_ms;
     const uint32_t elapsed = uint32_t(now - started_);
     out.phase_remaining_ms = elapsed >= limit ? 0 : limit - elapsed;
   }
@@ -443,6 +490,37 @@ void Engine::refuse(uint32_t tag, Kind kind, Transport transport, Reason reason,
   tag_ = tag; kind_ = kind; target_ = transport;
   if (tombstone_tag_ == tag) { tombstone_tag_ = 0; }
   settle(State::Failed, reason, now);
+}
+
+void Engine::test_result(bool pass, uint32_t now) {
+  now_ = now;
+  if (kind_ != Kind::Test || phase_ != Phase::Run || state_ != State::Applying) return;
+  test_passed_ = pass; test_result_known_ = true;
+  if (!rover_) {
+    // The delegate reports its verdict; the coordinator decides the pair outcome.
+    actions_.send = true;
+    actions_.message = Message{};
+    actions_.message.kind = Done; actions_.message.code = pass ? kApplied : kFailed;
+    actions_.message.transport = uint8_t(target_); actions_.message.tag = tag_; actions_.message.revision = revision_;
+    settle(pass ? State::Succeeded : State::Failed, pass ? Reason::Applied : Reason::TestFailed, now);
+    return;
+  }
+  if (peer_test_known_) {
+    const bool both = test_passed_ && peer_test_passed_;
+    settle(both ? State::Succeeded : State::Failed, both ? Reason::Applied : Reason::TestFailed, now);
+  }
+}
+
+void Engine::test_unavailable(uint32_t now) {
+  now_ = now;
+  if (kind_ != Kind::Test || phase_ != Phase::Run || state_ != State::Applying) return;
+  if (!rover_) {
+    actions_.send = true;
+    actions_.message = Message{};
+    actions_.message.kind = Done; actions_.message.code = kFailed;
+    actions_.message.transport = uint8_t(target_); actions_.message.tag = tag_; actions_.message.revision = revision_;
+  }
+  settle(State::Failed, Reason::TestUnavailable, now);
 }
 
 void Engine::persisted(bool ok) {
