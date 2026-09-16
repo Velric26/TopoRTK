@@ -11,7 +11,7 @@ constexpr size_t kWebStatusCapacity = 2048;
 #define TOPORTK_FIRMWARE_VERSION "0.11.5-hang-test"
 #endif
 #ifndef TOPORTK_FIRMWARE_VERSION
-#define TOPORTK_FIRMWARE_VERSION "0.11.32-arch-r06r2"
+#define TOPORTK_FIRMWARE_VERSION "0.11.33-arch-r10"
 #endif
 constexpr const char *kWebUiVersion = TOPORTK_FIRMWARE_VERSION;
 // Called from the main loop. The HTTP task only reads a copied snapshot.
