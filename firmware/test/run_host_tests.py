@@ -21,6 +21,13 @@ source += '\n' + (root / 'src/debug_service.cpp').read_text(encoding='utf-8')
 # device the two are ordinary src/*.cpp translation units.
 source += '\n' + (root / 'src/device_settings.cpp').read_text(encoding='utf-8')
 source += '\n' + (root / 'src/diagnostic_log.cpp').read_text(encoding='utf-8')
+# The board hardware and USB console owners join it for the same reason: the
+# suite injects FT6336 samples through its OWN `Wire` double and reads UART0
+# output through the shared `Serial`, so the touch read and the console line
+# buffer must live in the unit the test observes. On the device the two are
+# ordinary src/*.cpp translation units.
+source += '\n' + (root / 'src/board_hardware.cpp').read_text(encoding='utf-8')
+source += '\n' + (root / 'src/usb_console.cpp').read_text(encoding='utf-8')
 source = re.sub(r'^#include <' + hardware + r'>\n', '', source, flags=re.M)
 generated = root / '.pio/host_firmware.cpp'
 stubs = '''

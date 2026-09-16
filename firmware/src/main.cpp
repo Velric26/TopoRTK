@@ -1,9 +1,7 @@
 #include <Arduino.h>
-#include <Arduino_GFX_Library.h>
 #include <FS.h>
 #include <Preferences.h>
 #include <SD_MMC.h>
-#include <TCA9554.h>
 #include <WiFi.h>
 #include "network_service.h"
 #include "wifi_transport.h"
@@ -15,6 +13,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include <cstring>
+#include "board_hardware.h"
 #include "device_config.h"
 #include "device_settings.h"
 #include "diagnostic_log.h"
@@ -37,49 +36,10 @@
 #include "debug_service.h"
 #include "ota_service.h"
 #include "peer_update.h"
+#include "usb_console.h"
 
-#ifndef TOPORTK_DISPLAY_ROTATION
-#define TOPORTK_DISPLAY_ROTATION 2
-#endif
-
-#ifndef TOPORTK_UNIT_ID
-#define TOPORTK_UNIT_ID 1
-#endif
-
-static_assert(TOPORTK_DISPLAY_ROTATION == 0 || TOPORTK_DISPLAY_ROTATION == 2,
-              "The 320x480 touchscreen layout requires portrait rotation 0 or 2");
-static_assert(TOPORTK_UNIT_ID >= 1 && TOPORTK_UNIT_ID <= 26,
-              "TOPORTK_UNIT_ID must be between 1 (A) and 26 (Z)");
-
-namespace board {
-constexpr int kBacklight = 6;
-constexpr uint8_t kBacklightPwmChannel = 0;
-constexpr uint32_t kBacklightPwmHz = 5000;
-constexpr uint8_t kNightBacklightDuty = 26;  // About 10%; visibly different from Day.
-constexpr uint8_t kDayBacklightDuty = 255;
-constexpr uint32_t kBacklightFadeMs = 1200;
-constexpr int kSdData0 = 9;
-constexpr int kSdCommand = 10;
-constexpr int kSdClock = 11;
-constexpr int kSpiMiso = 2;
-constexpr int kSpiMosi = 1;
-constexpr int kSpiClock = 5;
-constexpr int kLcdChipSelect = -1;
-constexpr int kLcdDataCommand = 3;
-constexpr int kLcdReset = -1;
-constexpr uint8_t kDisplayRotation = TOPORTK_DISPLAY_ROTATION;
-constexpr char kUnitLabel = 'A' + TOPORTK_UNIT_ID - 1;
-constexpr int kWidth = 320;
-constexpr int kHeight = 480;
-constexpr int kI2cSda = 8;
-constexpr int kI2cScl = 7;
-constexpr uint8_t kIoExpanderAddress = 0x20;
-constexpr uint8_t kTouchAddress = 0x38;
-constexpr uint8_t kLcdResetExpanderPin = 1;
-constexpr int kGnssRx = 44;
-constexpr int kGnssTx = 43;
-constexpr uint32_t kGnssBaud = 115200;
-}  // namespace board
+// The board pin map, the display/touch construction and the LCD reset sequence
+// moved to board_hardware.cpp (R10a slice 5); this root composes their results.
 
 namespace network {
 constexpr uint32_t kMagic = 0x5452544B;
@@ -129,15 +89,6 @@ constexpr size_t kMaxRtcmFrameSize = 1029;
 constexpr size_t kMaxWiFiRtcmPacketSize =
     sizeof(WiFiRtcmHeader) + kMaxRtcmFrameSize;
 
-TCA9554 io_expander(board::kIoExpanderAddress);
-Arduino_DataBus *display_bus = new Arduino_ESP32SPI(
-    board::kLcdDataCommand, board::kLcdChipSelect, board::kSpiClock,
-    board::kSpiMosi, board::kSpiMiso);
-Arduino_GFX *display = new Arduino_ST7796(
-    display_bus, board::kLcdReset, board::kDisplayRotation, true,
-    board::kWidth, board::kHeight);
-bool display_ready = false;
-bool touch_ready = false;
 // The two NVS stores the settings owner writes through. They stay separate
 // objects: Preferences::begin rebinds the namespace of the object it is called
 // on, and the device config and the base record live in different namespaces.
@@ -145,8 +96,6 @@ Preferences preferences;
 Preferences base_preferences;
 
 bool is_base() { return device_settings::config().role == DeviceRole::kBase; }
-char usb_line[256] = {};
-size_t usb_length = 0;
 uint32_t last_screen_ms = 0;
 uint32_t last_web_status_ms = 0;
 bool wifi_peer_known = false;
@@ -580,53 +529,6 @@ void service_wifi() {
   }
 }
 
-void reset_lcd() {
-  io_expander.write1(board::kLcdResetExpanderPin, HIGH);
-  delay(10);
-  io_expander.write1(board::kLcdResetExpanderPin, LOW);
-  delay(10);
-  io_expander.write1(board::kLcdResetExpanderPin, HIGH);
-  delay(200);
-}
-
-bool i2c_device_present(uint8_t address) {
-  Wire.beginTransmission(address);
-  return Wire.endTransmission() == 0;
-}
-
-
-TouchRead read_touch(int16_t &x, int16_t &y) {
-  constexpr uint8_t kFirstRegister = 0x00;
-  constexpr size_t kReadLength = 7;
-  uint8_t data[kReadLength] = {};
-
-  Wire.beginTransmission(board::kTouchAddress);
-  Wire.write(kFirstRegister);
-  if (Wire.endTransmission(false) != 0) return TouchRead::kError;
-
-  const size_t received = Wire.requestFrom(
-      static_cast<int>(board::kTouchAddress), static_cast<int>(kReadLength));
-  if (received != kReadLength) {
-    while (Wire.available()) Wire.read();
-    return TouchRead::kError;
-  }
-  for (size_t index = 0; index < kReadLength; ++index) {
-    data[index] = Wire.read();
-  }
-
-  const uint8_t points = data[2] & 0x0F;
-  if (points == 0) return TouchRead::kReleased;
-  if (points != 1) return TouchRead::kMultiple;
-  x = static_cast<int16_t>(((data[3] & 0x0F) << 8) | data[4]);
-  y = static_cast<int16_t>(((data[5] & 0x0F) << 8) | data[6]);
-  if (x < 0 || x >= board::kWidth || y < 0 || y >= board::kHeight) return TouchRead::kError;
-  if (board::kDisplayRotation == 2) {
-    x = board::kWidth - 1 - x;
-    y = board::kHeight - 1 - y;
-  }
-  return TouchRead::kContact;
-}
-
 void format_horizontal_accuracy(char *output, size_t output_size,
                                 uint32_t now) {
   const GnssSnapshot gnss_state = gnss_service::snapshot();
@@ -918,9 +820,9 @@ void ui_build_frame(UiFrame &f, uint32_t now) {
     } else {
       std::snprintf(f.link_value, sizeof(f.link_value), "%s Disconnected", radio ? "Radio" : "Wi-Fi");
     }
-    f.link_color = !linked ? RGB565_RED : radio ? RGB565_GREEN : link_quality_color(link.signal.rssi_dbm);
+    f.link_color = !linked ? colors::kFailFill : radio ? colors::kHeaderReady : link_quality_color(link.signal.rssi_dbm);
     std::snprintf(f.fix_value, sizeof(f.fix_value), "%s", current_fix_label(now));
-    f.fix_card_color = now - gnss_state.gga_ms > 3000 ? RGB565_RED : fix_color(gnss_state.gga.quality);
+    f.fix_card_color = now - gnss_state.gga_ms > 3000 ? colors::kFailFill : fix_color(gnss_state.gga.quality);
     format_horizontal_accuracy(f.hacc_value, sizeof(f.hacc_value), now);
     f.hacc_color = std::strcmp(f.hacc_value, "---") == 0 ? colors::kSecondary : colors::kPrimary;
     const DashboardWarning warning = dashboard_warning(now);
@@ -1271,7 +1173,7 @@ void service_swipe_navigation() {
   last_touch_poll_ms = now;
   int16_t x = 0;
   int16_t y = 0;
-  const TouchRead state = read_touch(x, y);
+  const TouchRead state = board_hardware::read_touch(x, y);
   touch_input_sample(state, x, y, now);
 }
 
@@ -1378,171 +1280,37 @@ const GnssObservers kGnssObservers{receiver_log_event, receiver_log_config,
                                    receiver_reset, receiver_forward_frame,
                                    receiver_fix_label};
 
-// The receiver service's UART1 wiring: pins come from the board layer until
-// board_hardware owns them.
+// The receiver service's UART1 wiring: the pins and the baud are the board
+// layer's (board_hardware.h), the buffered port is the receiver owner's.
 void receiver_service_begin() {
   gnss_service::begin(GnssPort{board::kGnssRx, board::kGnssTx, board::kGnssBaud, 2048, 2048},
                       kGnssObservers, millis());
 }
 
-void print_console_help() {
-  Serial.println("Safe console commands:");
-  Serial.println("  help           - show this list");
-  Serial.println("  role?          - query current UM980 mode");
-  Serial.println("  config?        - show saved settings and profile status");
-  Serial.println("  phone?         - show phone Wi-Fi status (no password)");
-  Serial.println("  role rover     - save rover role and verify UM980");
-  Serial.println("  role base-test - save temporary base role and verify UM980");
-  Serial.println("  wifi?          - show selected transport, SSID, IP, and connection state");
-  Serial.println("  wifi direct    - use the validated Base-AP/Rover-client test link");
-  Serial.println("  wifi local     - make both units join the configured local router");
-  Serial.println("  rtcm?          - show RTCM bridge counters");
-  Serial.println("  accuracy?      - show BESTNAV horizontal-accuracy parser status");
-  Serial.println("  time?          - show GNSS UTC and fixed UTC-6 local time");
-  Serial.println("  brightness auto|day|night - select display brightness mode");
-  Serial.println("  brightness?    - report GNSS clock and PWM duty/frequency");
-  Serial.println("  rtcm base-test - base role: save and enable COM2 MSM4 test output");
-  Serial.println("  rtcm off       - base role: save and disable RTCM output");
-  Serial.println("No arbitrary passthrough and no SAVECONFIG are provided.");
+// The USB console owner (usb_console.cpp) owns the verb list, the wording and
+// the refusals. What stays here is the one value copy of the facts it prints
+// but cannot read - the applied role, the Wi-Fi direct peer and its counters,
+// the brightness label the LCD also shows - plus the three names the host suite
+// and setup()/loop() call.
+ConsoleInputs console_inputs() {
+  ConsoleInputs in;
+  in.base = is_base();
+  in.peer_known = wifi_peer_known;
+  in.peer = wifi_peer;
+  in.rtcm_wifi_tx_frames = rtcm_wifi_tx_frames;
+  in.rtcm_wifi_rx_frames = rtcm_wifi_rx_frames;
+  in.invalid_packets = wifi_invalid_packets;
+  in.brightness_label = brightness_mode_label();
+  return in;
 }
+
+void print_console_help() { usb_console::print_help(); }
 
 void handle_usb_command(const char *command) {
-  if(std::strcmp(command,"diag?")==0){static char data[kDiagnosticCapacity];if(diagnostic_snapshot(data,sizeof(data)))Serial.println(data);return;}
-  if(std::strncmp(command,"diag ",5)==0){Serial.println(diagnostic_request(command+5)?"DIAG QUEUED":"DIAG REJECTED");return;}
-  Serial.print("CONSOLE> ");
-  Serial.println(command);
-
-  const GnssSnapshot gnss_state = gnss_service::snapshot();
-  if (gnss_state.profile_running) {
-    Serial.println("CONSOLE> profile in progress; retry after verification");
-    return;
-  }
-
-  if (std::strcmp(command, "help") == 0) {
-    print_console_help();
-  } else if (std::strcmp(command, "role?") == 0) {
-    gnss_service::query_role();
-  } else if (std::strcmp(command, "config?") == 0) {
-    const SettingsSnapshot settings = device_settings::snapshot();
-    Serial.printf("CONFIG: role=%s brightness=%u rtcm=%s wifi=%s storage=%s profile=%s\n",
-                  is_base() ? "BASE" : "ROVER", static_cast<unsigned>(settings.config.brightness),
-                  settings.config.base_rtcm ? "ON" : "OFF", wifi_transport_label(),
-                  settings.error ? "ERROR" : settings.saved ? "SAVED" : "DEFAULTS",
-                  gnss_state.profile_applied ? "VERIFIED" : gnss_state.profile_failed ? "FAILED" : "WAITING");
-  } else if (std::strcmp(command,"phone?") == 0) {
-    Serial.printf("PHONE WIFI: %s SSID=%s IP=%s clients=%u UI=%s error=%s\n",
-                  rover_ap_ready() ? "READY" : "OFF",rover_ap_ssid(),rover_ap_address(),rover_ap_clients(),kWebUiVersion,rover_ap_error());
-  } else if (std::strcmp(command, "role rover") == 0) {
-    select_role(DeviceRole::kRover);
-  } else if (std::strcmp(command, "role base-test") == 0) {
-    Serial.println("WARNING: temporary averaged base for functional testing only.");
-    select_role(DeviceRole::kBase);
-  } else if (std::strcmp(command, "wifi?") == 0) {
-    const IPAddress ip = network_service::address();
-    Serial.printf("WIFI CONFIG: transport=%s role=%s ssid=%s station=%s udp=%s ip=%s peer=%s\n",
-                  wifi_transport_label(), is_base() ? "BASE" : "ROVER",
-                  active_wifi_ssid(), station_connected() ? "UP" : "DOWN",
-                  wifi_transport::started(wifi_transport::Channel::Corrections) ? "UP" : "DOWN", ip.toString().c_str(),
-                  wifi_peer_known ? wifi_peer.toString().c_str() : "NONE");
-  } else if (std::strcmp(command, "wifi direct") == 0) {
-    select_wifi_mode(WiFiMode::kDirect);
-  } else if (std::strcmp(command, "wifi local") == 0) {
-    select_wifi_mode(WiFiMode::kLocalRouter);
-  } else if (std::strcmp(command, "rtcm?") == 0) {
-    Serial.printf("RTCM STATUS: UART=%lu TX=%lu RX=%lu bytes=%lu UART_BAD=%lu NET_BAD=%lu last=%u age_ms=%lu\n",
-                  static_cast<unsigned long>(gnss_state.rtcm_frames),
-                  static_cast<unsigned long>(rtcm_wifi_tx_frames),
-                  static_cast<unsigned long>(rtcm_wifi_rx_frames),
-                  static_cast<unsigned long>(correction_service::snapshot().forwarded_bytes),
-                  static_cast<unsigned long>(gnss_state.rtcm_bad),
-                  static_cast<unsigned long>(wifi_invalid_packets),
-                  gnss_state.rtcm_last_message,
-                  gnss_state.rtcm_last_rx_ms == 0
-                      ? 0UL
-                      : static_cast<unsigned long>(millis() - gnss_state.rtcm_last_rx_ms));
-  } else if (std::strcmp(command, "accuracy?") == 0) {
-    Serial.printf("ACCURACY STATUS: BESTNAV=%lu lat_sigma=%.4f m lon_sigma=%.4f m H-ACC(1DRMS)=%.4f m age_ms=%lu usable=%s\n",
-                  static_cast<unsigned long>(gnss_state.bestnav_count),
-                  gnss_state.accuracy.latitude_sigma_m,
-                  gnss_state.accuracy.longitude_sigma_m,
-                  gnss_state.accuracy.horizontal_1drms_m,
-                  gnss_state.accuracy.received
-                      ? static_cast<unsigned long>(millis() -
-                                                   gnss_state.accuracy.received_ms)
-                      : 0UL,
-                  gnss_state.gga.received && gnss_state.gga.quality > 0 &&
-                          !(std::strcmp(gnss_state.role, "BASE") == 0 &&
-                            gnss_state.gga.quality == 7)
-                      ? "YES"
-                      : "NO");
-  } else if (std::strcmp(command, "time?") == 0) {
-    const uint32_t now = millis();
-    uint16_t year = 0;
-    uint8_t month = 0, day = 0, hour = 0, minute = 0, second = 0;
-    if (local_time_utc_minus_6(now, gnss_state.time, year, month, day, hour, minute, second)) {
-      Serial.printf("GNSS TIME: VALID UTC=%04u-%02u-%02u %02u:%02u:%02u LOCAL(UTC-6)=%04u-%02u-%02u %02u:%02u:%02u NAV=%s\n",
-                    gnss_state.time.year, gnss_state.time.month,
-                    gnss_state.time.day, gnss_state.time.hour,
-                    gnss_state.time.minute, gnss_state.time.second, year,
-                    month, day, hour, minute, second,
-                    gnss_state.time.navigation_valid ? "VALID" : "INVALID");
-    } else {
-      Serial.println("GNSS TIME: INVALID OR STALE; AUTO BRIGHTNESS IS FULL");
-    }
-  } else if (std::strcmp(command, "brightness?") == 0) {
-    Serial.printf("BRIGHTNESS: %s current=%u target=%u PWM=%s hardware_duty=%lu frequency=%lu Hz\n",
-                  brightness_mode_label(), static_cast<unsigned>(backlight_duty),
-                  static_cast<unsigned>(ui_backlight_target()), backlight_pwm_ready ? "PASS" : "FAIL",
-                  static_cast<unsigned long>(ledcRead(board::kBacklightPwmChannel)),
-                  static_cast<unsigned long>(ledcReadFreq(board::kBacklightPwmChannel)));
-  } else if (std::strcmp(command, "brightness auto") == 0) {
-    select_brightness(BrightnessMode::kAutomatic);
-  } else if (std::strcmp(command, "brightness day") == 0) {
-    select_brightness(BrightnessMode::kDay);
-  } else if (std::strcmp(command, "brightness night") == 0) {
-    select_brightness(BrightnessMode::kNight);
-  } else if (std::strcmp(command, "rtcm base-test") == 0) {
-    if (!is_base()) {
-      Serial.println("CONSOLE> rejected; select base role first");
-    } else {
-      DeviceConfig requested = device_settings::config();
-      requested.base_rtcm = true;
-      select_config(requested);
-    }
-  } else if (std::strcmp(command, "rtcm off") == 0) {
-    if (!is_base()) {
-      Serial.println("CONSOLE> rejected; select base role first");
-    } else {
-      DeviceConfig requested = device_settings::config();
-      requested.base_rtcm = false;
-      select_config(requested);
-    }
-  } else if (command[0] != '\0') {
-    Serial.println("CONSOLE> rejected; type help for the safe command list");
-  }
+  usb_console::handle(command, console_inputs());
 }
 
-void read_usb_console() {
-  while (Serial.available() > 0) {
-    const char incoming = static_cast<char>(Serial.read());
-    if (incoming == '\r') continue;
-    if (incoming == '\n') {
-      if (usb_length > 0) {
-        usb_line[usb_length] = '\0';
-        handle_usb_command(usb_line);
-        usb_length = 0;
-      }
-      continue;
-    }
-
-    if (usb_length < sizeof(usb_line) - 1) {
-      usb_line[usb_length++] = incoming;
-    } else {
-      usb_length = 0;
-      Serial.println("CONSOLE> input too long; rejected");
-    }
-  }
-}
+void read_usb_console() { usb_console::service(console_inputs); }
 
 void setup() {
   ota_boot_begin();
@@ -1555,20 +1323,7 @@ void setup() {
   load_base_settings();
   ui_module_begin();
 
-  Wire.begin(board::kI2cSda, board::kI2cScl, 400000);
-  const bool expander_ready = io_expander.begin();
-  Serial.printf("TCA9554: %s\n", expander_ready ? "PASS" : "FAIL");
-  if (expander_ready) {
-    io_expander.pinMode1(board::kLcdResetExpanderPin, OUTPUT);
-    reset_lcd();
-  }
-
-  touch_ready = i2c_device_present(board::kTouchAddress);
-  Serial.printf("FT6336 touch navigation: %s\n",
-                touch_ready ? "PASS" : "FAIL");
-
-  display_ready = expander_ready && display->begin();
-  Serial.printf("ST7796: %s\n", display_ready ? "PASS" : "FAIL");
+  board_hardware::begin();
   setup_backlight(device_settings::config().brightness, millis());
 
   if (display_ready) {

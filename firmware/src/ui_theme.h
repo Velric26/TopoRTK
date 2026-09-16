@@ -16,6 +16,7 @@ constexpr uint16_t kSelected = 0x0010;        // selected control fill, white te
 constexpr uint16_t kReadyText = 0x0300;       // ready/good text on white (7.7:1)
 constexpr uint16_t kError = 0xA000;           // error text on white (8.1:1)
 constexpr uint16_t kWarningBg = 0xFFE0;       // warning panel fill, black text (19.6:1)
+constexpr uint16_t kFailFill = 0xF800;        // RGB565 red: failed link, stale solution
 constexpr uint16_t kAccent = 0x0010;          // selection marker
 constexpr uint16_t kOutline = 0x0000;         // two-pixel control outlines
 }  // namespace colors
