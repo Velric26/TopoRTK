@@ -1,20 +1,50 @@
 #pragma once
-// Optional SD diagnostic log (R10a slice 4), extracted from main.cpp. Owns the
+// Optional SD diagnostic log (R10a slice 4, R10b prescribed queue). Owns the
 // best-effort CSV session that is separate from the authoritative survey
 // journal: the card mount test and its readback result, the session directory
 // naming, the events/config/solution writers and their headers and rows, the
 // one per-second solution sample, and the shared survey SD mutex discipline
 // around every append.
 //
-// It is bounded best-effort and never blocks the correction loop: a producer
-// only formats its row and enqueues it (R10b), one service call commits at most
-// one solution sample plus kEventRowsPerTurn event rows, and a missing card, a
-// closed session, a busy mutex or a card that refuses the write drops the row
-// and counts it in `snapshot().dropped` instead of waiting or retrying in place.
-// A failed readback stops the rows while the mount stays reported. It reads
-// nothing on its own - the root passes one value snapshot per call, so the
-// receiver/link facts the surfaces show stay in the root - and it prints the
-// same console lines it printed from main.cpp.
+// R10 step 4's structure: a fixed 16-record queue, each record one 160-byte
+// destination path plus one 512-byte text buffer, filled by one bounded copy
+// from a producer - no hot-path heap growth - plus the per-second sample's own
+// single record (the one record a later producer supersedes). The destination is
+// queued with its row, so a session change between queueing and writing cannot
+// misroute an old event. The producers never touch the card; a dedicated
+// low-priority `writer` stage drains the queue, at most kWriterRecordsPerTurn
+// records per call and always under the journal's own `survey_sd_lock` taken with
+// no wait. A slow, full, busy or failing card therefore costs the turn a bounded
+// number of appends and can never block the correction output written earlier in
+// the same turn.
+//
+// Scheduling (R10 step 4), stated rather than implied: the writer is a stage of
+// the loop task, not a second FreeRTOS task. It runs at the end of the turn,
+// after every other service, which is the lowest priority the loop has; one call
+// commits at most kWriterRecordsPerTurn records and every append takes
+// `survey_sd_lock` with a zero timeout, so a call costs at most that many
+// appends and never waits on the survey worker's own `portMAX_DELAY` use of the
+// same mutex or on the correction output written earlier in the turn. A second
+// task could only poll that same zero-timeout mutex from another context - adding
+// SD-bus contention and queue-index races with the journal's worker while still
+// owing the same per-turn bound - or block on the card, which is what the loop
+// must never do. A budgeted stage on the loop task bounds the turn
+// deterministically on the instrument and in the host doubles alike, so the
+// offline cases exercise the very code the hardware run measures.
+//
+// A row longer than the buffer that formats it, and a row the queue cannot
+// hold, are dropped and counted in `snapshot().dropped`, with
+// `dropped_oversized`/`dropped_queue_full` naming which. A missing card, or a
+// session whose readback test failed, produces no row at all and is not counted:
+// the card and the readback test gate every producer and the writer alike, which
+// is the gate this module has always documented. A write/flush the card refuses
+// marks optional logging unavailable (`available`) instead of retrying per row:
+// the writer then leaves the card alone until kWriterRetryMs has elapsed and
+// probes it once. The authoritative survey journal keeps its own writes, commits,
+// exports and recovery, none of which this module touches. It reads nothing on
+// its own - the root passes one value snapshot per call, so the receiver/link
+// facts the surfaces show stay in the root - and it prints the same console lines
+// it printed from main.cpp.
 
 #include <cstddef>
 #include <cstdint>
@@ -75,41 +105,64 @@ struct DiagnosticSnapshot {
   bool ready = false;      // sd_ready: the card mounted with a session directory
   bool verified = false;   // sd_test_passed: the write/readback test passed
   char session[128] = {};
-  // Rows this optional session produced and never wrote: the pending ring was
-  // full, a newer per-second solution sample superseded one the card had not
-  // taken, or the session, the card or the survey journal's SD mutex refused the
-  // commit. A missing card or a closed session produces no row at all and is not
-  // counted - the same gate main.cpp always applied. The authoritative survey
-  // journal keeps its own writes and is not counted here.
+  // Rows this optional session produced and never wrote: the queue was full, a
+  // row did not fit the buffer that formats it, a newer per-second solution
+  // sample superseded one the card had not taken yet, or the session, the shared
+  // journal's mutex or the card refused the record - or the card refused a write
+  // and the writer marked the optional log unavailable. A missing card or a
+  // closed session produces no row at all and is not counted - the same gate
+  // main.cpp always applied. The authoritative survey journal keeps its own
+  // writes and is not counted here.
   uint32_t dropped = 0;
-  // Rows waiting for a bounded commit: the ring plus the one-per-second
-  // solution slot.
+  uint32_t dropped_queue_full = 0;   // of `dropped`: the 16-record queue was full
+  uint32_t dropped_oversized = 0;    // of `dropped`: the row did not fit its buffer
+  // Records waiting for the writer: the queue plus the one-per-second sample.
   unsigned pending = 0;
+  // The writer is taking records: the session mounted, passed its readback test
+  // and has not had a write refused since (or the retry window has elapsed and
+  // it is probing again).
+  bool available = false;
 };
 
 namespace diagnostic_log {
 
-// Per-turn commit bound (R10b). Measured: a worst-case turn produced four rows
-// (link, rtcm and fix edges plus the one-second solution sample) and the
-// receiver's own profile-completion observer two more; with the host double's
+// The prescribed structures (R10 step 4). Measured: a worst-case turn produced
+// four rows (link, rtcm and fix edges plus the one-second solution sample) and
+// the receiver's own profile-completion observer two more; with the host double's
 // 40 ms card one such turn cost the loop 160 ms of clock, and the observer's two
-// rows cost 80 ms inside the receiver's call. The pending ring makes every
-// producer O(1) and the commit budget makes a turn's card cost independent of
-// how many rows that turn produced: one solution sample plus kEventRowsPerTurn
-// event rows, i.e. at most 120 ms with that card and nothing at all when the
-// card is absent or failing.
-constexpr unsigned kPendingRows = 8;       // queue depth per turn's producers
-constexpr unsigned kEventRowsPerTurn = 2;  // committed event rows per service call
+// rows cost 80 ms inside the receiver's call. Producers are now one bounded copy
+// each, and one writer call commits at most kWriterRecordsPerTurn records - the
+// same three the measured bound allowed, one solution record plus two event rows
+// - i.e. at most 120 ms with that card and no card work at all while the writer
+// is marked unavailable.
+constexpr unsigned kQueueRecords = 16;        // fixed queue depth per R10 step 4
+constexpr size_t kDestinationBytes = 160;     // destination path per record
+constexpr size_t kTextBytes = 512;            // text per record
+constexpr size_t kEventLineBytes = 256;       // existing event/config line buffer
+constexpr size_t kSolutionLineBytes = 320;    // existing solution line buffer
+// Strict per-turn drain budget: one solution record plus two event rows.
+constexpr unsigned kWriterRecordsPerTurn = 3;
+// A refused write marks optional logging unavailable for this long; the writer
+// then probes the card once, so an unplugged or failing card costs no time at
+// all and a card that recovers is picked up again without a reboot.
+constexpr uint32_t kWriterRetryMs = 5000;
 
 void begin(const SdPort &port, const DiagnosticHooks &hooks, const LogTime &time);
 
-// The loop's one call: session state changes, the per-second solution sample
-// when the window has elapsed, then the bounded card commits. A row the session,
-// the mutex or the card refuses is skipped and counted in `snapshot().dropped`
-// rather than retried in place.
+// The loop's producer call: session state changes and the per-second solution
+// sample, each one a bounded copy into the queue. It never opens the card. A row
+// the session has no use for produces no record at all; a row the queue or its
+// own buffer cannot hold is counted in `snapshot().dropped`.
 void service(const DiagnosticInputs &in);
-// One solution row, without the state-change events: fills the pending solution
-// slot that the next service call commits.
+// The dedicated low-priority writer: one bounded drain of the queue, at most
+// kWriterRecordsPerTurn records, each under `survey_sd_lock` taken with no wait.
+// Call it last in the turn: a record the session, the mutex or the card refuses
+// is skipped and counted in `snapshot().dropped` rather than retried in place,
+// and a refused write marks optional logging unavailable until kWriterRetryMs
+// has elapsed.
+void writer(uint32_t now_ms);
+// One solution row, without the state-change events: fills the queued
+// one-per-second sample record that the writer commits.
 void solution(const DiagnosticInputs &in);
 
 // The storage owner's session lines, called where the fact became true.

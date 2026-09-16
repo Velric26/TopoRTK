@@ -166,6 +166,18 @@ The redesigned dashboard has three equal-height cards, larger values, an actiona
 
 See the [2026-09-08 validation record](../tests/2026-09-08-touch-role-settings/README.md) for the distinction between host checks, Unit B hardware checks, and outstanding physical touch/power-cycle tests.
 
+## Instrument restart (0.11.33 and later)
+
+The instrument can be restarted **in software** — the same effect as a power cycle, which is what the operator previously had to perform whenever a link or operation was stuck. It is a maintenance action, not a settings change: nothing is persisted by it.
+
+- **On the touchscreen:** Debug page → **RESTART**. One tap arms it for ten seconds (the label changes to `CONFIRM RESTART`), a second tap sends the request. The refusal text appears under the button if the instrument declines.
+- **In the browser:** the Debug page's **Restart instrument** card, with the confirmation checkbox and the same refusal text. (Planned for the same release as this document's update.)
+- **API:** `POST /api/v1/diagnostic` with `{"op":"restart","confirm":true}` — 202 accepted, and the snapshot reports `restart_pending` until the chip resets.
+
+Restarting stops correction output, any active collection and web access until the instrument boots again; the dedicated pair reconnects on its saved link by itself. The request is **refused** while a firmware update is transferring, while a diagnostic run or probe is in flight, and while the instrument is collecting or writing — finish those first. After the reboot the instrument is in the state a cold boot produces: no session, no reservation, no in-progress operation.
+
+After a **flash** the reboot is already part of the flow (OTA restarts by design, and USB flashing resets the chip when the tool finishes), so this control is for the case where a clean boot is wanted without flashing a new image.
+
 ## Data Model
 
 Document jobs, points, codes, antenna height, quality metadata, base identity, coordinate configuration, and units.

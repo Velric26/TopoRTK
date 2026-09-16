@@ -9,6 +9,12 @@
 </section><section><h2>Communications</h2><p class="muted">Recent GNSS lines and frame summaries · up to 8 entries/second, 32 entries in RAM, 120 characters per entry. This is a sampled view, not a full serial recording. Wi-Fi passwords and control tokens are never captured.</p>
 <div class="row"><label>Channel <select id="filter"><option value="">All</option><option>GNSS RX</option><option>GNSS TX</option><option>SiK RX</option><option>SiK TX</option><option>Wi-Fi RX</option><option>Wi-Fi TX</option></select></label><button id="pause" disabled>Pause view</button><button id="download" disabled>Download snapshot</button></div>
 <pre id="log" aria-label="Communication log">Enable Debug on the touchscreen, then take control.</pre><p id="capture" class="muted">Capture counters unavailable.</p>
+</section><section><h2>Restart instrument</h2>
+<p class="muted">Restarts this instrument in software — the same effect as a power cycle, including for a link or an operation that is stuck. Correction output, an active collection and web access stop until it boots again, and the dedicated pair reconnects on the saved link by itself. Nothing is saved by a restart.</p>
+<p class="warning">Refused while a firmware update is transferring, while a diagnostic run or wiring check is in flight, and while the instrument is collecting or writing. Finish those first.</p>
+<p><label><input type="checkbox" id="acceptRestart"> I understand the interruptions above.</label></p>
+<div class="row"><button id="restartInstrument" disabled>Restart instrument</button></div>
+<p id="restartState" class="muted"></p>
 </section><section><h2 id="updateHeading">Updating Firmware</h2>
 <p class="muted">Local Wi-Fi / hotspot update · Hardware acceptance pending for this preview. Use a TopoRTK .tpk package for this instrument.</p>
 <p id="peerUpdate" class="banner" role="status">Paired unit: checking status…</p>
@@ -27,7 +33,7 @@
 let owner=false,online=false,enabled=false,paused=false,requesting=false,report=null,previous='',lastAdvance=0;
 // Every render pass also refreshes the firmware-update card through the hook
 // update-ui.js registers, so its buttons never act on a stale owner or upload state.
-function controls(){for(const id of ['disable','pause','filter'])$(id).disabled=!online||!enabled||!owner||requesting||window.otaUploading;$('claim').disabled=!online||!enabled||owner||requesting||window.otaUploading;$('download').disabled=!online||!enabled||!owner||!report||requesting||window.otaUploading;$('ownership').textContent=owner?'You control this instrument.':'Take control to view communication details. No PIN is required.';window.updateControls?.();}
+function controls(){for(const id of ['disable','pause','filter'])$(id).disabled=!online||!enabled||!owner||requesting||window.otaUploading;$('claim').disabled=!online||!enabled||owner||requesting||window.otaUploading;$('restartInstrument').disabled=!online||!enabled||!owner||requesting||window.otaUploading||!$('acceptRestart').checked;$('download').disabled=!online||!enabled||!owner||!report||requesting||window.otaUploading;$('ownership').textContent=owner?'You control this instrument.':'Take control to view communication details. No PIN is required.';window.updateControls?.();}
 const activeRequests=new Set();
 window.pauseDebugRequests=()=>{for(const controller of activeRequests)controller.abort();};
 // Another controller taking over drops the shared token; stop showing control at once
@@ -37,6 +43,27 @@ async function action(fn){requesting=true;controls();try{if(window.otaUploading)
 $('claim').onclick=()=>action(async()=>{await topoClaim();owner=true;});
 $('disable').onclick=()=>action(async()=>{const r=await topoRequest('/api/v1/debug',{op:'disable'},{timeout:3500});if(!r.ok)throw Error(r.body?.error||'Request failed');enabled=false;report=null;$('log').textContent='Debug disabled. It returns On at the next restart, or enable it again on the touchscreen.';});
 $('pause').onclick=()=>{paused=!paused;$('pause').textContent=paused?'Resume view':'Pause view'};
+// A restart is admitted by the diagnostics queue and evaluated on the main loop, so
+// a 2xx only means "queued": the page confirms by reading the published state, and
+// reports the layer's own refusal text when the gate declined the request.
+$('acceptRestart').onchange=controls;
+$('restartInstrument').onclick=()=>action(async()=>{
+ if(!$('acceptRestart').checked)throw Error('Confirm the interruptions first.');
+ const accepted=await topoRequest('/api/v1/diagnostic',{op:'restart',confirm:true},{timeout:3500});
+ if(!accepted.ok)throw Error('Restart refused: '+(accepted.body?.error||'request rejected'));
+ $('restartState').textContent='Restart requested. Confirming with the instrument…';
+ await new Promise(resolve=>setTimeout(resolve,1200));
+ const state=await topoRequest('/api/v1/diagnostic',undefined,{timeout:3500});
+ const diagnostic=state.ok?state.body:null;
+ const pending=diagnostic?.restart_pending===true;
+ if(pending){
+   $('restartState').textContent='Restart accepted. The instrument stops responding while it boots; the pair reconnects by itself.';
+   $('acceptRestart').checked=false;
+ }else{
+   $('restartState').textContent='Restart refused: '+(diagnostic?.corrections?.error||'the instrument declined the request');
+ }
+ controls();
+});
 function renderLog(){if(!report)return;const rows=report.entries.filter(e=>!$('filter').value||e.channel===$('filter').value);$('log').textContent=rows.map(e=>(e.at_ms/1000).toFixed(3)+' s  '+e.channel+'  '+e.text).join('\n')||'No captured messages in this view.';$('capture').textContent='Rate-limited entries: '+report.throttled+' · Overwritten entries: '+report.overwritten+' · Truncated entries: '+report.truncated+'. These are debug capture limits, not radio packet loss.';}
 $('filter').onchange=renderLog;
 $('download').onclick=()=>{if(!report)return;const a=document.createElement('a'),url=URL.createObjectURL(new Blob([JSON.stringify(report,null,2)],{type:'application/json'}));a.href=url;a.download='TopoRTK-debug-'+report.boot_id+'-'+report.uptime_ms+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)};

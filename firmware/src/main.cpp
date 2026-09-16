@@ -275,6 +275,14 @@ void setup_sd_logging() {
 
 void service_sd_logging() { diagnostic_log::service(sd_log_inputs(millis())); }
 
+// The optional session's writer stage (R10b): the lowest-priority work in the
+// turn, after every other service, bounded to diagnostic_log::kWriterRecordsPerTurn
+// records per call and never waiting on the card, the session or the journal's
+// mutex. A separate translation unit's task would add card contention without
+// bounding anything the loop does not already bound, so the drain stays on the
+// loop task - see the R10b note in diagnostic_log.h.
+void service_sd_writer() { diagnostic_log::writer(millis()); }
+
 void sd_log_event(const char *event, const char *detail) {
   diagnostic_log::event(event, detail, log_time(millis()));
 }
@@ -609,11 +617,13 @@ void loop() {
   // byte is ever discarded to shorten a turn. The correction output is written
   // next, in the same turn its frames were admitted, and before every optional
   // or best-effort service (the CSV session, the web publication, the settings
-  // service). The optional session runs after all of them and commits at most
-  // one solution sample plus diagnostic_log::kEventRowsPerTurn rows - and the
-  // receiver's own input path no longer writes to the card at all - so a slow,
-  // full or failing SD card can delay COM2 admission by one bounded commit, not
-  // by the rows the turn produced.
+  // service). The optional session's producers run after all of them, and its
+  // writer - diagnostic_log::writer, at most kWriterRecordsPerTurn records per
+  // call and never waiting on the card, the session or the journal's mutex -
+  // runs last of all. A slow, full or failing SD card can therefore delay COM2
+  // admission by one bounded drain, not by the rows the turn produced, and a
+  // card that refuses a write simply costs the turn nothing until the retry
+  // window elapses. The receiver's own input path never writes to the card.
   ota_service(millis(),!is_base(),gnss_service::snapshot().profile_running,display_ready&&!device_settings::snapshot().error&&survey_service_ready()&&web_service_ready());
   if(!ota_locked())read_usb_console();
   if(!ota_paused())gnss_service::service_input(millis());
@@ -632,6 +642,9 @@ void loop() {
     const uint32_t settings_now = millis();
     link_service::service_settings(settings_now, status_snapshot(settings_now).corrections.fresh);
   }
+  // The optional CSV writer drains last: it is the turn's lowest-priority work,
+  // and its bounded drain cannot delay any service that ran before it.
+  if(!ota_paused())service_sd_writer();
 
   const uint32_t render=millis();
   if (render - last_screen_ms >= 250) {

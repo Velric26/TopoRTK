@@ -6,6 +6,7 @@ const otaJs=web('update-ui.js'),html=web('debug.html'),nav=web('navigation.js'),
 (async()=>{fs.mkdirSync(out,{recursive:true});const browser=await chromium.launch({channel:'msedge',headless:true});try{
  const context=await browser.newContext({viewport:{width:390,height:844},acceptDownloads:true}),page=await context.newPage(),errors=[],posts=[];
  let enabled=false,owner=false,offline=false,frozen=false,uptime=0,role='ROVER',token='',peerConnected=false;
+ let restartPending=false,diagnosticError='';
  let updateState={version:1,state:'idle',unit:2,available:true,locked:false,boot:'Normal boot',boot_id:7};
  const report={version:1,boot_id:7,uptime_ms:2000,throttled:4,overwritten:8,truncated:1,entries:[{sequence:1,at_ms:1000,channel:'GNSS RX',text:'$GPGGA,passive sample'},{sequence:2,at_ms:1050,channel:'SiK RX',text:'<img src=x onerror="window.injected=true">'}]};
  page.on('pageerror',e=>errors.push(e.message));
@@ -16,6 +17,7 @@ const otaJs=web('update-ui.js'),html=web('debug.html'),nav=web('navigation.js'),
    if(url.pathname==='/api/v1/control'){owner=true;token='a'.repeat(32);return route.fulfill({json:{token}})}
    if(r.headers().authorization!=='Bearer '+token||!owner)return route.fulfill({status:401,json:{error:'claim_control_first'}});
    if(data.op==='disable')enabled=false;
+   else if(url.pathname==='/api/v1/diagnostic'&&data.op==='restart')return route.fulfill({json:{state:'queued'}});
    else return route.fulfill({status:400,json:{error:'operation_not_available'}});
    return route.fulfill({json:{state:'applied'}});
   }
@@ -25,7 +27,7 @@ const otaJs=web('update-ui.js'),html=web('debug.html'),nav=web('navigation.js'),
   }
   if(url.pathname==='/api/v1/debug/log')return route.fulfill({json:report});
   if(url.pathname==='/api/v1/survey')return route.fulfill({json:{unit:'B',role,collection:{active:true},gnss:{profile_verified:true,fixed:true}}});
-  if(url.pathname==='/api/v1/diagnostic')return route.fulfill({json:{corrections:{transport:'sik',peer_connected:peerConnected,pair_state:peerConnected?'connected':'negotiating',output:{forwarded:42}}}});
+  if(url.pathname==='/api/v1/diagnostic')return route.fulfill({json:{corrections:{transport:'sik',peer_connected:peerConnected,pair_state:peerConnected?'connected':'negotiating',output:{forwarded:42},error:diagnosticError},restart_pending:restartPending}});
   if(url.pathname==='/update-ui.js')return route.fulfill({body:otaJs,contentType:'application/javascript'});
   if(url.pathname==='/api/v1/update')return route.fulfill({json:updateState});
   if(url.pathname==='/api.js')return route.fulfill({body:api,contentType:'application/javascript'});
@@ -54,10 +56,28 @@ const otaJs=web('update-ui.js'),html=web('debug.html'),nav=web('navigation.js'),
  await page.locator('#claim').click();await page.waitForFunction(()=>document.querySelector('#ownership').textContent.startsWith('You control'));await page.locator('#pause').click();
  frozen=true;await page.waitForFunction(()=>document.querySelector('#connection').textContent.startsWith('Disconnected'),null,{timeout:10000});assert(await page.locator('#pause').isDisabled());assert.match(await page.locator('#route').innerText(),/stale/i);frozen=false;await page.waitForFunction(()=>!document.querySelector('#pause').disabled);
  for(const width of [320,390,768,1280]){await page.setViewportSize({width,height:900});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.screenshot({path:path.join(out,'debug-'+width+'.png'),fullPage:true})}
+ // The restart card is a maintenance action: the controller lease and the
+ // confirmation gate it, it posts exactly one request, and the page reports the
+ // diagnostic layer's own refusal text instead of the queue's generic status.
+ restartPending=false;diagnosticError='Firmware update is transferring; restart refused.';
+ assert(await page.locator('#restartInstrument').isDisabled());
+ await page.locator('#acceptRestart').check();
+ await page.waitForFunction(()=>!document.querySelector('#restartInstrument').disabled);
+ await page.locator('#restartInstrument').click();
+ await page.waitForFunction(()=>document.querySelector('#restartState').textContent.includes('refused'),null,{timeout:10000});
+ assert.equal(posts.filter(p=>p.path==='/api/v1/diagnostic'&&p.data.op==='restart').length,1);
+ assert.equal(posts.filter(p=>p.data.op==='restart')[0].data.confirm,true);
+ assert.match(await page.locator('#restartState').innerText(),/Firmware update is transferring/);
+ diagnosticError='';restartPending=true;
+ await page.locator('#acceptRestart').check();
+ await page.locator('#restartInstrument').click();
+ await page.waitForFunction(()=>document.querySelector('#restartState').textContent.includes('accepted'),null,{timeout:10000});
+ assert.equal(posts.filter(p=>p.data.op==='restart').length,2);
+ restartPending=false;
  role='BASE';await page.waitForFunction(()=>document.querySelector('#identity').textContent.includes('BASE'));assert.match(await page.locator('#updateWarning').innerText(),/Rover may lose RTK fix/);assert.equal(await page.locator('nav a').count(),1);
  enabled=false;await page.waitForFunction(()=>document.querySelector('#mode').textContent.includes('Debug unavailable'));assert(await page.locator('#claim').isDisabled());assert(await page.locator('#download').isDisabled());
  await page.goto('http://debug.test/survey');await page.waitForSelector('#debugTab');assert(await page.locator('#debugTab').isDisabled());
  offline=true;await page.waitForFunction(()=>document.querySelector('#debugAvailability').textContent.includes('disconnected'));assert(await page.locator('#debugTab').isDisabled());
- assert(posts.every(p=>p.path==='/api/v1/control'||p.path==='/api/v1/debug'),'passive page must not send survey, GNSS or radio commands');assert.deepEqual(errors,[]);
- fs.writeFileSync(path.join(out,'debug-browser.json'),JSON.stringify({result:'PASS',checks:['gray tab and enable instructions','hardware-enabled availability','takeover without PIN','monitoring while occupation is active','no idle timer; debug persists until disabled','text escaping/filter/download/pause','controller loss clears private view','stale/offline and timeout disable access','role-specific update warnings and guarded OTA controls','update card heading with live upload percentage','320/390/768/1280 layouts','no active diagnostic or survey commands']},null,2));console.log('PASS: Debug navigation, passive browser, persistent debug, role warnings, downloads and responsive layout');
+ assert(posts.every(p=>p.path==='/api/v1/control'||p.path==='/api/v1/debug'||(p.path==='/api/v1/diagnostic'&&p.data.op==='restart')),'passive page sends nothing but the confirmed restart');assert.deepEqual(errors,[]);
+ fs.writeFileSync(path.join(out,'debug-browser.json'),JSON.stringify({result:'PASS',checks:['gray tab and enable instructions','hardware-enabled availability','takeover without PIN','monitoring while occupation is active','no idle timer; debug persists until disabled','text escaping/filter/download/pause','controller loss clears private view','stale/offline and timeout disable access','role-specific update warnings and guarded OTA controls','restart card gating, single request and refusal text','update card heading with live upload percentage','320/390/768/1280 layouts','no active diagnostic or survey commands']},null,2));console.log('PASS: Debug navigation, passive browser, persistent debug, role warnings, downloads and responsive layout');
  }finally{await browser.close()}})().catch(e=>{console.error(e);process.exitCode=1});

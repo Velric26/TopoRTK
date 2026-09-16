@@ -31,6 +31,8 @@ The stored correction medium is restored at boot and the pair negotiates a fresh
 - Ask known questions together up front. If further user input is needed, ask and end the turn immediately; do not work or wait actively while awaiting a reply.
 - Pause implementation at 10% remaining of the **five-hour** allowance, update documentation, commit and push. The weekly allowance is not the threshold.
 
+**Restart on command in Debug mode (2026-09-15, R10c).** The operator asks for the instrument to be restarted in software — ideally usable after a flash and available while Debug is on — as the power-cycle equivalent for a state that cannot be recovered in place. Implemented as one admission path with three surfaces: the diagnostics API (`{"op":"restart","confirm":true}`), the touchscreen Debug page (two-tap confirm), and a Debug-page browser card. It rides the existing diagnostics gates (controller lease, same origin, explicit confirm), is refused while an update is transferring, while a run or probe is in flight, and while collecting or writing; it then holds the reservation through a 500 ms grace window so nothing new starts under a chip about to reset, publishes `restart_pending`, and resets on a later service turn so the 202, the snapshot and the serial line land first. Nothing is persisted, and after a flash the reboot is already part of OTA/USB flow — this is for the case where a clean boot is wanted without flashing. The restart phase of `run_pair_matrix.py` restarts each unit in turn and requires the pair to renegotiate by itself.
+
 ## Recommended separation
 
 | Mode/action | Normal operation | Access and lifetime |

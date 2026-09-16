@@ -1,9 +1,9 @@
 // Optional SD diagnostic log (R10a slice 4): the CSV session moved out of
-// main.cpp. Bodies are unchanged except that the removed globals became
-// file-local state, `millis()` and the receiver snapshot became the root's
-// `LogTime`/`DiagnosticInputs`, and the accuracy text arrives through the
-// installed hook. The rows, headers, event names and the survey SD mutex
-// discipline are the ones main.cpp wrote.
+// main.cpp. The rows, headers, event names and the survey SD mutex discipline
+// are the ones main.cpp wrote; R10b gave the module the prescribed shape - a
+// fixed 16-record queue whose every record carries its own 160-byte destination
+// and 512-byte text, producers that only copy into it, and a dedicated
+// low-priority writer stage that drains it under the journal's own SD mutex.
 #include "diagnostic_log.h"
 
 #include <Arduino.h>
@@ -32,28 +32,38 @@ int sd_last_fix_quality = -1;
 char sd_last_role[8] = {};
 uint32_t last_sd_solution_ms = 0;
 
-// Pending rows (R10b). Every producer formats its row and enqueues it with one
-// bounded copy; the loop's one service call then commits at most the solution
-// sample plus kEventRowsPerTurn event rows. Producer cost is therefore constant
-// no matter how many rows a turn produces, and a turn's card cost is bounded, so
-// the optional session cannot delay the correction output it shares the turn
-// with. Rows are per-file FIFO; the two files have never had a cross-file order.
-constexpr size_t kRowCapacity = 320;    // the longest row: one solution line
-struct PendingRow {
-  char path[160];
-  char text[kRowCapacity];
+// The prescribed queue (R10 step 4): 16 records, each one 160-byte destination
+// plus one 512-byte text. Every producer fills a record with one bounded copy of
+// its already-formatted row, so producer cost is constant no matter how many rows
+// a turn produces and no allocation happens on the hot path. The destination
+// travels in the record, so a session change between queueing and writing cannot
+// misroute a queued row. Rows are per-file FIFO; the two files have never had a
+// cross-file order.
+struct Record {
+  char destination[kDestinationBytes];
+  char text[kTextBytes];
 };
-// The whole optional queue is static: 8 x 484 B plus the 484 B solution slot.
-static_assert(kPendingRows * sizeof(PendingRow) + sizeof(PendingRow) < 4608,
+static_assert(sizeof(Record) == kDestinationBytes + kTextBytes,
+              "One record is one 160-byte destination plus one 512-byte text");
+static_assert((kQueueRecords + 1) * sizeof(Record) <= 12u * 1024u,
               "Bounded optional-log queue memory");
-PendingRow pending_rows[kPendingRows];
-unsigned pending_head = 0, pending_count = 0;
-// The one-per-second sample needs a single slot: a newer sample supersedes one
-// the card has not taken yet, and the superseded row counts as dropped.
-PendingRow solution_row;
+Record records[kQueueRecords];
+unsigned queue_head = 0, queue_count = 0;
+// The one-per-second sample keeps its own single record: a newer sample replaces
+// one the card has not taken yet and the replaced row counts as dropped - the
+// supersede rule the per-second sample has always had - so a 16-deep backlog of
+// event rows can never delay the sample and the queue itself stays per-file FIFO.
+Record solution_record;
 bool solution_pending = false;
-uint32_t dropped_rows = 0;
+uint32_t dropped_rows = 0, dropped_queue_full = 0, dropped_oversized = 0;
 bool drop_reported = false;
+
+// The writer's own availability. Set when a session mounted, passed its readback
+// test and had its headers written; cleared when the card refuses a write or a
+// flush, which is the only failure the writer reacts to by leaving the card
+// alone - a busy journal mutex or a closed session merely drops the record.
+bool writer_available = false;
+uint32_t writer_failed_ms = 0;
 
 void copy_text(char *out, size_t capacity, const char *text) {
   size_t index = 0;
@@ -64,18 +74,28 @@ void copy_text(char *out, size_t capacity, const char *text) {
   out[index] = '\0';
 }
 
-// Best effort: a unavailable card, an unopened session or a mutex the survey
-// journal is holding drops the line instead of waiting for it.
-bool append_text(const char *path, const char *text) {
-  if (!sd_ready || path == nullptr || text == nullptr) return false;
-  if(!survey_sd_lock())return false;
-  struct Unlock {~Unlock(){survey_sd_unlock();}} unlock;
-  File file = SD_MMC.open(path, FILE_APPEND);
-  if (!file) return false;
+// The three outcomes one append can have. `kRefused` is the optional log saying
+// no without the card having failed (closed session, mutex held); `kFailed` is
+// the card refusing the open or the bytes, which marks optional logging
+// unavailable.
+enum WriteResult { kWriteWritten, kWriteRefused, kWriteFailed };
+
+// One append under the journal's own SD mutex, taken with no wait: a mutex the
+// survey journal holds refuses the record instead of delaying the writer, so the
+// authoritative journal's commits are never waited on and never moved. A flush
+// that loses bytes is not observable through this API (`File::flush` returns
+// void), so a card that accepted the open but not the bytes surfaces as the
+// short print this returns.
+WriteResult write_record(const char *destination, const char *text) {
+  if (!sd_ready || destination == nullptr || text == nullptr) return kWriteRefused;
+  if (!survey_sd_lock()) return kWriteRefused;
+  struct Unlock { ~Unlock() { survey_sd_unlock(); } } unlock;
+  File file = SD_MMC.open(destination, FILE_APPEND);
+  if (!file) return kWriteFailed;
   const size_t written = file.print(text);
   file.flush();
   file.close();
-  return written == std::strlen(text);
+  return written == std::strlen(text) ? kWriteWritten : kWriteFailed;
 }
 
 // One bounded console line per failure episode, so a card that has stopped
@@ -83,75 +103,143 @@ bool append_text(const char *path, const char *text) {
 void report_drop() {
   if (drop_reported) return;
   drop_reported = true;
-  Serial.printf("SD: LOG DROPPED %lu optional row(s); card, session or shared journal refused the write\n",
+  Serial.printf("SD: LOG DROPPED %lu optional row(s); oversized or full queue, closed session, busy journal mutex or refusing card\n",
                 static_cast<unsigned long>(dropped_rows));
 }
 
-void place(PendingRow &row, const char *path, const char *line) {
-  copy_text(row.path, sizeof(row.path), path);
-  copy_text(row.text, sizeof(row.text), line);
+void drop_oversized() {
+  ++dropped_rows;
+  ++dropped_oversized;
+  report_drop();
 }
 
-bool enqueue(const char *path, const char *line) {
-  if (pending_count == kPendingRows) {   // the turn produced more than the ring holds
-    ++dropped_rows;
-    report_drop();
+void drop_full_queue() {
+  ++dropped_rows;
+  ++dropped_queue_full;
+  report_drop();
+}
+
+// The destination the record carries: the file of the session that produced the
+// row. The queue never re-derives it, and the session path is 128 bytes, so the
+// prescribed 160-byte destination holds every name it can build.
+bool destination_of(char *out, const char *file) {
+  const int needed = std::snprintf(out, kDestinationBytes, "%s/%s", sd_session_path, file);
+  return needed > 0 && static_cast<size_t>(needed) < kDestinationBytes;
+}
+
+// One record, one bounded copy: both fields are sized by the record, so no row
+// can overrun it and no heap is touched.
+void place(Record &record, const char *destination, const char *line) {
+  copy_text(record.destination, sizeof(record.destination), destination);
+  copy_text(record.text, sizeof(record.text), line);
+}
+
+bool enqueue(const char *destination, const char *line) {
+  if (std::strlen(line) + 1 > kTextBytes) {   // cannot happen from a 256/320-byte producer
+    drop_oversized();
     return false;
   }
-  place(pending_rows[(pending_head + pending_count) % kPendingRows], path, line);
-  ++pending_count;
+  if (queue_count == kQueueRecords) {         // the turn produced more than the queue holds
+    drop_full_queue();
+    return false;
+  }
+  place(records[(queue_head + queue_count) % kQueueRecords], destination, line);
+  ++queue_count;
   return true;
 }
 
-// One commit is one append: a skip, never a wait or an in-place retry.
-void commit_pending() {
+// The sample's own record is filled the same way; the row it replaces was
+// produced and never written, so it counts as dropped.
+void enqueue_solution(const char *destination, const char *line) {
+  if (std::strlen(line) + 1 > kTextBytes) {   // cannot happen from a 320-byte buffer
+    drop_oversized();
+    return;
+  }
+  place(solution_record, destination, line);
   if (solution_pending) {
-    const bool written = append_text(solution_row.path, solution_row.text);
-    solution_pending = false;
-    if (written) drop_reported = false;
-    else { ++dropped_rows; report_drop(); }
+    ++dropped_rows;
+    report_drop();
   }
-  for (unsigned committed = 0; committed < kEventRowsPerTurn && pending_count > 0;
-       ++committed) {
-    const bool written = append_text(pending_rows[pending_head].path,
-                                     pending_rows[pending_head].text);
-    pending_head = (pending_head + 1) % kPendingRows;
-    --pending_count;
-    if (written) drop_reported = false;
-    else { ++dropped_rows; report_drop(); }
+  solution_pending = true;
+}
+
+// A card that refused the bytes is not asked again per row: optional logging is
+// marked unavailable and the writer leaves the card alone until the retry
+// window elapses. Nothing here waits on or touches the survey journal.
+void mark_unavailable(uint32_t now_ms) {
+  writer_available = false;
+  writer_failed_ms = now_ms;
+  Serial.printf("SD: OPTIONAL LOG UNAVAILABLE %s; card refused a write, corrections are unaffected\n",
+                sd_session_path);
+}
+
+// One record's append, with the accounting every caller shares: a written record
+// clears the drop report, anything else is counted, and a card that refused the
+// open or the bytes marks optional logging unavailable and ends the drain.
+// Returns false when the card failed, so the caller stops asking it anything.
+bool commit_record(const Record &record, uint32_t now_ms) {
+  const WriteResult result = write_record(record.destination, record.text);
+  if (result == kWriteWritten) {
+    drop_reported = false;
+    return true;
   }
+  ++dropped_rows;
+  report_drop();
+  if (result == kWriteFailed) {
+    mark_unavailable(now_ms);
+    return false;
+  }
+  return true;   // the optional log refused the record (no session, mutex held)
 }
 
 }  // namespace
 
 void event(const char *name, const char *detail, const LogTime &time) {
-  if (!sd_ready || sd_session_path[0] == '\0') return;
-  char path[160] = {};
-  std::snprintf(path, sizeof(path), "%s/events.csv", sd_session_path);
+  // The readback test is the session's admission gate for every row, the events
+  // file included: a session that cannot be proven takes no row at all.
+  if (!sd_ready || !sd_test_passed || sd_session_path[0] == '\0') return;
+  char destination[kDestinationBytes] = {};
+  if (!destination_of(destination, "events.csv")) {
+    drop_oversized();
+    return;
+  }
   char utc[24] = "---";
   if (time.utc.valid) {
     std::snprintf(utc, sizeof(utc), "%04u-%02u-%02uT%02u:%02u:%02uZ",
                   time.utc.year, time.utc.month, time.utc.day, time.utc.hour,
                   time.utc.minute, time.utc.second);
   }
-  char line[256] = {};
-  std::snprintf(line, sizeof(line), "%lu,%c,%s,%s,%s\n",
+  char line[kEventLineBytes] = {};
+  const int needed = std::snprintf(line, sizeof(line), "%lu,%c,%s,%s,%s\n",
                 static_cast<unsigned long>(time.now_ms), unit_label, utc,
                 name == nullptr ? "UNKNOWN" : name,
                 detail == nullptr ? "" : detail);
-  enqueue(path, line);
+  // An event line that does not fit its 256-byte buffer is an oversized record:
+  // dropped and counted, never written truncated.
+  if (needed < 0 || static_cast<size_t>(needed) >= sizeof(line)) {
+    drop_oversized();
+    return;
+  }
+  enqueue(destination, line);
 }
 
 void config(const char *profile, const char *notes, const LogTime &time) {
   if (!sd_ready || !sd_test_passed || sd_session_path[0] == '\0') return;
-  char path[160] = {};
-  std::snprintf(path, sizeof(path), "%s/config.csv", sd_session_path);
-  char line[256] = {};
-  std::snprintf(line, sizeof(line), "%lu,%c,%s,%s\n",
+  char destination[kDestinationBytes] = {};
+  if (!destination_of(destination, "config.csv")) {
+    drop_oversized();
+    return;
+  }
+  char line[kEventLineBytes] = {};
+  const int needed = std::snprintf(line, sizeof(line), "%lu,%c,%s,%s\n",
                 static_cast<unsigned long>(time.now_ms), unit_label,
                 profile == nullptr ? "UNKNOWN" : profile,
                 notes == nullptr ? "" : notes);
-  enqueue(path, line);
+  if (needed < 0 || static_cast<size_t>(needed) >= sizeof(line)) {
+    drop_oversized();
+    return;
+  }
+  enqueue(destination, line);
   event("CONFIG_PROFILE", profile == nullptr ? "UNKNOWN" : profile, time);
 }
 
@@ -160,20 +248,19 @@ void solution(const DiagnosticInputs &in) {
       !in.solution_fresh) {
     return;
   }
-  if (solution_pending) {   // the card has not taken the previous second's row
-    ++dropped_rows;
-    report_drop();
+  char destination[kDestinationBytes] = {};
+  if (!destination_of(destination, "solution.csv")) {
+    drop_oversized();
+    return;
   }
-  char path[160] = {};
-  std::snprintf(path, sizeof(path), "%s/solution.csv", sd_session_path);
   char hacc[24] = {};
   hooks->accuracy_text(hacc, sizeof(hacc), in.time.now_ms);
   char rssi[8] = "";
   if (in.rssi_valid) {
     std::snprintf(rssi, sizeof(rssi), "%d", in.rssi_dbm);
   }
-  char line[320] = {};
-  std::snprintf(line, sizeof(line),
+  char line[kSolutionLineBytes] = {};
+  const int needed = std::snprintf(line, sizeof(line),
                 "%lu,%s,%s,%s,%.8f,%.8f,%.3f,%d,%.2f,%s,%ld,%s,%lu,%lu,%lu,%lu,%lu,%lu,%s\n",
                 static_cast<unsigned long>(in.time.now_ms),
                 in.time.utc.valid ? in.gga_utc : "---",
@@ -187,13 +274,20 @@ void solution(const DiagnosticInputs &in) {
                 static_cast<unsigned long>(in.sequence_gaps),
                 static_cast<unsigned long>(in.invalid_packets),
                 in.transport);
-  place(solution_row, path, line);
-  solution_pending = true;
+  if (needed < 0 || static_cast<size_t>(needed) >= sizeof(line)) {
+    drop_oversized();
+    return;
+  }
+  enqueue_solution(destination, line);
 }
 
 void begin(const SdPort &port, const DiagnosticHooks &installed, const LogTime &time) {
   hooks = &installed;
   unit_label = port.unit;
+  // A mount attempt starts with the writer marked unavailable: only a session
+  // that mounts and passes its readback test may take records.
+  writer_available = false;
+  writer_failed_ms = time.now_ms;
   SD_MMC.setPins(port.clock, port.command, port.data0);
   if (!SD_MMC.begin("/sdcard", true, false)) {
     Serial.println("SD: MOUNT FAIL");
@@ -246,15 +340,15 @@ void begin(const SdPort &port, const DiagnosticHooks &installed, const LogTime &
   Serial.printf("SD: READBACK %s\n", sd_test_passed ? "PASS" : "FAIL");
   if (!sd_test_passed) return;
 
-  char path[160] = {};
+  char path[kDestinationBytes] = {};
   std::snprintf(path, sizeof(path), "%s/events.csv", sd_session_path);
-  append_text(path, "uptime_ms,unit,utc,event,detail\n");
+  write_record(path, "uptime_ms,unit,utc,event,detail\n");
   std::snprintf(path, sizeof(path), "%s/solution.csv", sd_session_path);
-  append_text(path,
+  write_record(path,
               "uptime_ms,utc_time,utc_status,fix,latitude,longitude,altitude_m,satellites,hdop,h_acc,rtcm_age_ms,link_rssi_dbm,rtcm_uart_frames,rtcm_wifi_tx_frames,rtcm_wifi_rx_frames,rtcm_forwarded_bytes,wifi_sequence_gaps,wifi_invalid_packets,link_transport\n");
   std::snprintf(path, sizeof(path), "%s/config.csv", sd_session_path);
-  append_text(path, "uptime_ms,unit,profile,notes\n");
-  char session_path[160] = {};
+  write_record(path, "uptime_ms,unit,profile,notes\n");
+  char session_path[kDestinationBytes] = {};
   std::snprintf(session_path, sizeof(session_path), "%s/session.json", sd_session_path);
   File session = SD_MMC.open(session_path, FILE_WRITE);
   if (session) {
@@ -264,10 +358,16 @@ void begin(const SdPort &port, const DiagnosticHooks &installed, const LogTime &
     session.flush();
     session.close();
   }
+  // The session is proven: the writer may now take records, including the ones
+  // the producers queue from here on.
+  writer_available = true;
   event("BOOT", "SD_READY|READBACK_PASS", time);
 }
 
 void service(const DiagnosticInputs &in) {
+  // The service turn only produces records - one bounded copy each, no card
+  // access - so nothing here can be delayed by the card, the session or the
+  // journal's mutex. The writer stage drains them at the end of the turn.
   if (!sd_state_initialized) {
     sd_state_initialized = true;
     sd_last_uart_active = in.uart_active;
@@ -302,10 +402,40 @@ void service(const DiagnosticInputs &in) {
     last_sd_solution_ms = in.time.now_ms;
     solution(in);
   }
-  // The bounded card work of this turn: one solution sample plus at most
-  // kEventRowsPerTurn event rows, committed after every other service that
-  // shares the turn has run.
-  commit_pending();
+}
+
+// The dedicated low-priority writer: at most kWriterRecordsPerTurn records per
+// call, each one append under the journal's SD mutex, on the loop task and after
+// every other service of the turn.
+void writer(uint32_t now_ms) {
+  // No session, no card: the queue simply holds its records, unopened and
+  // uncounted, exactly as a missing card has always behaved.
+  if (!sd_ready || !sd_test_passed || sd_session_path[0] == '\0') return;
+  if (!writer_available) {
+    // Optional logging is unavailable: no card work at all until the retry
+    // window has elapsed, then one probe - so a card that refuses writes costs
+    // the loop nothing while it stays broken and is picked up again when it
+    // recovers.
+    if (now_ms - writer_failed_ms < kWriterRetryMs) return;
+    writer_available = true;
+  }
+  unsigned committed = 0;
+  // The queued per-second sample goes first: it is the one record another
+  // producer supersedes, so leaving it behind a deep backlog would cost the log
+  // its freshness.
+  if (solution_pending) {
+    ++committed;
+    const Record &record = solution_record;
+    solution_pending = false;
+    if (!commit_record(record, now_ms)) return;
+  }
+  while (committed < kWriterRecordsPerTurn && queue_count > 0) {
+    ++committed;
+    const Record &record = records[queue_head];
+    queue_head = (queue_head + 1) % kQueueRecords;
+    --queue_count;
+    if (!commit_record(record, now_ms)) return;
+  }
 }
 
 DiagnosticSnapshot snapshot() {
@@ -314,7 +444,10 @@ DiagnosticSnapshot snapshot() {
   out.verified = sd_test_passed;
   std::strncpy(out.session, sd_session_path, sizeof(out.session) - 1);
   out.dropped = dropped_rows;
-  out.pending = pending_count + (solution_pending ? 1u : 0u);
+  out.dropped_queue_full = dropped_queue_full;
+  out.dropped_oversized = dropped_oversized;
+  out.pending = queue_count + (solution_pending ? 1u : 0u);
+  out.available = writer_available;
   return out;
 }
 

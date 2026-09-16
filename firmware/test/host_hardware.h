@@ -189,8 +189,16 @@ class File {
  public:
   std::string *destination = nullptr;
   bool ok = false;
-  File(std::string *destination_ptr = nullptr, bool valid = false)
-      : destination(destination_ptr), ok(valid) {}
+  // A card that accepted the open but refuses the bytes (full or write-protected):
+  // the append comes back short, which is the only write failure the firmware can
+  // observe through this API (`File::flush` returns void).
+  bool write_fail = false;
+  // A card that reads back different bytes than it took, so the session's own
+  // readback test fails although the mount succeeded.
+  bool read_corrupt = false;
+  File(std::string *destination_ptr = nullptr, bool valid = false, bool refusing = false,
+       bool corrupt = false)
+      : destination(destination_ptr), ok(valid), write_fail(refusing), read_corrupt(corrupt) {}
   explicit operator bool() const { return ok; }
   void flush() {}
   void close() { destination = nullptr; }
@@ -198,6 +206,7 @@ class File {
     if (!destination) return 0;
     const size_t count = std::min(length, destination->size());
     std::memcpy(out, destination->data(), count);
+    if (read_corrupt && count) out[0] ^= 0x01;
     return count;
   }
   template<class... Args> size_t printf(const char *format, Args... args) {
@@ -206,7 +215,7 @@ class File {
     return print(buffer);
   }
   size_t print(const char *text) {
-    if (!destination) return 0;
+    if (!destination || write_fail) return 0;
     *destination += text;
     return std::strlen(text);
   }
@@ -219,9 +228,16 @@ struct HostSD {
   // appends one turn attempts is therefore a bound on the time the optional
   // writer can take from the turn it shares with the correction output.
   uint32_t stall_ms = 0;
+  // A card that takes the open and refuses the bytes, the way a full card does:
+  // the mount, the readback test and every header still succeed, so only the
+  // writer sees the short append. Set it after the session is up.
+  bool write_fail = false;
+  // A card whose reads come back changed: the mount and every write still
+  // succeed, so only the session's own readback test can see it fail.
+  bool read_corrupt = false;
   // Card activity, so a case can assert how much work one turn asked of it:
-  // every committed row is one open (append_text opens, prints, flushes and
-  // closes once per row).
+  // every committed row is one open (the writer opens, prints, flushes and
+  // closes once per record) and a failing open charges the same as a good one.
   uint32_t opens = 0;
   bool exists(const char *path) { return files.count(path) != 0; }
   void setPins(int,int,int) {}
@@ -237,9 +253,13 @@ struct HostSD {
     if (mode == FILE_READ) {
       auto it = files.find(path);
       if (it == files.end()) return File{};
-      return File{&it->second, true};
+      return File{&it->second, true, false, read_corrupt};
     }
-    return File{&files[path], true};
+    // FILE_WRITE truncates, the way SD_MMC does: a second session's readback
+    // test must read back only the bytes it just wrote. Everything else (the
+    // log's own appends) adds to what the file already holds.
+    if (mode == FILE_WRITE) files[path].clear();
+    return File{&files[path], true, write_fail};
   }
 };
 static HostSD SD_MMC;

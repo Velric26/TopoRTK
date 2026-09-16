@@ -508,7 +508,8 @@ int main() {
   // Radio mode: transport is SiK, no RSSI is fabricated, LCD shows radio state.
   host_radio_active = true; host_radio_linked = true;
   host_now += 1000;
-  service_sd_logging();   // its own window writes the row the assertions read
+  service_sd_logging();   // its own window queues the row the assertions read
+  service_sd_writer();    // and the session's writer commits it in the same turn
   assert(format_web_status(json, sizeof(json), host_now) > 0);
   assert(std::strstr(json, "\"transport\":\"SiK RADIO\""));
   assert(std::strstr(json, "\"rssi_dbm\":null"));
@@ -524,7 +525,8 @@ int main() {
   host_radio_active = false; host_radio_linked = false;
   host_now += 1000; wifi_last_peer_ms = host_now;
   assert(gnss_service::write_frame(link_reference.data(),link_reference.size(),host_now)==link_reference.size());
-  service_sd_logging();   // its own window writes the row the assertions read
+  service_sd_logging();   // its own window queues the row the assertions read
+  service_sd_writer();    // and the session's writer commits it in the same turn
   assert(format_web_status(json, sizeof(json), host_now) > 0);
   assert(std::strstr(json, "\"rssi_dbm\":-48"));
   assert(std::strstr(json, "\"peer_age_ms\":0"));
@@ -930,35 +932,113 @@ int main() {
     assert(left_in_ring > 0 && left_in_ring <= gnss_service::kInputBacklogMargin);
   }
 
-  // A turn that produces more rows than the ring holds drops the excess visibly,
-  // and one service call asks the card for the bounded budget only (R10b).
+  // The prescribed optional-log queue (R10 step 4): 16 records, each one a
+  // 160-byte destination plus a 512-byte text, filled by producers that never
+  // open the card and drained by the session's own writer at a bounded rate per
+  // turn. A row longer than the buffer that formats it and a row the full queue
+  // cannot hold are dropped and counted, never written truncated (R10b).
   {
-    for (unsigned call = 0; call < 8 && diagnostic_log::snapshot().pending > 0; ++call)
-      service_sd_logging();                    // drain what earlier turns left
+    for (unsigned call = 0; call < 32 && diagnostic_log::snapshot().pending > 0; ++call)
+      service_sd_writer();                     // drain what earlier turns queued
     assert(diagnostic_log::snapshot().pending == 0);
+    const DiagnosticSnapshot opened = diagnostic_log::snapshot();
+    assert(opened.available);                  // the session passed its readback test
     LogTime when;
     when.now_ms = host_now;
+    const std::string detail(200, 'y');        // fits the 256-byte event line buffer
+    const std::string oversized(600, 'x');     // a whole row that does not fit it
     const uint32_t dropped_before = diagnostic_log::snapshot().dropped;
-    for (unsigned row = 0; row < diagnostic_log::kPendingRows + 5; ++row)
-      diagnostic_log::event("QUEUE", "overflow", when);
-    assert(diagnostic_log::snapshot().pending == diagnostic_log::kPendingRows);
-    assert(diagnostic_log::snapshot().dropped == dropped_before + 5);
-    host_now += 1000;                          // the per-second sample is due too
+    const uint32_t oversized_before = diagnostic_log::snapshot().dropped_oversized;
+    const uint32_t full_before = diagnostic_log::snapshot().dropped_queue_full;
+    const size_t drop_report = Serial.output.size();
+    diagnostic_log::event("FITS", detail.c_str(), when);
+    diagnostic_log::event("OVERSIZED", oversized.c_str(), when);
+    assert(diagnostic_log::snapshot().pending == 1);           // only the row that fits
+    assert(diagnostic_log::snapshot().dropped == dropped_before + 1);
+    assert(diagnostic_log::snapshot().dropped_oversized == oversized_before + 1);
+    // The count is published, not just kept: the console reports the drop the
+    // writer's accounting holds.
+    char reported[96] = {};
+    std::snprintf(reported, sizeof(reported), "SD: LOG DROPPED %lu optional row(s)",
+                  static_cast<unsigned long>(dropped_before + 1));
+    assert(Serial.output.find(reported, drop_report) != std::string::npos);
+    // The queue holds 16 records; the excess is dropped and counted, and not one
+    // producer touched the card.
     const uint32_t opens_before = SD_MMC.opens;
-    service_sd_logging();
-    const uint32_t appends = SD_MMC.opens - opens_before;
-    assert(appends == 1 + diagnostic_log::kEventRowsPerTurn);
+    for (unsigned row = 0; row < diagnostic_log::kQueueRecords + 4; ++row)
+      diagnostic_log::event("QUEUE", "overflow", when);
+    assert(diagnostic_log::snapshot().pending == diagnostic_log::kQueueRecords);
+    assert(diagnostic_log::snapshot().dropped == dropped_before + 6);
+    assert(diagnostic_log::snapshot().dropped_queue_full == full_before + 5);
+    assert(SD_MMC.opens == opens_before);      // no card access from a producer
+
+    // One writer call asks the card for the bounded budget only, however deep the
+    // queue is: the per-turn card cost cannot follow the turn's churn.
+    SD_MMC.stall_ms = 40;
+    const uint32_t turn_start = host_now;
+    const uint32_t budget_before = SD_MMC.opens;
+    service_sd_writer();
+    const uint32_t appends = SD_MMC.opens - budget_before;
+    assert(appends == diagnostic_log::kWriterRecordsPerTurn);
+    assert(host_now - turn_start == appends * SD_MMC.stall_ms);
+    // ... and one call never drains a full queue: the rest waits for later turns.
     assert(diagnostic_log::snapshot().pending ==
-           diagnostic_log::kPendingRows - diagnostic_log::kEventRowsPerTurn);
-    std::printf("R10b optional log: ring=%u, one turn committed %u row(s) of %u pending\n",
-                diagnostic_log::kPendingRows, appends,
-                diagnostic_log::kPendingRows - diagnostic_log::kEventRowsPerTurn + appends);
+           diagnostic_log::kQueueRecords - diagnostic_log::kWriterRecordsPerTurn);
+    assert(diagnostic_log::snapshot().pending > 0);
+    const uint32_t card_cost = host_now - turn_start;
+    SD_MMC.stall_ms = 0;
+    // What the budget did not reach stays queued rather than dropped: later calls
+    // continue the FIFO and the rows land in the session that queued them.
+    for (unsigned call = 0; call < 32 && diagnostic_log::snapshot().pending > 0; ++call)
+      service_sd_writer();
+    assert(diagnostic_log::snapshot().pending == 0);
+    assert(diagnostic_log::snapshot().dropped == dropped_before + 6);
+    const std::string events = SD_MMC.files[std::string(opened.session) + "/events.csv"];
+    assert(events.find(",FITS," + detail) != std::string::npos);        // written whole
+    assert(events.find(oversized.substr(0, 40)) == std::string::npos);  // never truncated
+    const size_t first_queue = events.find(",QUEUE,overflow");
+    assert(first_queue != std::string::npos && events.find(",FITS,") < first_queue);
+    std::printf("R10b optional log: queue %u x (160 B destination + 512 B text), %u oversized and %u full-queue rows dropped, one writer call committed %u record(s) in %u ms\n",
+                diagnostic_log::kQueueRecords,
+                diagnostic_log::snapshot().dropped_oversized,
+                diagnostic_log::snapshot().dropped_queue_full, appends, card_cost);
   }
 
-  // A card that answers slowly and then stops taking rows is skipped, not waited
-  // on: the turn's card cost stays within the commit budget, every refused row is
-  // visible, and the correction output the turn also services still gets its
-  // write. The correction queue is untouched by the optional writer.
+  // The destination is queued with each record (R10 step 4): a session change
+  // between queueing and writing cannot misroute an old event.
+  {
+    const std::string first_session = diagnostic_log::snapshot().session;
+    LogTime when;
+    when.now_ms = host_now;
+    diagnostic_log::event("SESSION_A", "queued before the change", when);
+    diagnostic_log::event("SESSION_A", "also before the change", when);
+    assert(diagnostic_log::snapshot().pending == 2);
+    host_now += 7;                             // a different BOOT-<ms> session
+    setup_sd_logging();
+    const DiagnosticSnapshot second = diagnostic_log::snapshot();
+    assert(second.ready && second.verified && second.available);
+    assert(std::string(second.session) != first_session);
+    service_sd_writer();                       // drains both records queued for A
+    const std::string first_events = first_session + "/events.csv";
+    const std::string second_events = std::string(second.session) + "/events.csv";
+    assert(SD_MMC.files[first_events].find("SESSION_A,queued before the change") != std::string::npos);
+    assert(SD_MMC.files[first_events].find("SESSION_A,also before the change") != std::string::npos);
+    assert(SD_MMC.files[second_events].find("SESSION_A") == std::string::npos);
+    // The new session's own rows go to its own files, and the writer is available
+    // again after the second boot's readback test.
+    diagnostic_log::event("SESSION_B", "after the change", when);
+    service_sd_writer();
+    assert(SD_MMC.files[second_events].find("SESSION_B,after the change") != std::string::npos);
+    assert(SD_MMC.files[second_events].find("BOOT,SD_READY") != std::string::npos);
+    std::printf("R10b optional log: session change kept %s for the queued rows\n",
+                first_session.c_str());
+  }
+
+  // A card that takes the open and then refuses the bytes marks optional logging
+  // unavailable instead of retrying per row: the record is counted as dropped,
+  // the card is left alone for the retry window, and the correction output the
+  // turn services is written anyway. The correction queue and the authoritative
+  // journal are untouched by the optional writer.
   {
     // The link-loss case above dropped the receiver's proof; a boot would prove
     // it again, and a role change only re-profiles over a proven receiver.
@@ -978,35 +1058,59 @@ int main() {
     assert(correction_service::admit(observation.data(), observation.size(), host_now, host_now));
     const auto queued_before = correction_service::snapshot();
     assert(queued_before.queued == 2);
-    for (unsigned call = 0; call < 8 && diagnostic_log::snapshot().pending > 0; ++call)
-      service_sd_logging();                    // start the turn with an empty ring
+    for (unsigned call = 0; call < 32 && diagnostic_log::snapshot().pending > 0; ++call)
+      service_sd_writer();                     // start the turn with an empty queue
     assert(diagnostic_log::snapshot().pending == 0);
-    gnss.binary_output.clear();
-    SD_MMC.stall_ms = 40;                      // every open costs 40 ms of the turn
-    SD_MMC.fail = true;                        // ... and then refuses the row
-    feed_line(gga_fixture(4, 28, 0.5));
+    assert(diagnostic_log::snapshot().available);
     LogTime due;
     due.now_ms = host_now;
-    for (unsigned row = 0; row < diagnostic_log::kEventRowsPerTurn + 1; ++row)
+    for (unsigned row = 0; row < diagnostic_log::kWriterRecordsPerTurn + 2; ++row)
       diagnostic_log::event("FIXTURE", "pending", due);
-    host_now += 1000;                          // the per-second sample is due too
+    gnss.binary_output.clear();
+    SD_MMC.stall_ms = 40;                      // every open costs 40 ms of the turn
+    SD_MMC.write_fail = true;                  // ... and then refuses the bytes
+    const size_t unavailable_report = Serial.output.size();
     const uint32_t dropped_before = diagnostic_log::snapshot().dropped;
     const uint32_t opens_before = SD_MMC.opens;
     const uint32_t turn_start = host_now;
-    service_sd_logging();
+    service_sd_writer();
     const uint32_t card_cost = host_now - turn_start;
-    const uint32_t appends = SD_MMC.opens - opens_before;
-    const uint32_t skipped = diagnostic_log::snapshot().dropped - dropped_before;
-    assert(appends == 1 + diagnostic_log::kEventRowsPerTurn);
-    assert(card_cost == appends * SD_MMC.stall_ms);
-    assert(skipped == appends);                // every refused row is visible
+    assert(SD_MMC.opens - opens_before == 1);  // one refused append, then the card is left alone
+    assert(card_cost == SD_MMC.stall_ms);
+    assert(diagnostic_log::snapshot().dropped == dropped_before + 1);
+    assert(diagnostic_log::snapshot().pending == diagnostic_log::kWriterRecordsPerTurn + 1);
+    assert(!diagnostic_log::snapshot().available);
+    assert(Serial.output.find("SD: OPTIONAL LOG UNAVAILABLE", unavailable_report) != std::string::npos);
+    // The correction output of the same turn is written regardless of what the
+    // optional writer just cost it.
     correction_service::service_output(host_now);
     assert(correction_service::snapshot().forwarded == queued_before.forwarded + 1);
     assert(gnss.binary_output == reference);
-    SD_MMC.fail = false;
+    // Inside the retry window the loop pays no optional-log cost at all. The
+    // writer latches the time its call was given, so the window is measured from
+    // the turn's own clock reading.
+    const uint32_t opens_after_failure = SD_MMC.opens;
+    host_now = turn_start + diagnostic_log::kWriterRetryMs - 1;
+    service_sd_writer();
+    assert(SD_MMC.opens == opens_after_failure);
+    assert(!diagnostic_log::snapshot().available);
+    // A card that recovers is picked up after the window, and the records that
+    // waited are written: only the row a refusing card refused is lost.
+    SD_MMC.write_fail = false;
     SD_MMC.stall_ms = 0;
-    std::printf("R10b optional log: stalled+failing card cost %u append(s)/%u ms, skipped %u, COM2 wrote %u byte(s) in the same turn\n",
-                appends, card_cost, skipped, unsigned(gnss.binary_output.size()));
+    host_now = turn_start + diagnostic_log::kWriterRetryMs;
+    service_sd_writer();
+    assert(diagnostic_log::snapshot().available);
+    assert(diagnostic_log::snapshot().pending == 1);   // one record past the budget
+    for (unsigned call = 0; call < 32 && diagnostic_log::snapshot().pending > 0; ++call)
+      service_sd_writer();
+    assert(diagnostic_log::snapshot().pending == 0);
+    assert(diagnostic_log::snapshot().dropped == dropped_before + 1);
+    const std::string events =
+        SD_MMC.files[std::string(diagnostic_log::snapshot().session) + "/events.csv"];
+    assert(events.find(",FIXTURE,pending") != std::string::npos);
+    std::printf("R10b optional log: refusing card cost 1 append/%u ms, 1 row dropped, logging unavailable, COM2 wrote %u byte(s) in the same turn\n",
+                card_cost, unsigned(gnss.binary_output.size()));
   }
 
   // The profile-completion rows the receiver's own observer produces no longer
@@ -1023,5 +1127,33 @@ int main() {
     assert(SD_MMC.opens == opens_before);      // no card access from a producer
     assert(producer_cost == 0);
     assert(diagnostic_log::snapshot().pending >= 2);   // the two rows are queued
+  }
+
+  // A card that mounts but cannot read back what it took leaves the mount
+  // reported and stops every row: the readback test is the session's admission
+  // gate, so no producer queues anything, nothing is counted as dropped, and the
+  // writer asks the card for nothing at all (R10 step 4).
+  {
+    for (unsigned call = 0; call < 32 && diagnostic_log::snapshot().pending > 0; ++call)
+      service_sd_writer();                     // start the case with an empty queue
+    assert(diagnostic_log::snapshot().pending == 0);
+    SD_MMC.read_corrupt = true;                // the mount and every write succeed
+    const size_t readback_report = Serial.output.size();
+    setup_sd_logging();
+    const DiagnosticSnapshot failed = diagnostic_log::snapshot();
+    assert(Serial.output.find("SD: READBACK FAIL", readback_report) != std::string::npos);
+    assert(failed.ready && !failed.verified && !failed.available);
+    const uint32_t dropped_before = failed.dropped;
+    const uint32_t opens_before = SD_MMC.opens;
+    LogTime when;
+    when.now_ms = host_now;
+    diagnostic_log::event("UNPROVEN", "card read back other bytes", when);
+    diagnostic_log::config("ROVER_SURVEY", "VERIFIED|RTCM_OFF", when);
+    assert(diagnostic_log::snapshot().pending == 0);           // nothing was queued
+    assert(diagnostic_log::snapshot().dropped == dropped_before);  // and nothing counted
+    service_sd_writer();
+    assert(SD_MMC.opens == opens_before);      // the writer asks a failed session for nothing
+    SD_MMC.read_corrupt = false;
+    std::printf("R10b optional log: unproven session kept its mount, queued no row and cost no card access\n");
   }
 }
