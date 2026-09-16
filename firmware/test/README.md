@@ -10,6 +10,25 @@ python test/run_host_tests.py
 
 Python 3 and a modern x86_64 `g++` are required. No extra Python packages are used. These checks do not open serial ports or change connected hardware. On this workstation MinGW-W64 16.1.0 (winget `BrechtSanders.WinLibs.POSIX.UCRT`) is installed and sits on the user `PATH`; a shell opened before that change, or any session that cannot see it, can run `.pio/run_with_toolchain.py <runner>` instead. PlatformIO's bundled `toolchain-gccmingw32` (GCC 5.1) cannot compile these sources: C++11 only, and its `cc1plus` needs `i686-w64-mingw32\lib` on `PATH` to start.
 
+## How the native harnesses compile production sources
+
+The native harnesses compile the production translation units themselves: the `src/*.cpp` under test are passed to `g++` unmodified, and the platform headers they include (`<Arduino.h>`, `<WiFi.h>`, `<SD_MMC.h>`, `<Preferences.h>`, `<esp_ota_ops.h>`, `<mbedtls/sha256.h>`, ...) resolve through a per-harness adapter directory whose every header contains nothing but an include of that harness's double:
+
+| Harness | Adapter directory | Double it forwards to |
+| --- | --- | --- |
+| `run_host_tests.py` | `test/host_adapter/` | `test/host_hardware.h` (`host_hardware.cpp` holds the one `Serial`, `WiFi` and `millis()` clock) |
+| `run_update_tests.py`, OTA service | `test/ota_adapter/` | `test/ota_hardware.h` |
+| `run_update_tests.py`, peer service | `test/peer_adapter/` | `test/peer_hardware.h` |
+| `run_link_service_tests.py` | `.pio/link-service-tests/IPAddress.h` | `test/link_service_hardware.h` |
+
+The text the compiler reads is therefore the text under review: no harness copies a source and strips its hardware includes into `.pio/host_*.cpp` any more. Three consequences worth knowing:
+
+- A platform header a source adds or moves must have a header of that name in the adapter directory too, or the build stops with `No such file or directory` naming it. That failure is the point: a double can no longer define something a device build would not, which is how a moved panel header once left `RGB565_RED` undefined on the target while the copied text still defined it.
+- `test/host_adapter/` must lead the include path: it also stands in for `<Arduino_GFX_Library.h>`, which the PlatformIO GFX library directory behind it supplies for real.
+- `run_link_service_tests.py` still strips its service's platform includes into a generated file (it needs `IPAddress` from its double); its adapter directory already holds that one header. It is the remaining copy path.
+
+One translation unit is still assembled rather than compiled. `run_host_tests.py` includes `rover_ap.cpp`, `main.cpp`, the owners the cases observe through the composition root (`debug_service.cpp`, `device_settings.cpp`, `diagnostic_log.cpp`, `board_hardware.cpp`, `usb_console.cpp`), its stubs and `firmware_cases.h` into one `.pio/host_firmware.cpp`. The files are `#include`d, never copied, and they have to share a unit: the cases call the root's own internal entry points, and `host_hardware.h` gives each translation unit its own `SD_MMC`, `Wire` and `Preferences` doubles, so the config store, the log's CSV files, the injected FT6336 samples and the console's line buffer are observable only from the unit the test compiles. Splitting it apart would need new boundary declarations in `src/`. `run_update_tests.py` likewise includes `peer_update.cpp` twice, once per simulated unit inside its own namespace; its platform includes are satisfied once at global scope first, and the runner asserts that list stays complete.
+
 `run_pair_session_tests.py` compiles the production `pair_session.cpp` and covers startup orders on both media, lossy proof and backpressure, strict codec/padding/opcode rejection, Hello/session replay, reboot and role isolation, same-boot outage retention, bounded dead-boot candidate reclaim and clock wrap. `run_link_operation_tests.py` compiles the production `link_operation.cpp` and covers pair-wide admission (staleness, busy, conflicting ids, idempotent repeats), cancellation before and after commit, restoration after a failed cutover, `recovery_required`, reboot reporting and the PLC1 operation wire boundaries. `run_link_service_tests.py` compiles the production `link_service.cpp` against an NVS double and both portable cores, covering stored-selection absence versus corruption (truncated/oversized/CRC-invalid, a valid pending record never masking a corrupt confirmed one), the sealed R5 migration, physical-ingress binding for control envelopes, recognized-version classification and radio-fault isolation on teardown. `run_settings_http_tests.py` slices the production settings handlers out of `web_http.cpp` and asserts every documented status code (202/400/401/403/409/503) against admission doubles. `run_update_tests.py` compiles the peer-notice and OTA services against the real pair core.
 
 - `test_config.cpp`: round trips for every supported setting, rejected invalid/schema values, clearing prior base outputs, role-dependent RTCM streams, and recorded UM980 response checksums.

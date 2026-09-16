@@ -2,33 +2,37 @@
 
 Run from firmware after a PlatformIO unit_b build.
 Requires Python 3 and g++ on PATH; no third-party Python modules.
+
+The production sources are compiled as they are: the platform headers they
+include (`<Arduino.h>`, `<WiFi.h>`, `<SD_MMC.h>`, ...) resolve through
+test/host_adapter/, and every header there forwards to this harness's single
+double, test/host_hardware.h. Nothing rewrites the text under review.
 """
 from pathlib import Path
-import re
 import struct
 import subprocess
 import zlib
 import json
 
 root = Path(__file__).resolve().parents[1]
-source = (root / 'src/rover_ap.cpp').read_text(encoding='utf-8') + '\n' + (root / 'src/main.cpp').read_text(encoding='utf-8')
-hardware = r'(Arduino|Arduino_GFX_Library|FS|Preferences|SD_MMC|TCA9554|WiFi|WiFiUdp|Wire|esp_system)\.h'
-source += '\n' + (root / 'src/debug_service.cpp').read_text(encoding='utf-8')
-# The settings and diagnostic-log owners join this translation unit rather than
-# a .pio/host_* translation unit: host_hardware.h gives each translation unit
-# its OWN SD_MMC and Preferences doubles, so the CSV files the log writes and the
-# config store the test fails on must live in the unit the test observes. On the
-# device the two are ordinary src/*.cpp translation units.
-source += '\n' + (root / 'src/device_settings.cpp').read_text(encoding='utf-8')
-source += '\n' + (root / 'src/diagnostic_log.cpp').read_text(encoding='utf-8')
-# The board hardware and USB console owners join it for the same reason: the
-# suite injects FT6336 samples through its OWN `Wire` double and reads UART0
-# output through the shared `Serial`, so the touch read and the console line
-# buffer must live in the unit the test observes. On the device the two are
-# ordinary src/*.cpp translation units.
-source += '\n' + (root / 'src/board_hardware.cpp').read_text(encoding='utf-8')
-source += '\n' + (root / 'src/usb_console.cpp').read_text(encoding='utf-8')
-source = re.sub(r'^#include <' + hardware + r'>\n', '', source, flags=re.M)
+# The composition root is the one translation unit this harness still assembles
+# from more than one source file, and it has to be: test/firmware_cases.h calls
+# the root's own entry points, and host_hardware.h gives each translation unit
+# its OWN SD_MMC, Wire and Preferences doubles, so the owners the cases observe
+# through the root (the config store the failing writes go to, the CSV files the
+# log appends, the FT6336 samples the suite injects, the UART0 line buffer the
+# console keeps) must live in the very unit the test observes. On the device
+# these are ordinary src/*.cpp translation units; splitting them apart here would
+# add boundary declarations to src/. The files are #included, never copied or
+# rewritten, so what the compiler sees is still the source under review.
+composition = ('../src/rover_ap.cpp', '../src/main.cpp', '../src/debug_service.cpp',
+               '../src/device_settings.cpp', '../src/diagnostic_log.cpp',
+               '../src/board_hardware.cpp', '../src/usb_console.cpp')
+# Every other owner is compiled as its own translation unit straight from src/.
+modules = ('src/ui_display.cpp', 'src/ui_screens.cpp', 'src/wifi_transport.cpp',
+           'src/network_service.cpp', 'src/gnss_service.cpp',
+           'src/correction_service.cpp', 'src/correction_wifi.cpp',
+           'src/ui_presenter.cpp', 'src/status_surface.cpp')
 generated = root / '.pio/host_firmware.cpp'
 stubs = '''
 bool host_diagnostic_busy=false;
@@ -106,33 +110,22 @@ bool survey_sd_lock() {return true;}
 void survey_sd_unlock() {}
 void survey_revoke_control() {}
 '''
-generated.write_text('#include "host_hardware.h"\n' + source + stubs + '\n#include "firmware_cases.h"\n', encoding='utf-8')
-def adapted(name):
-    text = (root / 'src' / name).read_text(encoding='utf-8')
-    text = re.sub(r'^#include <' + hardware + r'>\n', '', text, flags=re.M)
-    return '#include "host_hardware.h"\n' + text
-
-for name in ('ui_display.cpp', 'ui_screens.cpp', 'wifi_transport.cpp',
-             'network_service.cpp', 'gnss_service.cpp',
-             'correction_service.cpp', 'correction_wifi.cpp',
-             'ui_presenter.cpp', 'status_surface.cpp'):
-    (root / f'.pio/host_{name}').write_text(adapted(name))
+generated.write_text('#include "host_hardware.h"\n'
+                     + ''.join(f'#include "{path}"\n' for path in composition)
+                     + stubs + '\n#include "firmware_cases.h"\n', encoding='utf-8')
 subprocess.run(['g++', '-std=c++11', '-Wall', '-Wextra', '-Werror', '-Isrc',
                 'test/radio_framing_cases.cpp', '-o', '.pio/test_radio_framing.exe'], cwd=root, check=True)
 subprocess.run([str(root / '.pio/test_radio_framing.exe')], cwd=root, check=True)
+# test/host_adapter leads the include path: the sources' `<Arduino_GFX_Library.h>`
+# must reach the double's pixel buffer, not the PlatformIO GFX library behind it.
 subprocess.run(['g++', '-std=c++11', '-DTOPORTK_UNIT_ID=2', '-DTOPORTK_DISPLAY_ROTATION=0',
-                '-Itest', '-Isrc', '-I.pio/libdeps/unit_b/GFX Library for Arduino/src',
+                '-Itest/host_adapter', '-Itest', '-Isrc',
+                '-I.pio/libdeps/unit_b/GFX Library for Arduino/src',
                 '-I.pio/libdeps/unit_a/ArduinoJson/src', 'test/host_hardware.cpp',
                 'src/survey_engine.cpp', 'src/gnss_parser.cpp',
                 'src/instrument_status.cpp',
                 'src/touch_input.cpp', 'src/link_operation.cpp',
-                '.pio/host_gnss_service.cpp',
-                '.pio/host_correction_service.cpp',
-                '.pio/host_ui_display.cpp', '.pio/host_ui_screens.cpp',
-                '.pio/host_wifi_transport.cpp', '.pio/host_network_service.cpp',
-                '.pio/host_correction_wifi.cpp', '.pio/host_ui_presenter.cpp',
-                '.pio/host_status_surface.cpp',
-                str(generated), '-o', '.pio/test_firmware.exe'], cwd=root, check=True)
+                *modules, str(generated), '-o', '.pio/test_firmware.exe'], cwd=root, check=True)
 subprocess.run([str(root / '.pio/test_firmware.exe')], cwd=root, check=True)
 for name in ('ready', 'stale'):
     snapshot = json.loads((root / f'.pio/status-{name}.json').read_text())
