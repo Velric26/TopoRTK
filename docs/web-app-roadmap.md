@@ -2,11 +2,7 @@
 
 Updated 2026-09-11. This is the proposed development order for TopoRTK's offline GNSS surveying interface. Importance reflects correctness, protection of field records, everyday use and dependencies. It is our project ranking, not a vendor ranking. Items with hardware or coordinate-model dependencies must not be presented as working before validation.
 
-The existing Rover status page and password-protected phone Wi-Fi provide the starting point. The user reported that the initial Android connection worked. That does not yet establish all phone/tablet models, recovery scenarios or field performance. The user then requested **ranks 2–5 together** and selected **UTM**. Their initial implementation is now UI 0.3; see [scope, limitations and validation](survey-workflow.md). Zapopan starter values (WGS84 UTM 13N) are convenience defaults and still require explicit confirmation. UI 0.6 completes the agreed instrument subsets: rank 6 review/plot, rank 7 export/backup and small targets, rank 8 checks/repeats, rank 9 basic stakeout, and rank 10 manual line tags. The deferred phone/app scope through rank 12 remains outstanding. See [features 6–12 checkpoint](roadmap-6-12-progress.md).
-
-## Responsibility review
-
-The [ESP32/Android responsibility decision](esp32-android-feature-split.md) sets the current implementation scope. Keep bounded target records, check/repeat occupations, basic point stakeout and manual line tags on the instrument. Defer bulk imports/restore, continuous collection, localization, full COGO and rich project processing to the phone/app. Web JavaScript already runs on the phone, so an APK is not required for computation alone.
+The existing Rover status page and password-protected phone Wi-Fi provide the starting point. The user reported that the initial Android connection worked. That does not yet establish all phone/tablet models, recovery scenarios or field performance. The user then requested **ranks 2–5 together** and selected **UTM**. Their initial implementation is now UI 0.3; see [scope, limitations and validation](survey-workflow.md). Zapopan starter values (WGS84 UTM 13N) are convenience defaults and still require explicit confirmation. UI 0.6 completes the agreed instrument subsets: rank 6 review/plot, rank 7 export/backup and small targets, rank 8 checks/repeats, rank 9 basic stakeout, and rank 10 manual line tags. The deferred phone/app scope through rank 12 remains outstanding. See [survey workflow: point review, export and precision](survey-workflow.md#point-review-export-and-precision).
 
 ## Ranked backlog
 
@@ -32,26 +28,7 @@ The [ESP32/Android responsibility decision](esp32-android-feature-split.md) sets
 
 Ranks 2–8 form the first usable collection workflow. Rank 9 completes the initial collection-and-stakeout release. Later ranking can change with a real job; localization, raw logging and surface work are especially dependent on the task.
 
-## Current checkpoint and remaining acceptance
-
-**UI 0.3 implements the initial scope of ranks 2–5 at the user's request.** The original recommendation was to deliver the job foundation alone; the explicit four-feature request sets this checkpoint's scope. Supported coordinates are WGS84 standard-zone UTM/geographic only, with no datum transform and no installed geoid grids. The following original acceptance criteria remain the basis for hardware/field qualification; implemented code is not proof of field accuracy.
-
-Deliver a Jobs screen that creates a named job, lists jobs, opens/resumes one and displays its configuration checklist. New jobs may show a clearly labeled Zapopan starter profile (WGS84 / UTM 13N, metres, ellipsoidal height and installed HA-609 model) as editable convenience values, but must not inherit an assumed datum confirmation, geoid, pole height or trustworthy base coordinate. Store a versioned manifest and audit log on Rover SD. Keep the existing read-only status accessible while jobs are used.
-
-Before enabling writes, define controller authorization and ownership: pairing/session handling, one active writer, read-only access for additional devices, explicit command outcomes and bounded execution. Network membership alone should not silently grant every connected browser the right to alter base coordinates. Receiver commands remain a typed allowlist. Settings that can invalidate measurements need a concrete confirmation and audit record.
-
-Acceptance for that checkpoint:
-
-1. Create/open a job, close Chrome and reconnect; the same saved job reopens.
-2. Restart the instrument; committed job data and active-job selection recover.
-3. Retry a timed-out request and double-tap Create; exactly one job is created.
-4. Remove/fill/fail the SD card during a write; no false success and no destruction of an existing job.
-5. Use phone and tablet together; controller ownership prevents conflicting edits.
-6. Validate job names, sizes and paths; imported or user-entered text cannot escape job storage or become executable UI content.
-7. Keep Base traffic, GNSS parsing and live status responsive during all operations.
-8. Reopen every committed manifest after an interrupted write; recover or clearly quarantine incomplete data with an actionable message.
-
-The agreed instrument scope through rank 10 now passes native/browser tests and read-only two-instrument bench checks in UI 0.6. Next are field qualification and the deferred phone/app backlog: bulk file workflows, rich linework/continuous collection, localization (11) and COGO (12). The complete target remains **create job → configure → observe point → inspect → export → independently check**. Complete the current hardware/field acceptance before treating measurements as validated survey results.
+The complete target remains **create job → configure → observe point → inspect → export → independently check**.
 
 ## Basis in established survey software
 
@@ -64,8 +41,3 @@ Common stakeout workflows extend from points to lines, arcs, alignments and surf
 Emlid's published field-software feature set includes survey projects, coordinate systems, collection/stakeout, import/export and more advanced mapping/design tools. This supports a focused first release followed by task-specific expansion. [Emlid Flow features](https://emlid.com/emlid-flow/).
 
 The priorities, architecture choices, acceptance criteria and TopoRTK-specific limitations above are our recommendations, informed by those workflows and the current hardware. They are not a claim that the prototype already meets commercial equipment specifications.
-
-
-## UI 0.7 interface refresh
-
-The [web GUI redesign](web-gui-design.md) reorganizes existing workflows for phones and larger screens. It adds no new surveying feature or coordinate model. Both units run the verified UI 0.7 application; the previously documented phone/app deferrals and field acceptance requirements remain.

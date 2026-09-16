@@ -88,30 +88,11 @@ Pass criteria:
 - Temporary GGA can be enabled, received, and disabled without saving configuration.
 - No brownout, restart, unexpected heating, or unstable serial data occurs.
 
-### 2026-09-04 Initial Result - Not Reproduced
+### 2026-09-04 result
 
-- Firmware build and flash: PASS.
-- Waveshare display initialization reported by firmware: PASS.
-- Read-only `VERSION` command and UM980 identification: PASS.
-- Temporary `GPGGA 1` acknowledgment and continuous 1 Hz checksummed GGA reception: PASS.
-- No restart observed during the captured monitor interval: PASS.
-- Valid GNSS position: not tested; GGA reported quality 0.
-- Physical display contents and temperature were not confirmed during this initial run.
+Executed on the validated Channel 2 receive path: Waveshare USB to the PC, BDRTK USB disconnected, Waveshare 5 V/VBUS to BDRTK `5V_IN`, common ground, `TTL_TXD2` to GPIO44/RX, ESP32 GPIO43/TX disconnected. Continuous checksummed GGA arrived at approximately 1 Hz with no restart. Result: PASS for startup and short receive-only operation; current draw, 5 V rail voltage under load, heating, antenna load, and long-duration stability remain unmeasured, so this power path is not accepted for extended bench or field use. Disconnect the 5 V interconnection wire before attaching the BDRTK USB cable.
 
-Later isolated testing could not reproduce communication through the presumed Channel 1 pins, and `TTL_TXD1` measured approximately 0.022 V. Treat the original channel assignment and one-USB power result as unverified historical evidence, not an accepted design checkpoint.
-
-### 2026-09-04 TTL2 Receive-Only Power Result
-
-The one-USB arrangement was repeated with the validated Channel 2 receive path:
-
-- Waveshare USB connected to the PC; BDRTK USB disconnected.
-- Waveshare 5 V/VBUS connected to BDRTK `5V_IN`.
-- `GND` connected to `GND`.
-- BDRTK `TTL_TXD2` connected to ESP32 GPIO44/RX.
-- ESP32 GPIO43/TX disconnected.
-- Continuous checksummed GGA received at approximately 1 Hz.
-
-Result: PASS for startup and short receive-only operation. Current draw, 5 V rail voltage under load, heating, antenna load, and long-duration stability remain to be measured before this power path is accepted for extended bench or field use. Disconnect the 5 V interconnection wire before attaching the BDRTK USB cable.
+Superseded evidence retained: the earlier run on the presumed Channel 1 wiring reported build/flash, display initialization, read-only `VERSION` and UM980 identification, temporary `GPGGA 1` acknowledgement with 1 Hz checksummed GGA, and no restart observed, but GGA quality was 0 (no position) and the display contents and temperature were not confirmed. Later isolated testing could not reproduce communication through those pins and measured `TTL_TXD1` at approximately 0.022 V; treat that channel assignment and its one-USB power result as unverified historical evidence, not an accepted design checkpoint.
 
 ## Checkpoint 3 - Bidirectional COM2 UART
 

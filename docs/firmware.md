@@ -1,6 +1,6 @@
 # Firmware
 
-> Status: Display/GNSS, SD logging, and the Wi-Fi RTCM bridge have been validated on project hardware. Runtime role selection and NVS restoration passed a Unit B bench checkpoint on 2026-09-08; physical touch and complete power-cycle validation remain pending.
+> Status: see [PROJECT.md section 12](../PROJECT.md#12-current-decisions-and-open-items) for the current firmware state and open items. This file documents build, flash, configuration and firmware architecture.
 
 ## Supported Hardware
 
@@ -11,10 +11,6 @@ List exact ESP32-S3 board revisions and connected peripherals.
 Record toolchain, framework, dependencies, board settings, and required host tools.
 
 ## Build and Flash
-
-**2026-09-14:** 0.11.0 source contains guarded OTA and paired update notices, with passing software checks and hardware acceptance pending. No unit was flashed at the user's stop request. The [operator guide](ota-operator-guide.md) documents packages, interrupted-upload behavior, deferred boot acceptance and rollback checks. Do not interpret the earlier unimplemented-OTA checkpoint below as the current source status; 0.11.16-arch-r5 replaced the manual session rejoin with automatic current-boot negotiation.
-
-**2026-09-13:** Debug 0.10.5 builds for Unit A and Unit B; it has not been flashed. The deployed baseline remains 0.10.4. OTA is not available yet: the next update workflow requires peer notices, guarded inactive-slot writing and verified boot rollback. See [Debug/OTA architecture and deployment order](debug-and-ota.md) and [build/test evidence](../tests/2026-09-13-debug/README.md).
 
 Document commands, cable/port requirements, recovery procedure, and how to confirm the flashed version.
 
@@ -32,7 +28,7 @@ The firmware serves a **read-only** Rover status page at `/` and `/ui/v1/`, plus
 
 API version 1 includes `device`, `state`, `gnss`, `link`, `time`, and `warning`. UI 0.2.0 adds `phone_wifi` with availability, public AP SSID/address and client count. `boot_id` and sampled `uptime_ms` let the client detect an unchanged snapshot across polls and recover across reboots. Missing or unusable measurements are `null`; no coordinates, upstream router SSID, passwords or raw receiver identifiers are published.
 
-The local-router checkpoint is recorded in [2026-09-10 validation](../tests/2026-09-10-rover-web-status/README.md), followed by the [phone AP checkpoint](../tests/2026-09-10-rover-phone-wifi/README.md). UI 0.3 adds roadmap ranks 2–5: see [survey architecture, endpoints, storage and limits](survey-workflow.md) and its [test record](../tests/2026-09-10-survey-workflow/README.md). Next development: full point review/offline plot, after outstanding hardware/field acceptance.
+Evidence: [2026-09-10 Rover status](../tests/2026-09-10-rover-web-status/README.md), [2026-09-10 phone AP](../tests/2026-09-10-rover-phone-wifi/README.md), [2026-09-10 survey workflow](../tests/2026-09-10-survey-workflow/README.md). Design, endpoints, storage and limits: [survey workflow](survey-workflow.md).
 
 ### Phone access point
 

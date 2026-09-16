@@ -4,15 +4,20 @@
 
 ## Users and Field Workflow
 
-### Debug OTA preview (0.11.0 source)
+### Screen organization
 
-The Debug tab now offers package review, role-specific interruption warnings, explicit final confirmation, peer acknowledgement/unconfirmed override and transfer/new-boot status. Peer update labels also appear on Survey tabs and the instrument dashboard. Passive Debug remains separate from the update pause. Both builds and software regressions pass. See the [operator guide](ota-operator-guide.md); correction sessions renegotiate automatically after an update (0.11.16-arch-r5), so no manual rejoin step is documented or required.
+The interface stays self-contained on the instruments — no external fonts, images, libraries or network dependencies — and the browser scripts still submit the same typed commands; receiver logic, coordinate calculations, quality gates and journal formats are unchanged.
 
-### Debug (0.10.5 source; hardware validation pending)
+- **Navigation:** Jobs, Setup, Collect and Points remain in the same order. Navigation stays at the bottom on phones and at the top on larger screens. Base mode shows its single setup screen without a redundant navigation bar.
+- **Jobs:** clear create/open controls; storage and recovery are in an expandable section.
+- **Setup:** four groups for coordinates/height, antennas, base reference and quality limits. Coordinates open initially. Native validation opens any group containing an invalid field before focusing it. Required confirmations and configuration revision behavior are retained.
+- **Collect:** survey method, point ID and code are prominent. Optional description and linework expand when needed. Cancel appears while collection is active. The last confirmed observation remains separate from the current operation.
+- **Points:** the plan and point list sit beside each other on larger screens and stack on phones. Downloads, reference targets and manual lines are expandable. The inspector has a Close review action. Original observations, metadata audit reasons and deletion/restore controls are retained.
+- **Live status:** matching palette, compact metric cards, a prominent Survey link and existing expandable diagnostics. Loss of connection still clears live readiness/metrics.
 
-Debug is On by default at startup (0.11.5) and stays On until disabled on the instrument touchscreen or web; there is no idle timer. When manually disabled, the web Survey interface grays the Debug tab on both roles and shows enable instructions. The current controller can view bounded GNSS and correction summaries, filter or pause the view, and download a snapshot without injecting receiver commands or diagnostic traffic. There is no PIN and no remote enable operation.
+Controls have visible keyboard focus and generous touch sizes. No animation is needed for meaning; the small button transitions respect reduced motion. Layout checks cover 320, 390, 768 and 1280 px, plus 200% text at 390 px. The active navigation label stays readable on hover.
 
-The Debug page contains role-specific flashing warnings and the update/peer-status plan. Upload and actual peer update notices are **not implemented yet**. Passive monitoring never announces a paused link. See the [Debug and OTA design](debug-and-ota.md) and [host/browser validation](../tests/2026-09-13-debug/README.md).
+Both units were flashed with hash verification and passed read-only browser checks. See [validation and screenshots](../tests/2026-09-11-gui-redesign/README.md). Actual phone/tablet keyboard behavior, sunlight readability and field occupations remain user/field acceptance work. This interface organization does not change the [deferred Android responsibilities](esp32-android-feature-split.md).
 
 Describe job setup, base setup, rover connection, point collection, stakeout, checks, and export.
 
@@ -171,7 +176,7 @@ See the [2026-09-08 validation record](../tests/2026-09-08-touch-role-settings/R
 The instrument can be restarted **in software** — the same effect as a power cycle, which is what the operator previously had to perform whenever a link or operation was stuck. It is a maintenance action, not a settings change: nothing is persisted by it.
 
 - **On the touchscreen:** Debug page → **RESTART**. One tap arms it for ten seconds (the label changes to `CONFIRM RESTART`), a second tap sends the request. The refusal text appears under the button if the instrument declines.
-- **In the browser:** the Debug page's **Restart instrument** card, with the confirmation checkbox and the same refusal text. (Planned for the same release as this document's update.)
+- **In the browser:** the Debug page's **Restart instrument** card, with the confirmation checkbox and the same refusal text. Shipped in `0.11.33-arch-r10` and covered by the Debug browser check; the on-hardware deployment pends the bench.
 - **API:** `POST /api/v1/diagnostic` with `{"op":"restart","confirm":true}` — 202 accepted, and the snapshot reports `restart_pending` until the chip resets.
 
 Restarting stops correction output, any active collection and web access until the instrument boots again; the dedicated pair reconnects on its saved link by itself. The request is **refused** while a firmware update is transferring, while a diagnostic run or probe is in flight, and while the instrument is collecting or writing — finish those first. After the reboot the instrument is in the state a cold boot produces: no session, no reservation, no in-progress operation.

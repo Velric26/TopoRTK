@@ -47,4 +47,4 @@ Both instruments were restored to Wi-Fi corrections (`transport: wifi`, session 
 
 - Direct-sunlight readability acceptance on both physical panels (R2b human gate, unchanged).
 - Outdoor SiK RTK acceptance and the R3-specific live-forwarding-under-loss/STA-bounce checks (independent gates per the review; the indoor bench could not produce an RTCM source).
-- Firmware-folder restructure: planned and deferred per [the restructure plan](../../docs/firmware-folder-restructure.md).
+- Firmware-folder restructure: executed 2026-09-14, after this R3 checkpoint; mapping and evidence are in [PROJECT.md's deployment history](../../PROJECT.md#deployment-history).

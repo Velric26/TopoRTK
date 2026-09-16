@@ -1,6 +1,6 @@
 # UI 0.7 redesign checkpoint
 
-See [design and screen organization](../../docs/web-gui-design.md). This is an interface change; survey engine, journal, receiver and quality logic are unchanged.
+See [design and screen organization](../../docs/interface.md). This is an interface change; survey engine, journal, receiver and quality logic are unchanged.
 
 ## Checks
 

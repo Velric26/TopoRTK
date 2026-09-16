@@ -24,11 +24,7 @@ The manual says entering a new `MODE` command switches the receiver to the lates
 
 The unit letter and operating role are separate concepts. `A` and `B` identify physical instruments; either instrument may be commanded to `BASE` or `ROVER` later.
 
-Current temporary assignment:
-
-- Unit A: temporary self-optimizing base; live RTCM generation and transport passed, but its autonomous coordinate is not survey control.
-- Unit B: confirmed rover in `MODE ROVER SURVEY`; achieved `RTK FIXED` in the first documented HA-609 open-sky Wi-Fi test.
-- Future: select and verify either role from the ESP32 interface without reflashing.
+Current temporary assignment is recorded in the [temporary COM1 fault plan](hardware/unicore-um980/temporary-com1-fault-plan.md): the healthy receiver is the temporary Base and the suspect COM1 carrier is the COM2-only Rover.
 
 ### Role-Switching Rules
 

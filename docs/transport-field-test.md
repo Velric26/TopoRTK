@@ -27,7 +27,7 @@ Repeat Base-to-Rover, Rover-to-Base and both directions at each useful distance.
 - SiK uses hardware UART2: ESP32 GPIO17 TX to radio RX; GPIO18 RX from radio TX, 57600 8N1. RX/TX buffers are bounded. Synthetic frames are never forwarded to UM980.
 - Wi-Fi uses UDP 22346 and the peer discovered by the existing instrument Wi-Fi exchange. It tests the instrument-to-instrument network, not tablet range. Production RTCM remains on UDP 22345. For router mode, both stations and the router form the tested path; Direct Link tests the direct instrument network.
 - Each fixed 256-byte packet carries version, session, role, settings, sequence/counters, deterministic payload and CRC32. A 4096-bit bitmap tracks unique data packets; maximum configured send count is 3515. Hello/result frames repeat, while test data are not retransmitted, so losses remain visible.
-- The standalone SiK diagnostic is implemented; a production SiK RTCM/status bridge and radio power-setting UI are still pending. Current UART probing only identifies the local radio.
+- The standalone SiK diagnostic is implemented. The production SiK RTCM bridge is implemented and its receiver/field validation is tracked in [live correction bridge](live-correction-bridge.md); a radio power-setting UI is still pending. Current UART probing only identifies the local radio.
 - BLE remains future work. ESP32-S3 supports BLE, not Classic SPP. A BLE GATT adapter needs explicit fragmentation, backpressure and session handling before it can join this test engine. [Espressif support matrix](https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/api-guides/bt-architecture/overview.html).
 
 ## Development verification
@@ -42,12 +42,6 @@ Set both instruments to Direct Link on their touchscreens before leaving the rou
 
 The automated browser bench check uses the actual instrument pages at phone/tablet viewport sizes. It is not evidence of a physical Android tablet test or Direct Link field acceptance; those remain operator checks.
 
-## Loss-tolerant transport plan
+## Loss-tolerant transport
 
-The approved [transport development plan](loss-tolerant-transport.md) separates fresh RTCM delivery, acknowledged duplicate-safe commands and periodic status. Start with a fixed-memory core and on-instrument fault self-tests, then paired synthetic SiK transport, then real UM980 COM2/RTK validation. Keep both UM980s disconnected through the synthetic stages.
-
-Stage 1 is implemented: all 22 local transport fault checks pass, saved reports survive restart, and RF results remain separate. Use `/diagnostics` → **Run local fault checks**. Its ESP32 test workspace is 4744 bytes. Stage 2 now adds **Arm RTCM fault test** using the same code/duration on both units and fixed SiK Base → Rover traffic. Firmware 0.10.1 is flashed to both. Run 913225 recovered 19/20 eligible messages with zero invalid sink output: delivery did not pass. Reports survived restart; no real correction forwarding is connected and UM980s remain disconnected. See `tests/2026-09-12-correction-pair/README.md` for evidence and next diagnostic work.
-
-Current firmware is **0.10.2**, with **Arm RTCM test** and matching **clean/injected** profile selection. Per-run UART errors, receive backlog and service-gap observations are saved with results. At the confirmed 20 cm bench spacing, clean delivery was 25/30 and injected eligible delivery 17/20, both with zero invalid sink output and no reported UART error events. Delivery is still not qualified. Both latest reports survived restart; the next comparison needs greater operator-confirmed separation. Details and reusable checks: `tests/2026-09-12-correction-uart/README.md`.
-
-The follow-up at operator-confirmed **8–10 m** also had losses: 27/30 clean and 15/20 eligible injected messages. No invalid sink outputs or UART error events were reported. All four runs saved/downloaded results and finished; the next software investigation is envelope pacing and long service intervals, not further blind changes to RF settings. UM980s remain disconnected.
+The approved loss-tolerant transport plan, its stages and its acceptance criteria live in [loss-tolerant transport](loss-tolerant-transport.md); results are in the dated `tests/2026-09-12-*` records, [packet loss investigation](packet-loss-investigation.md) and [live correction bridge](live-correction-bridge.md).

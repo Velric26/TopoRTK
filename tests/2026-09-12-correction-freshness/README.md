@@ -12,4 +12,4 @@ The disconnected-receiver handshake previously contained four `delay(100)` calls
 
 MSM station/epoch field interpretation was cross-checked against the primary [RTKLIB decoder](https://github.com/tomojitakasu/RTKLIB/blob/master/src/rtcm3.c), `decode_msm_head`: 12-bit message/station identifiers and 30-bit epoch, with GLONASS 3-bit day plus 27-bit milliseconds. The observer does not import RTKLIB or its observation solver.
 
-Hardware deployment status is recorded in the transport-plan checkpoint. Keep UM980s disconnected until the remaining forwarding work and connection checks are ready. Radio-loss root-cause investigation is [deferred](../../docs/packet-loss-investigation.md), not an acceptance blocker for this development.
+Hardware deployment status is recorded in [live correction bridge](../../docs/live-correction-bridge.md). Keep UM980s disconnected until the remaining forwarding work and connection checks are ready. Radio-loss root-cause investigation is [deferred](../../docs/packet-loss-investigation.md), not an acceptance blocker for this development.

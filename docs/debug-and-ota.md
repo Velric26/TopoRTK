@@ -1,25 +1,5 @@
 # Debug, OTA and paired update status
 
-## Latest hardware checkpoint — 0.11.2, 2026-09-14
-
-Unit B successfully updated from 0.11.1 to 0.11.2 over local Wi-Fi with the actual browser workflow, verified its new boot, preserved saved survey state and returned Debug to Off. Unit A (still 0.11.0) displayed preparation, Updating and Reconnected statuses. The complete transfer took 118.602 seconds with zero receive-timeout retries, leaving little margin below 120 seconds. This proves one successful local-router OTA/acceptance cycle, not hotspot coverage, sustained throughput, actual rollback or field reliability. The preceding attempt stopped before upload; 0.11.2 corrects a host-reproduced race between HTTP timestamps and the main-loop clock. See [full evidence and next work](../tests/2026-09-14-ota-success/README.md). Earlier checkpoints below are historical.
-
-## Source increments — 0.11.3/0.11.4/0.11.5, 2026-09-14
-
-**0.11.5 (deployed):** Debug is **On by default at startup** — an operator request. A manual disable persists only until the next restart; there is still no stored preference, no idle timer and no HTTP enable path. Capture remains RAM-only and empty at boot. All other Debug/OTA behavior is unchanged.
-
-**Rollback acceptance (2026-09-14):** deliberate fault-injection images proved on hardware that a pending boot which fails the health gate is marked invalid and rolled back by the bootloader, that a hung pending boot is recovered by the task watchdog, and that a raw-socket mid-upload disconnect retains the running firmware and records. See [rollback acceptance evidence](../tests/2026-09-14-rollback-acceptance/README.md). Peer recovery confirmation requires the Rover's GNSS quality gate, so indoors the peer shows "Update overdue" after an update — by design. Hotspot OTA remains untested.
-
-**0.11.3 (deployed):** The OTA transfer deadline was raised from 120 to 300 seconds after the real 118.6-second transfer left almost no margin; the 12-second no-progress stall limit is unchanged. Debug lost its 15-minute idle timer: it stays On until disabled on the instrument or web. The `POST /api/v1/debug` `activity` operation and the browser keep-alive/extend controls were removed with the timer; the controller's separate two-minute lease and all OTA guard deadlines are unchanged. **0.11.4 (deployed):** the dashboard's Correction Link and Link Signal cards merged into one BASE/ROVER LINK indicator. Both versions were verified on hardware by Wi-Fi OTA with acknowledged peer notices.
-
-## Current checkpoint — 0.11.0 software, 2026-09-14
-
-Peer transport integration, the guarded package uploader, role-specific confirmations, browser progress/new-boot verification, deferred boot acceptance and rollback handling are now implemented in source. Software checks and both firmware builds pass. **Both units have received 0.11.0 by USB. The first Unit B Wi-Fi OTA transfer timed out after 37,336 bytes and safely retained the running firmware. Successful OTA and rollback acceptance remain pending.** Peer preparation and Updating notices were observed on Unit A. See the [live result and next work](../tests/2026-09-14-ota-live/README.md). Routine development updates use a small settings snapshot when practical; full flash backups are optional. See the [operator guide and actual behavior](ota-operator-guide.md), [software validation](../tests/2026-09-14-ota/README.md) and [USB installation evidence](../tests/2026-09-14-ota-usb/README.md).
-
-**0.11.1 recovery follow-up:** Unit B is USB-installed and verified with bounded transient-timeout retries and rejected-upload socket closure. Debug requests are cancelled/paused during the transfer. Unit A remains 0.11.0. HTTP handler fault tests, OTA/Debug browser regressions, existing service tests and both builds pass. A real OTA retry remains pending physical Debug enable. See [evidence](../tests/2026-09-14-ota-recovery/README.md).
-
-The stored correction medium is restored at boot and the pair negotiates a fresh session automatically: corrections stay blocked until a current-boot bidirectional exchange proves the peer, so restarted counters cannot reuse the old session's replay window. Seamless session negotiation is implemented in 0.11.16-arch-r5. The earlier increment sections retain their historical checkpoints and the original design requirements.
-
 ## Accepted operator requirements
 
 - Name the feature **Debug**, including the touchscreen setting and dedicated web tab.
@@ -42,11 +22,9 @@ The stored correction medium is restored at boot and the pair negotiates a fresh
 | Active tests or receiver commands | May change UART traffic or receiver state | Separate named action and existing occupation/configuration admission gates; never started merely by opening Debug |
 | Firmware update | Local processing/forwarding must quiesce, and web/Debug access disconnects during reboot | Validate image, show role-specific impact, acquire exclusive update ownership, notify peer, then explicit confirmation |
 
-Turning Debug On is **not** a general system pause. Physical disable ends capture and clears the in-memory history; it must not revoke an ongoing ordinary survey operation. During a future admitted OTA transaction, disable must not tear down a flash write halfway through: defer shutdown to a safe transaction boundary, then reboot or abort safely. No OTA transaction is exposed in the first increment.
+Turning Debug On is **not** a general system pause. Physical disable ends capture and clears the in-memory history; it must not revoke an ongoing ordinary survey operation. During a future admitted OTA transaction, disable must not tear down a flash write halfway through: defer shutdown to a safe transaction boundary, then reboot or abort safely.
 
-## Increment 1 — implemented in 0.10.5, deployment pending
-
-Both Unit A/B builds, production host regressions and controlled browser tests passed on 2026-09-13. No hardware was flashed or reconfigured. See the [validation record and limitations](../tests/2026-09-13-debug/README.md).
+## Passive Debug capture and access
 
 The touchscreen has a Debug page and On/Off control. The Survey interface gains a Debug tab on both roles (Base now has Base setup and Debug navigation). `/debug` remains a readable explanation when Off, but private log access is rejected by the server until hardware enables Debug and the browser holds the current controller token. There is no HTTP operation to enable Debug and no PIN. The private capture endpoints respect existing control expiry/takeover and same-origin mutation checks.
 
@@ -56,26 +34,13 @@ Capture includes recent GNSS text, GNSS RTCM summaries, selected live SiK comple
 
 The browser can pause its view and download the current bounded snapshot. Debug has no idle timer and is On by default at startup (0.11.5): it remains on until disabled or restart. The normal controller's two-minute lease remains separate. Both heartbeat requests and direct API mutations still require the current token. Mode and capture are RAM-only; capture is empty at boot.
 
-Public availability: `GET /api/v1/debug`. Private history: `GET /api/v1/debug/log`. Authenticated same-origin `POST /api/v1/debug` accepts only `disable`. `web/navigation.js` drives the page's explicitly declared Debug tab: it stays disabled until a fresh `GET /api/v1/debug` reports the service enabled and advancing, with the visible `#debugAvailability` note as its `aria-describedby`. No arbitrary command route exists. The web page explicitly shows the remaining update plan with the upload control disabled.
+Public availability: `GET /api/v1/debug`. Private history: `GET /api/v1/debug/log`. Authenticated same-origin `POST /api/v1/debug` accepts only `disable`. `web/navigation.js` drives the page's explicitly declared Debug tab: it stays disabled until a fresh `GET /api/v1/debug` reports the service enabled and advancing, with the visible `#debugAvailability` note as its `aria-describedby`. No arbitrary command route exists.
 
-## Increment 2 — peer update-notice protocol
-
-### Portable core checkpoint — 2026-09-13
-
-Implementation paused when the five-hour usage check reported **91% used / 9% remaining**, per the operator's limit. The passing portable core, test evidence and continuation steps are committed together. No transport integration or OTA flash was started.
-
-`src/update_notice.h` now implements a bounded, hardware-independent notice codec and sender/peer state machines. `test/run_update_tests.py` compiles it with warnings as errors and runs wire-bit corruption, reserved-field rejection, loss/retry, wrong role/unit/session/attempt, phase reorder, cancellation overtaking prepare, timer rollover and 1,000 seeded fault schedules. The tests pass. This core is **not integrated into either transport, display or OTA service**; it does not change the running firmware and does not make the upload control available. Evidence: [protocol checkpoint](../tests/2026-09-13-update-notice/README.md).
+## Peer update-notice protocol
 
 The wire record is 40 bytes: `TUP1`, version 1, kind, sender/recipient instrument IDs, little-endian session/attempt/sequence/duration, role, acknowledged kind, ten reserved zero bytes, and CRC32 over the first 36 bytes. IDs 1/2 identify hardware, independently of Base/Rover role. Prepare/Updating deadlines are bounded to 3–180 seconds from reception; no phase/retry may extend an existing deadline. A sender offers at most six writes over three seconds, spaced 500 ms after successful transmission. The adapter must call `committed` only after accepting the entire record. Acknowledgements correlate session, attempt, sequence, phase and peer; they cannot authorize a flash operation.
 
 Attempts must increase within a newly provisioned session. Selecting the same session preserves replay history. A cancellation received before its prepare/update records a closed attempt, so delayed messages cannot reopen it. Reconnection remains a separate status until the adapter supplies fresh identity and receiver-quality evidence. CRC provides corruption detection, not authentication. Transport adapters must enforce trusted pairing/session selection and bounded acknowledgement scheduling; these are not supplied by this portable core.
-
-Next implementation steps, in dependency order:
-
-1. Add a shared UART envelope demultiplexer and scheduler for RTCM plus notices. Do not feed an independent notice parser arbitrary RTCM payload bytes: an embedded marker could otherwise be mistaken for control traffic. Add equivalent selected-peer Wi-Fi routing, without silently substituting Wi-Fi when SiK is selected.
-2. Provide fresh session/attempt correlation across reboot and role changes, bounded acknowledgement scheduling, and truthful touchscreen/web peer labels. Persist or explicitly restore the current SiK selection before promising automatic post-update recovery.
-3. Implement the image package/target validation and OTA admission/ownership service, then the upload UI, deferred boot acceptance and rollback checks described below.
-4. Run transport, HTTP, browser and firmware builds before the combined USB preparation and real OTA/failure tests. The user accepted completing OTA before this USB installation on 2026-09-13.
 
 Implement a small bounded control channel independently of RTCM freshness and command execution. It must work on the **selected instrument link**, including SiK; local-router reachability cannot be a prerequisite in the field. Share the existing UART2 owner and scheduler. Use explicit peer identity, current session, update-attempt ID, sequence, finite deadline and CRC; validate source/session and reject malformed, stale or replayed notices. CRC/session matching is protocol isolation, not cryptographic authentication. Define/provision authentication separately before claiming authenticated RF control.
 
@@ -90,11 +55,11 @@ Use `prepare-update`, `acknowledged`, `updating`, `cancelled` and `reconnected` 
 | Peer identity returns but corrections/receiver quality are not fresh | **Peer reconnected — checking corrections** |
 | Fresh link and receiver quality recover | Ordinary link/fix/readiness states resume |
 
-Keep informational update reason separate from safety gates: stale correction age still inhibits collection. A claimed Updating reason cannot make old observations usable. Store enough identity/attempt correlation to handle reboot without accepting stale buffered notices. The current 0.10.4 SiK preview returns to Wi-Fi at restart and uses manual sessions; automatic post-update radio recovery therefore needs persistent paired identity and fresh session negotiation, or an explicit documented manual rejoin step. Do not promise seamless SiK restart recovery until that dependency passes.
+Keep informational update reason separate from safety gates: stale correction age still inhibits collection. A claimed Updating reason cannot make old observations usable. Store enough identity/attempt correlation to handle reboot without accepting stale buffered notices.
 
 Before an update, wait a bounded time for the peer acknowledgement. If it cannot be confirmed, show a distinct warning and require an explicit choice to continue without peer notification. Do not permanently block an otherwise recoverable single-unit update merely because its peer is offline. This choice belongs in the final review, not an automatic retry loop.
 
-## Increment 3 — guarded OTA
+## Guarded OTA
 
 Support browser uploads through both the instrument hotspot and local Wi-Fi. No cloud/server/Internet dependency. Verify Base hotspot access in local-router deployments; the current Base Phone page points to its configured network and does not create a second independent phone AP in that mode. Preserve the working Wi-Fi correction topology rather than silently changing network mode just to enable Debug.
 
@@ -115,12 +80,3 @@ The pinned 16 MB layout already has `otadata`, `ota_0` and `ota_1` slots (0x6400
 **Updating Rover:** finish collection first. Rover correction reception, local processing, web access and passive logging pause during update/reboot. Base may continue generating corrections. Existing jobs/settings are retained; the UM980 and SiK firmware are not updated.
 
 Neither warning should imply that a radio is powered off, a receiver is updated, or the peer acknowledged unless that was actually observed. Recovery/normal operation must be determined by fresh runtime evidence.
-
-## Acceptance and deployment order
-
-1. Host tests for actual touchscreen routing, Off-at-boot semantics, idle expiry/rollover, explicit activity, unchanged correction output, bounded capture and disabled endpoint behavior.
-2. Browser tests for both roles, gray/disabled tab and enable instructions, token loss, stale/offline state, expiry, log text escaping, snapshots, active-occupation monitoring and responsive layout.
-3. Build both targets. Review the new Debug page and capture integration before flashing. Keep the known-good 0.10.4 binaries/commit available.
-4. Implement and test peer notice/acknowledgement loss/reorder/replay/deadline behavior, then OTA transaction/rollback behavior. Do not show a working Upload control prematurely.
-5. Prefer a combined final USB install once OTA is ready, so the operator does not repeatedly open the battery holder for intermediate previews. After that, validate an actual Wi-Fi update on both units, via local Wi-Fi and hotspot, plus interruption and boot rollback. Retain physical USB recovery access for a firmware that cannot boot or start networking.
-6. Measure passive Debug overhead with live RTCM and a normal occupation, verify receiver freshness is maintained, then conduct real paired update/recovery checks without collecting a field point. Keep packet-loss root-cause investigation deferred unless it prevents useful operation.

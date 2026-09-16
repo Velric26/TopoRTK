@@ -9,7 +9,7 @@ This implements the initial scope of roadmap ranks **2–5**, requested together
 3. Create or open a job. Jobs, the active selection, configuration revisions and committed points live on Rover SD. Browser storage retains only the current pairing/request state.
 4. Complete **Setup**: review the Zapopan starter values, confirm the WGS84 source and epoch, enter both antenna reference measurements, identify the RTCM base/station, choose known control or explicitly accept a temporary base, and review the occupation/quality limits. Save only after the complete configuration is correct.
 5. In **Collect**, enter a unique point ID, optional code and description. Hold the pole still and level. The occupation must remain RTK FIXED and within all limits. A success message appears only after the point record is written, flushed and read back.
-6. The last committed point is shown with coordinates, ground height, configuration revision and control status. Full point review/plot and export are the next roadmap items; they are not included in this release.
+6. The last committed point is shown with coordinates, ground height, configuration revision and control status. Point review/plot, the paged point list, CSV export/backup and manual line tags are implemented; see *Point review, export and precision*. Open work is the deferred phone/app scope: bulk CSV import and guided restore, continuous-topo session management, localization/grid-ground and full COGO/offsets.
 
 Multiple devices may view the instrument. Only the current controller may write; control expires after 120 seconds without an authenticated request. Every accepted Base or Rover takeover creates a new bearer token, including repeated requests with the same client ID. Old tokens immediately lose write access and cannot release the new controller. Polling/renewal does not take control back. Commands already accepted by the instrument continue, and the new controller can cancel an active occupation. Releasing control, rebooting, changing role/network or replacing the phone Wi-Fi key revokes the session. Both roles use the same takeover rule; there is no display PIN, PIN-attempt throttle or previous-owner veto. Credentials are absent from status/USB/SD logs.
 
@@ -83,7 +83,7 @@ The browser locks writes on connection loss, preserves edits during polling, and
 
 `/TOPO-RTK/SURVEY` on the SD card contains a sequential append-only journal. Each record has a version, command ID, payload fingerprint, typed operation, result, JSON body, CRC and commit trailer. A new record is written to a temporary file, flushed/synced, renamed to its final name and read back before success. Committed files are never overwritten. An incomplete temporary file is ignored; a missing committed sequence, invalid CRC, truncated record or invalid event disables writes. Recovery replays valid committed records. Back up a faulty card before manual repair; recovery does not erase it.
 
-Prototype bounds: **16 jobs, 512 distinct durable command IDs and 1,024 journal records**. Occupations reserve capacity for their final/cancellation records. No job deletion, archive/rotation, import, export or full point list yet. Changing these bounds needs memory/latency validation. The SD journal is authoritative; do not remove the card while an operation is active. Flush/readback cannot eliminate every consumer SD controller or FAT power-loss failure; physical power-cut/card-removal tests remain a separate checkpoint.
+Prototype bounds: **16 jobs, 512 distinct durable command IDs and 1,024 journal records**. Occupations reserve capacity for their final/cancellation records. CSV export/backup and the paged point list/plot are implemented; job deletion, journal archive/rotation and CSV import are not. Changing these bounds needs memory/latency validation. The SD journal is authoritative; do not remove the card while an operation is active. Flush/readback cannot eliminate every consumer SD controller or FAT power-loss failure; physical power-cut/card-removal tests remain a separate checkpoint.
 
 | Endpoint | Purpose |
 |---|---|
@@ -96,6 +96,32 @@ Prototype bounds: **16 jobs, 512 distinct durable command IDs and 1,024 journal 
 Commands are `job.create`, `job.open`, `job.configure`, `collect.start`, `collect.cancel`, `base.apply` and `storage.recover`. Every command requires a 32-character lowercase hexadecimal ID. Configuration writes also require the expected job revision and confirmation. No arbitrary receiver passthrough exists. POST bodies are bounded JSON, cross-origin browser writes are rejected, responses disable caching, and the pages contain no external assets. Coordinate/job data are readable to connected viewers; control credentials are not included in snapshots.
 
 The HTTP task queues commands. A separate survey worker owns the engine and journal. Main-loop typed requests own receiver/NVS changes; GNSS/RTCM handling continues independently. A mutex serializes SD use, and diagnostic CSV writes skip a busy card rather than blocking the GNSS loop. Larger allocations use board PSRAM. Survey snapshots older than two seconds return 503.
+
+## Point review, export and precision
+
+Provenance: extracted from the retired `docs/roadmap-6-12-progress.md` — its feature 6 architecture note, feature 7 export checkpoint and UI 0.5 precision note.
+
+### Feature 6 point review architecture
+
+The original journal remains authoritative and backward compatible. Recovery builds a small point index containing the source record number and current metadata. Original coordinates, quality and configuration are never overwritten. `point.edit` journals the before/after metadata, reason and expected metadata revision; deleted IDs remain reserved. Reads of a corrupt point disable writes.
+
+`GET /api/v1/data` supports `view=points` (25 rows per page) and `view=point`. A journal-sequence `at` cursor rejects mixed snapshots when another command changes the data. Data reads run on the survey worker, under the shared SD mutex, through a bounded read request/response slot; HTTP never touches the card directly. Responses are bounded to 64 KiB and read waits to two seconds. This is separate from the small frequently polled status snapshot.
+
+The `/survey-tools.js` asset extends the existing offline interface. User-entered metadata is rendered as text, not executable markup. The plan uses only the active setup revision to avoid mixing coordinate systems/units; other revisions remain available in the list. The live marker disappears if current quality checks or connection freshness fail.
+
+Validation artifacts: [roadmap 6–12 checkpoint](../tests/2026-09-10-roadmap-6-12/README.md). Synthetic native/browser observations are fixtures; no fabricated observations are written to either physical instrument.
+
+### Feature 7 export checkpoint
+
+CSV includes all points (including deleted records), per-row units/reference/revision, and full original observation/configuration/quality JSON. Formula-like metadata columns are prefixed with an apostrophe for spreadsheet handling; exact values remain in `observation_json`. Mixed revisions are explicitly retained per row, not silently converted.
+
+`view=backup` pages up to three matching job records and scans at most 32 journal slots per request. It returns the exact JSON strings plus original sequence and CRC32. Stable `at` cursors cover all pages. Backups retain metadata edit reasons/before values and original observations. An offline verifier is available at `firmware/tools/verify_survey_backup.py`; it does not restore or modify instrument data.
+
+Both instruments ran UI 0.4 at that historical export checkpoint. Unit A's two existing jobs remain intact; no field point or synthetic point was created on hardware. Validation details and limits: [checkpoint record](../tests/2026-09-10-roadmap-6-12/README.md).
+
+### UI 0.5 precision
+
+The residual tests exposed rounding in the original ArduinoJson number formatter. UI 0.5 journal/snapshot serialization retains 15 significant digits; exact backup JSON is unchanged. New receipts have precision-format version 2, while legacy receipt retries retain their original canonicalization. See [validation and limitations](../tests/2026-09-11-instrument-scope/README.md).
 
 ## Validation and remaining acceptance
 

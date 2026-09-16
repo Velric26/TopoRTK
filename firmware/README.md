@@ -1,6 +1,6 @@
 # UM980 Display Demo
 
-**Firmware updates: OTA over Wi-Fi is preferred.** Known router addresses: Unit A `192.168.100.20`, Unit B `192.168.100.19` (verify hardware identity; DHCP addresses can change). Use the [OTA operator guide](../../docs/ota-operator-guide.md) for build/package commands, the web workflow and the supported install script. USB/serial is for unavailable OTA, unreachable devices, first provisioning or recovery. Earlier dated sections below retain historical validation details.
+**Firmware updates: OTA over Wi-Fi is preferred.** Known router addresses: Unit A `192.168.100.20`, Unit B `192.168.100.19` (verify hardware identity; DHCP addresses can change). Use the [OTA operator guide](../docs/ota-operator-guide.md) for build/package commands, the web workflow and the supported install script. USB/serial is for unavailable OTA, unreachable devices, first provisioning or recovery. Earlier dated sections below retain historical validation details.
 
 > Status: Both units have validated bidirectional TTL Channel 2, rotation `0`, automatic startup profiles, and CRC-validated BESTNAV accuracy parsing. On 2026-09-06 Unit A generated live base RTCM over the ESP32 Wi-Fi bridge and Unit B reached `RTK FIXED` using HA-609 antennas. Absolute accuracy and repeatability remain untested.
 
@@ -12,7 +12,7 @@ On the Rover touchscreen, open **Link → Phone / Tablet → Show key**. Join th
 
 The saved key has eight random digits and a middle period (`dddd.dddd`). The update replaces the original letter-based key once, so paired devices need the new key. **Show key** hides automatically after 30 seconds; **New key → Confirm** replaces it and disconnects phone clients. Neither changes the receiver configuration.
 
-The phone AP runs alongside the correction station in both **Local Router** and **Direct Link**, with up to three clients. The PC router address also works in Local Router mode. `phone?` provides non-secret USB diagnostics. See [phone Wi-Fi validation](../../tests/2026-09-10-rover-phone-wifi/README.md) and the [ranked next features](../../docs/web-app-roadmap.md).
+The phone AP runs alongside the correction station in both **Local Router** and **Direct Link**, with up to three clients. The PC router address also works in Local Router mode. `phone?` provides non-secret USB diagnostics. See [phone Wi-Fi validation](../tests/2026-09-10-rover-phone-wifi/README.md) and the [ranked next features](../docs/web-app-roadmap.md).
 
 ## Rover Browser Status (2026-09-10)
 
@@ -22,7 +22,7 @@ The read-only overview shows readiness, correction link, GNSS fix, horizontal un
 
 The original status endpoint remains read-only. UI 0.3 keeps an HTTP listener on both roles and adds paired survey commands; the HTTP task queues these for the survey/receiver workers. The Rover field access point is implemented; extended Android and field validation remain tracked in the phone Wi-Fi checkpoint.
 
-Build both hardware variants with `pio run -e unit_a -e unit_b`. Package and update through the [preferred OTA workflow](../../docs/ota-operator-guide.md). USB defaults are COM4 for Unit A and COM10 for Unit B; USB upload commands are fallback/recovery procedures, not the routine update method.
+Build both hardware variants with `pio run -e unit_a -e unit_b`. Package and update through the [preferred OTA workflow](../docs/ota-operator-guide.md). USB defaults are COM4 for Unit A and COM10 for Unit B; USB upload commands are fallback/recovery procedures, not the routine update method.
 
 ## Survey jobs and collection (UI 0.3)
 
@@ -30,7 +30,7 @@ Open **Open survey jobs** from the Rover status page, or `/survey` directly. Pai
 
 On the Base, `/survey` (also `/`) provides separately paired fixed-coordinate or temporary survey-in setup with receiver verification and NVS startup persistence. Enter receiver-reference ellipsoidal height, including the base antenna height/offset. This page changes the local Base only.
 
-See the [workflow and limits](../../docs/survey-workflow.md), [test record](../../tests/2026-09-10-survey-workflow/README.md), and [ranked roadmap](../../docs/web-app-roadmap.md). This first implementation has 16 jobs, 512 durable command IDs and 1,024 journal records; WGS84 standard-zone UTM; ellipsoidal or locally validated constant-geoid heights; and a last-point preview. Full point management/plot, export, datum transforms, installed geoid grids and validated field accuracy remain later checkpoints.
+See the [workflow and limits](../docs/survey-workflow.md), [test record](../tests/2026-09-10-survey-workflow/README.md), and [ranked roadmap](../docs/web-app-roadmap.md). This first implementation has 16 jobs, 512 durable command IDs and 1,024 journal records; WGS84 standard-zone UTM; ellipsoidal or locally validated constant-geoid heights; and a last-point preview. Full point management/plot, export, datum transforms, installed geoid grids and validated field accuracy remain later checkpoints.
 
 ## Touch Roles and Remembered Settings (2026-09-08)
 
@@ -44,7 +44,7 @@ The redesigned portrait interface has larger status values, three equal-height c
 
 Backlight brightness uses GPIO6 PWM at 5 kHz, matching the Waveshare example. `DAY` is full duty, `NIGHT` is approximately 10% duty, and transitions complete in about 1.2 seconds. `AUTO` uses checksum-validated GNSS UTC time converted to fixed UTC-6; when GNSS time is invalid or stale it deliberately remains full brightness and labels the state `AUTO: NO GNSS TIME`. The `brightness?` console command reports the requested mode, current/target duty, hardware duty, and PWM frequency.
 
-Unit B has passed runtime role reversal, saved settings across ESP32 hardware resets, and profile verification on the bench. Physical touchscreen usability, complete power-off/on, and two-unit role reversal under RTK remain separate checks. See the [test record](../../tests/2026-09-08-touch-role-settings/README.md).
+Unit B has passed runtime role reversal, saved settings across ESP32 hardware resets, and profile verification on the bench. Physical touchscreen usability, complete power-off/on, and two-unit role reversal under RTK remain separate checks. See the [test record](../tests/2026-09-08-touch-role-settings/README.md).
 
 ## SD Logging (Unit A Checkpoint)
 
@@ -119,7 +119,7 @@ Base mode uses `BASE WAIT`, `BASE SURVEY`, and `BASE LOCKED` instead of the misl
 
 ## USB fallback: build, flash and monitor
 
-For routine updates, use the [OTA procedure](../../docs/ota-operator-guide.md). When USB fallback is required, run from this directory and select the instrument explicitly:
+For routine updates, use the [OTA procedure](../docs/ota-operator-guide.md). When USB fallback is required, run from this directory and select the instrument explicitly:
 
 ```powershell
 pio run --environment unit_a
@@ -141,11 +141,11 @@ pio device monitor --environment unit_b
 
 A `NO FIX` result still passes UART integration when the GGA messages are complete and checksummed. GNSS positioning is a separate outdoor antenna test.
 
-See the [validated Channel 2 receive test](../../tests/2026-09-04-um980-esp32-ttl2-receive/README.md). The earlier [integrated test record](../../tests/2026-09-04-um980-esp32-display/README.md) is retained as historical evidence but its assumed Channel 1 wiring was not reproduced.
+See the [validated Channel 2 receive test](../tests/2026-09-04-um980-esp32-ttl2-receive/README.md). The earlier [integrated test record](../tests/2026-09-04-um980-esp32-display/README.md) is retained as historical evidence but its assumed Channel 1 wiring was not reproduced.
 
-See also the [validated bidirectional Channel 2 test](../../tests/2026-09-04-um980-esp32-ttl2-bidirectional/README.md).
+See also the [validated bidirectional Channel 2 test](../tests/2026-09-04-um980-esp32-ttl2-bidirectional/README.md).
 
-The [HA-609 standalone-fix test](../../tests/2026-09-05-ha609-standalone-fix/README.md) validates the complete battery-powered GNSS-to-display path. It does not validate RTK accuracy.
+The [HA-609 standalone-fix test](../tests/2026-09-05-ha609-standalone-fix/README.md) validates the complete battery-powered GNSS-to-display path. It does not validate RTK accuracy.
 
 ## Safe USB Role Console
 
@@ -166,7 +166,7 @@ The ESP32 accepts a small allowlisted command set through its native USB serial 
 
 `role base-test` starts the UM980's default averaged-base behavior and is for functional testing only. It does not establish a survey-quality base. The console intentionally provides no arbitrary passthrough, `SAVECONFIG`, factory reset, baud-rate, or firmware-update commands. Brightness commands save the same preferences as the touchscreen.
 
-The relay was validated on Unit A on 2026-09-06: the receiver acknowledged the ESP32's `MODE BASE` and verification query, then read back `MODE BASE TIME 60 2.5 3.5`. The project owner also confirmed that `BASE` appeared beneath `UM980 OK` on the physical display. This proves runtime configuration relay and role display without an ESP32 or UM980 reflash. It does not prove a valid base coordinate or RTCM output. See the [Unit A command-relay test](../../tests/2026-09-06-unit-a-base-relay/README.md).
+The relay was validated on Unit A on 2026-09-06: the receiver acknowledged the ESP32's `MODE BASE` and verification query, then read back `MODE BASE TIME 60 2.5 3.5`. The project owner also confirmed that `BASE` appeared beneath `UM980 OK` on the physical display. This proves runtime configuration relay and role display without an ESP32 or UM980 reflash. It does not prove a valid base coordinate or RTCM output. See the [Unit A command-relay test](../tests/2026-09-06-unit-a-base-relay/README.md).
 
 ## Wi-Fi Link Checkpoint
 
@@ -214,7 +214,7 @@ Use `wifi?`, `wifi direct`, and `wifi local` on native USB during development.
 Changing transport clears link counters and peer state, reconnects Wi-Fi, and
 does not change the UM980 role or its profile.
 
-The [ESP32 Wi-Fi link test](../../tests/2026-09-06-esp32-wifi-link/README.md) passed through packet 84 with zero detected gaps and zero invalid packets.
+The [ESP32 Wi-Fi link test](../tests/2026-09-06-esp32-wifi-link/README.md) passed through packet 84 with zero detected gaps and zero invalid packets.
 
 ## RTCM-over-Wi-Fi Checkpoint
 
@@ -244,8 +244,8 @@ No startup touch is required. The ESP32 restores its saved role, then applies th
 
 These actions intentionally send no `SAVECONFIG`. The allowlisted USB console remains available for role queries, controlled recovery, RTCM counters, and `accuracy?` diagnostics.
 
-The [Wi-Fi RTCM bridge bench test](../../tests/2026-09-06-wifi-rtcm-bridge-bench/README.md) records the transport checkpoint.
+The [Wi-Fi RTCM bridge bench test](../tests/2026-09-06-wifi-rtcm-bridge-bench/README.md) records the transport checkpoint.
 
-The [HA-609 Wi-Fi RTK open-sky test](../../tests/2026-09-06-ha609-wifi-rtk-open-sky/README.md) records the first `RTK FIXED` field checkpoint.
+The [HA-609 Wi-Fi RTK open-sky test](../tests/2026-09-06-ha609-wifi-rtk-open-sky/README.md) records the first `RTK FIXED` field checkpoint.
 
-The [automatic-profile and horizontal-accuracy bench test](../../tests/2026-09-06-auto-profile-horizontal-accuracy/README.md) records the first real-hardware validation of the new startup behavior and BESTNAV parser.
+The [automatic-profile and horizontal-accuracy bench test](../tests/2026-09-06-auto-profile-horizontal-accuracy/README.md) records the first real-hardware validation of the new startup behavior and BESTNAV parser.

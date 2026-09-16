@@ -145,6 +145,6 @@ This passes standalone GNSS acquisition and the complete antenna-to-display data
 - Antenna bias is currently enabled. Confirm the carrier's SMA path, bias voltage/current, and the antenna's requirements before connection.
 - Do not send `SAVECONFIG`, `FRESET`, `RESET`, base-mode, baud-rate, or RTCM-output commands during bring-up unless the intended change and recovery path are documented.
 
-## Next Incremental Test
+## Current Status
 
-Both UM980/ESP32 pairs passed USB identification and bidirectional TTL Channel 2 by 2026-09-06. Unit B is explicitly confirmed in `MODE ROVER SURVEY`. Unit A accepted an allowlisted `MODE BASE` command relayed by its ESP32 and read back `MODE BASE TIME 60 2.5 3.5`; this validates runtime command relay and a temporary base role, not a usable base position or RTCM output. No `SAVECONFIG` was sent. K700 validation is on hold because the purchased cable has the wrong antenna-side center-contact gender. Channel 1 remains out of service; RTCM, RTK accuracy, antenna comparison, and extended power stability remain separate investigations.
+**2026-09-15:** Receiver, carrier, role, fault and correction-link status are tracked in [PROJECT.md section 12](../../../PROJECT.md#12-current-decisions-and-open-items); this note keeps only the module, carrier and caution records above.

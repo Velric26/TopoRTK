@@ -1,6 +1,6 @@
 # R4 transport-aware status checkpoint — 0.11.15-arch-r4 deployed to both units (2026-09-14)
 
-Implementation of the [architecture review](../../docs/architecture-review.md) R4 checkpoint: one central `InstrumentStatus` interpretation consumed by the LCD frame, the web JSON and the CSV logger, so the surfaces can never disagree on transport, freshness or readiness. Both instruments now run **`0.11.15-arch-r4`** via guarded OTA with verified boots and unchanged saved survey state. (Executed after the [repository restructure](../../docs/firmware-folder-restructure.md); all paths below use the new layout.)
+Implementation of the [architecture review](../../docs/architecture-review.md) R4 checkpoint: one central `InstrumentStatus` interpretation consumed by the LCD frame, the web JSON and the CSV logger, so the surfaces can never disagree on transport, freshness or readiness. Both instruments now run **`0.11.15-arch-r4`** via guarded OTA with verified boots and unchanged saved survey state. (Executed after the [repository restructure](../../PROJECT.md#deployment-history); all paths below use the new layout.)
 
 ## Contract implemented
 
