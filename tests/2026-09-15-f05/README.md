@@ -19,7 +19,7 @@ Implementation of finding F05 from the [R06-R review](../../docs/r06-r.md), comp
 | `run_settings_http_tests.py` | PASS — the new 400s and the pass-through |
 | `run_pair_session_tests.py`, `run_update_tests.py` | PASS |
 | Browser checks (web, survey, GUI layout, diagnostic, debug, OTA, settings) | PASS, 7/7 — the diagnostics page rebuilt, and the Settings quick-test expectations unchanged |
-| `pio run -e unit_a -e unit_b` | **pending** — the tree is being edited concurrently by the receiver extraction; re-run before deployment |
+| `pio run -e unit_a -e unit_b` | PASS — both environments build, and the change ships in `0.11.33-arch-r10` |
 
 ## Behaviour change to record
 
