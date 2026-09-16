@@ -1,0 +1,24 @@
+{
+  "result": "PASS",
+  "checks": [
+    "live connection and role",
+    "both roles use takeover without a PIN",
+    "explicit claim/release and reload retention",
+    "a passive view starts nothing",
+    "confirm gate sends nothing",
+    "one link.test with a fresh 32-hex id, the tested medium and only its fields",
+    "device-owned preparation, running and verdict phases",
+    "current failed report never replaced with the old pass",
+    "the other medium sends its own rate and mode",
+    "cancel is the issuer's link.cancel",
+    "offline and stale freeze the controls and the phase text",
+    "another controller's operation cannot be cancelled",
+    "report download",
+    "320/390/768/1280 widths and 200% text",
+    "local fault self-test and downloaded report",
+    "wiring probe stays local",
+    "Radio selection locks the UART2 probe and the local fault checks",
+    "local selection is not pair coordination and stays visible",
+    "no page errors"
+  ]
+}

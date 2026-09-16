@@ -190,7 +190,7 @@ int main() {
     std::vector<uint8_t> packet(header.packet_size);std::memcpy(packet.data(),&header,sizeof(header));std::memcpy(packet.data()+sizeof(header),reference.data(),reference.size());
     header.checksum=fnv1a(packet.data(),packet.size());std::memcpy(packet.data(),&header,sizeof(header));
     assert(!correction_link_input(reference.data(),reference.size(),host_now));  // the radio is not the route yet
-    host_radio_active=true;assert(!handle_wifi_rtcm_packet(packet.data(),packet.size()));
+    host_radio_active=true;assert(!correction_wifi::handle_rtcm_packet(packet.data(),packet.size()));
     host_radio_linked=true;
     assert(correction_link_input(reference.data(),reference.size(),host_now-1000));
     host_now+=500;correction_service::service_output(host_now);assert(correction_service::snapshot().queued==0); // carried age expires
@@ -207,23 +207,23 @@ int main() {
     correction_service::reset();wifi_last_peer_ms=host_now;
     const auto identity=link_service::snapshot(host_now);
     auto current=wifi_frame(1,identity.session,identity.peer_boot,identity.local_boot);
-    assert(handle_wifi_rtcm_packet(current.data(),current.size()));
+    assert(correction_wifi::handle_rtcm_packet(current.data(),current.size()));
     correction_service::service_output(host_now);
     const auto delivered=gnss.binary_output.size();
     current=wifi_frame(1,identity.session,identity.peer_boot,identity.local_boot);
-    assert(!handle_wifi_rtcm_packet(current.data(),current.size()));
+    assert(!correction_wifi::handle_rtcm_packet(current.data(),current.size()));
     host_now+=4500;wifi_last_peer_ms=host_now;
     current=wifi_frame(1,identity.session,identity.peer_boot,identity.local_boot);
-    assert(!handle_wifi_rtcm_packet(current.data(),current.size()));
+    assert(!correction_wifi::handle_rtcm_packet(current.data(),current.size()));
     auto old_session=wifi_frame(2,identity.session+1,identity.peer_boot,identity.local_boot);
     auto old_sender=wifi_frame(2,identity.session,identity.peer_boot+1,identity.local_boot);
     auto old_receiver=wifi_frame(2,identity.session,identity.peer_boot,identity.local_boot+1);
     auto old_version=wifi_frame(2,identity.session,identity.peer_boot,identity.local_boot,2);
     for(auto *bad:{&old_session,&old_sender,&old_receiver,&old_version})
-      assert(!handle_wifi_rtcm_packet(bad->data(),bad->size()));
+      assert(!correction_wifi::handle_rtcm_packet(bad->data(),bad->size()));
     correction_service::service_output(host_now);assert(gnss.binary_output.size()==delivered);
     current=wifi_frame(2,identity.session,identity.peer_boot,identity.local_boot);
-    assert(handle_wifi_rtcm_packet(current.data(),current.size()));correction_service::service_output(host_now);
+    assert(correction_wifi::handle_rtcm_packet(current.data(),current.size()));correction_service::service_output(host_now);
     assert(gnss.binary_output.size()==delivered+reference.size());
     assert(rtcm_wifi_rx_frames==2);
     // Admitted OTA pause rejects new input and discards pending output. Preparing
@@ -525,9 +525,9 @@ int main() {
   const auto key_writes = storage.writes;
   stop_rover_ap(); start_rover_ap(board::kUnitLabel);
   assert(original_key == rover_ap_password() && storage.writes == key_writes);
-  assert(station_broadcast()[3] == 255);
-  assert(on_station_subnet(IPAddress(192,168,4,1)));
-  assert(!on_station_subnet(IPAddress(192,168,8,2)));
+  assert(network_service::station_broadcast()[3] == 255);
+  assert(network_service::on_station_subnet(IPAddress(192,168,4,1)));
+  assert(!network_service::on_station_subnet(IPAddress(192,168,8,2)));
   WiFi.station_ip = IPAddress(192,168,8,10);
   host_now += 1100; service_rover_ap();
   assert(std::string(rover_ap_address()) == "172.22.42.1");

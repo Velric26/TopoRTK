@@ -1,0 +1,17 @@
+{
+  "result": "PASS",
+  "checks": [
+    "gray tab and enable instructions",
+    "hardware-enabled availability",
+    "takeover without PIN",
+    "monitoring while occupation is active",
+    "no idle timer; debug persists until disabled",
+    "text escaping/filter/download/pause",
+    "controller loss clears private view",
+    "stale/offline and timeout disable access",
+    "role-specific update warnings and guarded OTA controls",
+    "update card heading with live upload percentage",
+    "320/390/768/1280 layouts",
+    "no active diagnostic or survey commands"
+  ]
+}

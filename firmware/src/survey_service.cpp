@@ -1,6 +1,14 @@
 #include "survey_service.h"
+#include "board_hardware.h"
+#include "correction_service.h"
+#include "device_settings.h"
+#include "diagnostic_log.h"
+#include "gnss_service.h"
+#include "link_diagnostic.h"
+#include "ota_service.h"
 #include "survey_store.h"
 #include "survey_control.h"
+#include "web_http.h"
 #include <Arduino.h>
 #include <esp_system.h>
 #include <esp_heap_caps.h>
@@ -69,6 +77,36 @@ void survey_begin(bool storage_ready) {
   Serial.println(initialized?"SURVEY: jobs service started":"SURVEY: task creation failed");
 }
 void survey_update(const survey::Fix &fix){portENTER_CRITICAL(&guard);current=fix;portEXIT_CRITICAL(&guard);}
+// The base-coordinate request path and the Fix build moved here from main.cpp
+// unchanged: the same gates (the settings owner enforces revision, role and idle
+// profile, its checked write and read-back, the coordinate publish, the profile
+// re-apply and the failure report), the same fields in the same order and the
+// same sources. Additions: the receiver accuracy the correction age policy
+// reads and the applied role arrive in the root's evaluation.
+void survey_publish(const instrument_status::Inputs &inputs) {
+  survey::BaseRequest request;
+  if(survey_take_base(request)) {
+    // The settings owner records the coordinate and tells the receiver owner
+    // either way; the survey glue only reports what the receiver published.
+    device_settings::apply_base(request.position,request.fixed,request.revision);
+  }
+  const uint32_t now=inputs.now_ms;survey::Fix f;f.now=now;f.rover=!inputs.role_base;
+  const GnssSnapshot gnss_state=gnss_service::snapshot();
+  const SettingsSnapshot settings=device_settings::snapshot();
+  f.unit=board::kUnitLabel;f.boot_id=web_boot_id();f.reset_reason=esp_reset_reason();f.free_heap=ESP.getFreeHeap();f.min_heap=ESP.getMinFreeHeap();f.free_psram=ESP.getFreePsram();
+  f.profile_ok=gnss_state.profile_applied&&!gnss_state.profile_failed&&!diagnostic_busy()&&!ota_paused();f.base_apply_pending=gnss_state.profile_running;f.base_apply_failed=settings.base_failed||gnss_state.profile_failed;f.base_revision=settings.base_revision;
+  f.base_attempt_revision=settings.base_attempt_revision;f.base_fixed=settings.base_fixed;f.base_setting={settings.base_latitude,settings.base_longitude,settings.base_height};
+  f.position=gnss_state.accuracy.position;f.position_valid=gnss_state.accuracy.position_valid;
+  f.received=gnss_state.accuracy.received_ms;f.epoch=gnss_state.accuracy.epoch;
+  f.fixed=gnss_state.accuracy.rtk_fixed && gnss_state.gga.received && gnss_state.gga.quality==4 && now-gnss_state.gga_ms<1500;
+  f.hacc=gnss_state.accuracy.horizontal_1drms_m;f.vacc=gnss_state.accuracy.vertical_sigma_m;
+  f.linked=instrument_status::correction_link_connected(instrument_status::status_snapshot(inputs,correction_service::health()));f.correction_age=instrument_status::verified_correction_age(inputs.solution,now,correction_service::health());
+  f.position_valid=f.position_valid && gnss_state.accuracy.solution_station==gnss_state.station;
+  f.reference_valid=gnss_state.reference_ms!=0;f.reference=gnss_state.reference;f.station=gnss_state.station;
+  f.reference_age=gnss_state.reference_ms?now-gnss_state.reference_ms:UINT32_MAX;f.satellites=gnss_state.gga.satellites;
+  if(instrument_status::fresh_gnss_time(gnss_state.time.valid,gnss_state.time.received_ms,now))std::snprintf(f.utc,sizeof(f.utc),"%04u-%02u-%02uT%02u:%02u:%02uZ",gnss_state.time.year,gnss_state.time.month,gnss_state.time.day,gnss_state.time.hour,gnss_state.time.minute,gnss_state.time.second);
+  survey_update(f);
+}
 bool survey_queue(const char *command){if(!initialized||!command||std::strlen(command)>survey::max_request)return false;
   if(xSemaphoreTake(engine_gate,pdMS_TO_TICKS(100))!=pdTRUE)return false;
   auto *r=new Request;std::strcpy(r->json,command);const bool ok=!diagnostic_locked&&xQueueSend(commands,r,0)==pdTRUE;delete r;xSemaphoreGive(engine_gate);return ok;}

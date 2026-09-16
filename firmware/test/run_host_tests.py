@@ -94,6 +94,7 @@ bool diagnostic_request(const char *) {return false;}
 bool diagnostic_snapshot(char *,size_t) {return false;}
 void survey_begin(bool) {}
 void survey_update(const survey::Fix &) {}
+void survey_publish(const instrument_status::Inputs &) {}
 bool survey_take_base(survey::BaseRequest &) {return false;}
 bool survey_sd_lock() {return true;}
 void survey_sd_unlock() {}
@@ -107,7 +108,8 @@ def adapted(name):
 
 for name in ('ui_display.cpp', 'ui_screens.cpp', 'wifi_transport.cpp',
              'network_service.cpp', 'gnss_service.cpp',
-             'correction_service.cpp'):
+             'correction_service.cpp', 'correction_wifi.cpp',
+             'ui_presenter.cpp', 'status_surface.cpp'):
     (root / f'.pio/host_{name}').write_text(adapted(name))
 subprocess.run(['g++', '-std=c++11', '-Wall', '-Wextra', '-Werror', '-Isrc',
                 'test/radio_framing_cases.cpp', '-o', '.pio/test_radio_framing.exe'], cwd=root, check=True)
@@ -122,6 +124,8 @@ subprocess.run(['g++', '-std=c++11', '-DTOPORTK_UNIT_ID=2', '-DTOPORTK_DISPLAY_R
                 '.pio/host_correction_service.cpp',
                 '.pio/host_ui_display.cpp', '.pio/host_ui_screens.cpp',
                 '.pio/host_wifi_transport.cpp', '.pio/host_network_service.cpp',
+                '.pio/host_correction_wifi.cpp', '.pio/host_ui_presenter.cpp',
+                '.pio/host_status_surface.cpp',
                 str(generated), '-o', '.pio/test_firmware.exe'], cwd=root, check=True)
 subprocess.run([str(root / '.pio/test_firmware.exe')], cwd=root, check=True)
 for name in ('ready', 'stale'):
