@@ -32,6 +32,38 @@ int sd_last_fix_quality = -1;
 char sd_last_role[8] = {};
 uint32_t last_sd_solution_ms = 0;
 
+// Pending rows (R10b). Every producer formats its row and enqueues it with one
+// bounded copy; the loop's one service call then commits at most the solution
+// sample plus kEventRowsPerTurn event rows. Producer cost is therefore constant
+// no matter how many rows a turn produces, and a turn's card cost is bounded, so
+// the optional session cannot delay the correction output it shares the turn
+// with. Rows are per-file FIFO; the two files have never had a cross-file order.
+constexpr size_t kRowCapacity = 320;    // the longest row: one solution line
+struct PendingRow {
+  char path[160];
+  char text[kRowCapacity];
+};
+// The whole optional queue is static: 8 x 484 B plus the 484 B solution slot.
+static_assert(kPendingRows * sizeof(PendingRow) + sizeof(PendingRow) < 4608,
+              "Bounded optional-log queue memory");
+PendingRow pending_rows[kPendingRows];
+unsigned pending_head = 0, pending_count = 0;
+// The one-per-second sample needs a single slot: a newer sample supersedes one
+// the card has not taken yet, and the superseded row counts as dropped.
+PendingRow solution_row;
+bool solution_pending = false;
+uint32_t dropped_rows = 0;
+bool drop_reported = false;
+
+void copy_text(char *out, size_t capacity, const char *text) {
+  size_t index = 0;
+  while (text != nullptr && text[index] != '\0' && index + 1 < capacity) {
+    out[index] = text[index];
+    ++index;
+  }
+  out[index] = '\0';
+}
+
 // Best effort: a unavailable card, an unopened session or a mutex the survey
 // journal is holding drops the line instead of waiting for it.
 bool append_text(const char *path, const char *text) {
@@ -44,6 +76,50 @@ bool append_text(const char *path, const char *text) {
   file.flush();
   file.close();
   return written == std::strlen(text);
+}
+
+// One bounded console line per failure episode, so a card that has stopped
+// taking rows is visible without a line per row; a successful commit clears it.
+void report_drop() {
+  if (drop_reported) return;
+  drop_reported = true;
+  Serial.printf("SD: LOG DROPPED %lu optional row(s); card, session or shared journal refused the write\n",
+                static_cast<unsigned long>(dropped_rows));
+}
+
+void place(PendingRow &row, const char *path, const char *line) {
+  copy_text(row.path, sizeof(row.path), path);
+  copy_text(row.text, sizeof(row.text), line);
+}
+
+bool enqueue(const char *path, const char *line) {
+  if (pending_count == kPendingRows) {   // the turn produced more than the ring holds
+    ++dropped_rows;
+    report_drop();
+    return false;
+  }
+  place(pending_rows[(pending_head + pending_count) % kPendingRows], path, line);
+  ++pending_count;
+  return true;
+}
+
+// One commit is one append: a skip, never a wait or an in-place retry.
+void commit_pending() {
+  if (solution_pending) {
+    const bool written = append_text(solution_row.path, solution_row.text);
+    solution_pending = false;
+    if (written) drop_reported = false;
+    else { ++dropped_rows; report_drop(); }
+  }
+  for (unsigned committed = 0; committed < kEventRowsPerTurn && pending_count > 0;
+       ++committed) {
+    const bool written = append_text(pending_rows[pending_head].path,
+                                     pending_rows[pending_head].text);
+    pending_head = (pending_head + 1) % kPendingRows;
+    --pending_count;
+    if (written) drop_reported = false;
+    else { ++dropped_rows; report_drop(); }
+  }
 }
 
 }  // namespace
@@ -63,7 +139,7 @@ void event(const char *name, const char *detail, const LogTime &time) {
                 static_cast<unsigned long>(time.now_ms), unit_label, utc,
                 name == nullptr ? "UNKNOWN" : name,
                 detail == nullptr ? "" : detail);
-  append_text(path, line);
+  enqueue(path, line);
 }
 
 void config(const char *profile, const char *notes, const LogTime &time) {
@@ -75,7 +151,7 @@ void config(const char *profile, const char *notes, const LogTime &time) {
                 static_cast<unsigned long>(time.now_ms), unit_label,
                 profile == nullptr ? "UNKNOWN" : profile,
                 notes == nullptr ? "" : notes);
-  append_text(path, line);
+  enqueue(path, line);
   event("CONFIG_PROFILE", profile == nullptr ? "UNKNOWN" : profile, time);
 }
 
@@ -83,6 +159,10 @@ void solution(const DiagnosticInputs &in) {
   if (!sd_ready || !sd_test_passed || sd_session_path[0] == '\0' ||
       !in.solution_fresh) {
     return;
+  }
+  if (solution_pending) {   // the card has not taken the previous second's row
+    ++dropped_rows;
+    report_drop();
   }
   char path[160] = {};
   std::snprintf(path, sizeof(path), "%s/solution.csv", sd_session_path);
@@ -107,7 +187,8 @@ void solution(const DiagnosticInputs &in) {
                 static_cast<unsigned long>(in.sequence_gaps),
                 static_cast<unsigned long>(in.invalid_packets),
                 in.transport);
-  append_text(path, line);
+  place(solution_row, path, line);
+  solution_pending = true;
 }
 
 void begin(const SdPort &port, const DiagnosticHooks &installed, const LogTime &time) {
@@ -221,6 +302,10 @@ void service(const DiagnosticInputs &in) {
     last_sd_solution_ms = in.time.now_ms;
     solution(in);
   }
+  // The bounded card work of this turn: one solution sample plus at most
+  // kEventRowsPerTurn event rows, committed after every other service that
+  // shares the turn has run.
+  commit_pending();
 }
 
 DiagnosticSnapshot snapshot() {
@@ -228,6 +313,8 @@ DiagnosticSnapshot snapshot() {
   out.ready = sd_ready;
   out.verified = sd_test_passed;
   std::strncpy(out.session, sd_session_path, sizeof(out.session) - 1);
+  out.dropped = dropped_rows;
+  out.pending = pending_count + (solution_pending ? 1u : 0u);
   return out;
 }
 

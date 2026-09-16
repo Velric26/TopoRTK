@@ -836,4 +836,152 @@ int main() {
            std::fabs(reloaded_base.base_height - 2201.5) < 1e-9);
     std::puts("PASS: base record revision gate, store failure, applied coordinate and reload");
   }
+
+  // The receiver's own reader bounds its work per turn (R10b). Measured on these
+  // doubles: the three 1 Hz sentences, a 1005 reference and a full-size
+  // 1029-byte MSM frame are 1492 bytes, 129.5 ms of 115200 8N1 line time, and
+  // arrived as one 1492-byte turn before the budget existed.
+  {
+    const std::string sentence = gga_fixture(4, 28, 0.5) + "\r\n";
+    auto feed_lines = [&](size_t target) {
+      std::vector<uint8_t> burst;
+      unsigned lines = 0;
+      while (burst.size() < target) {
+        burst.insert(burst.end(), sentence.begin(), sentence.end());
+        ++lines;
+      }
+      gnss.feed(burst.data(), burst.size());
+      return lines;
+    };
+    // A backlog above the ring's safety margin is drained within the same turn
+    // down to that margin: deferring it whole is what would overflow the
+    // 2048-byte ring and lose receiver bytes.
+    const unsigned burst_lines =
+        feed_lines(gnss_service::kInputBudgetBytes + gnss_service::kInputBacklogMargin + 64);
+    const uint32_t bytes_before = receiver().bytes;
+    const uint32_t lines_before = receiver().lines;
+    const uint32_t gga_before = receiver().gga_count;
+    gnss_service::service_input(host_now);
+    const uint32_t burst_read = receiver().bytes - bytes_before;
+    const int after_burst = gnss.available();
+    assert(burst_read >= gnss_service::kInputBudgetBytes);
+    assert(after_burst <= gnss_service::kInputBacklogMargin);
+    while (gnss.available() > 0) gnss_service::service_input(host_now);
+    assert(receiver().bytes == bytes_before + burst_lines * sentence.size());
+    assert(receiver().lines == lines_before + burst_lines);
+    assert(receiver().gga_count == gga_before + burst_lines);
+    // Below the margin the turn yields after the budget and leaves the rest in
+    // the ring: the next turn reads it, so no byte is dropped to shorten a turn
+    // and the framing/overflow counters stay the ones the receiver produced.
+    const unsigned short_lines = feed_lines(gnss_service::kInputBudgetBytes + 8);
+    const uint32_t short_start = receiver().bytes;
+    gnss_service::service_input(host_now);
+    const uint32_t first_turn = receiver().bytes - short_start;
+    const int left_in_ring = gnss.available();
+    while (gnss.available() > 0) gnss_service::service_input(host_now);
+    assert(receiver().bytes == short_start + short_lines * sentence.size());
+    assert(receiver().lines == lines_before + burst_lines + short_lines);
+    assert(receiver().gga_count == gga_before + burst_lines + short_lines);
+    std::printf("R10b input: %u-byte burst read %u in one turn (%d left), budget %u then %d left, margin %d\n",
+                unsigned(burst_lines * sentence.size()), burst_read, after_burst,
+                unsigned(gnss_service::kInputBudgetBytes), left_in_ring,
+                unsigned(gnss_service::kInputBacklogMargin));
+    assert(first_turn == gnss_service::kInputBudgetBytes);
+    assert(left_in_ring > 0 && left_in_ring <= gnss_service::kInputBacklogMargin);
+  }
+
+  // A turn that produces more rows than the ring holds drops the excess visibly,
+  // and one service call asks the card for the bounded budget only (R10b).
+  {
+    for (unsigned call = 0; call < 8 && diagnostic_log::snapshot().pending > 0; ++call)
+      service_sd_logging();                    // drain what earlier turns left
+    assert(diagnostic_log::snapshot().pending == 0);
+    LogTime when;
+    when.now_ms = host_now;
+    const uint32_t dropped_before = diagnostic_log::snapshot().dropped;
+    for (unsigned row = 0; row < diagnostic_log::kPendingRows + 5; ++row)
+      diagnostic_log::event("QUEUE", "overflow", when);
+    assert(diagnostic_log::snapshot().pending == diagnostic_log::kPendingRows);
+    assert(diagnostic_log::snapshot().dropped == dropped_before + 5);
+    host_now += 1000;                          // the per-second sample is due too
+    const uint32_t opens_before = SD_MMC.opens;
+    service_sd_logging();
+    const uint32_t appends = SD_MMC.opens - opens_before;
+    assert(appends == 1 + diagnostic_log::kEventRowsPerTurn);
+    assert(diagnostic_log::snapshot().pending ==
+           diagnostic_log::kPendingRows - diagnostic_log::kEventRowsPerTurn);
+    std::printf("R10b optional log: ring=%u, one turn committed %u row(s) of %u pending\n",
+                diagnostic_log::kPendingRows, appends,
+                diagnostic_log::kPendingRows - diagnostic_log::kEventRowsPerTurn + appends);
+  }
+
+  // A card that answers slowly and then stops taking rows is skipped, not waited
+  // on: the turn's card cost stays within the commit budget, every refused row is
+  // visible, and the correction output the turn also services still gets its
+  // write. The correction queue is untouched by the optional writer.
+  {
+    // The link-loss case above dropped the receiver's proof; a boot would prove
+    // it again, and a role change only re-profiles over a proven receiver.
+    complete_profile();                        // the base-coordinate profile in flight
+    reply("$command,VERSION,response: OK");
+    feed_line(gga_fixture(4, 28, 0.5));
+    gnss_service::service_startup(host_now);
+    assert(receiver().version_ok && receiver().startup_complete);
+    select_role(DeviceRole::kRover);
+    complete_profile();
+    correction_service::reset();
+    host_radio_active = false;
+    wifi_last_peer_ms = host_now;
+    auto reference = msm(1006, 0);
+    auto observation = msm(1074, 1000);
+    assert(correction_service::admit(reference.data(), reference.size(), host_now, host_now));
+    assert(correction_service::admit(observation.data(), observation.size(), host_now, host_now));
+    const auto queued_before = correction_service::snapshot();
+    assert(queued_before.queued == 2);
+    for (unsigned call = 0; call < 8 && diagnostic_log::snapshot().pending > 0; ++call)
+      service_sd_logging();                    // start the turn with an empty ring
+    assert(diagnostic_log::snapshot().pending == 0);
+    gnss.binary_output.clear();
+    SD_MMC.stall_ms = 40;                      // every open costs 40 ms of the turn
+    SD_MMC.fail = true;                        // ... and then refuses the row
+    feed_line(gga_fixture(4, 28, 0.5));
+    LogTime due;
+    due.now_ms = host_now;
+    for (unsigned row = 0; row < diagnostic_log::kEventRowsPerTurn + 1; ++row)
+      diagnostic_log::event("FIXTURE", "pending", due);
+    host_now += 1000;                          // the per-second sample is due too
+    const uint32_t dropped_before = diagnostic_log::snapshot().dropped;
+    const uint32_t opens_before = SD_MMC.opens;
+    const uint32_t turn_start = host_now;
+    service_sd_logging();
+    const uint32_t card_cost = host_now - turn_start;
+    const uint32_t appends = SD_MMC.opens - opens_before;
+    const uint32_t skipped = diagnostic_log::snapshot().dropped - dropped_before;
+    assert(appends == 1 + diagnostic_log::kEventRowsPerTurn);
+    assert(card_cost == appends * SD_MMC.stall_ms);
+    assert(skipped == appends);                // every refused row is visible
+    correction_service::service_output(host_now);
+    assert(correction_service::snapshot().forwarded == queued_before.forwarded + 1);
+    assert(gnss.binary_output == reference);
+    SD_MMC.fail = false;
+    SD_MMC.stall_ms = 0;
+    std::printf("R10b optional log: stalled+failing card cost %u append(s)/%u ms, skipped %u, COM2 wrote %u byte(s) in the same turn\n",
+                appends, card_cost, skipped, unsigned(gnss.binary_output.size()));
+  }
+
+  // The profile-completion rows the receiver's own observer produces no longer
+  // touch the card inside the receiver's call (R10b): they cost one enqueue.
+  {
+    LogTime when;
+    when.now_ms = host_now;
+    const uint32_t opens_before = SD_MMC.opens;
+    SD_MMC.stall_ms = 40;
+    const uint32_t clock_before = host_now;
+    diagnostic_log::config("ROVER_SURVEY", "VERIFIED|RTCM_OFF", when);
+    const uint32_t producer_cost = host_now - clock_before;
+    SD_MMC.stall_ms = 0;
+    assert(SD_MMC.opens == opens_before);      // no card access from a producer
+    assert(producer_cost == 0);
+    assert(diagnostic_log::snapshot().pending >= 2);   // the two rows are queued
+  }
 }

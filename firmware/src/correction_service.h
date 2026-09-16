@@ -60,6 +60,19 @@ bool admit(const uint8_t *frame, size_t size, uint32_t at, uint32_t now_ms);
 // Writes at most one queued frame to COM2: a zero write is backpressure and is
 // retried, a short write latches the output fault and drops the queue. A closed
 // gate discards whatever is queued.
+//
+// Precedence (R10b): admission happens where the frame arrives (the receiver's
+// own input read, through `admit`), and the write is attempted in the same turn
+// before every optional or best-effort service the root runs - the CSV session
+// first among them. A frame therefore waits at most one bounded optional commit
+// (diagnostic_log's budget) plus one turn, never the optional work a turn
+// produced. Nothing on this path writes to or reads from storage.
+//
+// Counters keep their meanings: `forwarded`/`forwarded_bytes` are whole frames
+// and their bytes written, `expired` the queue entries the age limit dropped,
+// `overflow` the observation slots taken from the oldest, `waiting` the polls
+// that found the TX ring unable to take a frame, `faults` the short writes that
+// latched the fault.
 void service_output(uint32_t now_ms);
 
 // Session/role/config change: drops the queue, the station latch, the

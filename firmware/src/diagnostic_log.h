@@ -6,12 +6,15 @@
 // one per-second solution sample, and the shared survey SD mutex discipline
 // around every append.
 //
-// It is bounded best-effort and never blocks the correction loop beyond what
-// main.cpp already did: a missing card, a closed session or a busy mutex drops
-// the line instead of waiting, and a failed readback stops the rows while the
-// mount stays reported. It reads nothing on its own - the root passes one value
-// snapshot per call, so the receiver/link facts the surfaces show stay in the
-// root - and it prints the same console lines it printed from main.cpp.
+// It is bounded best-effort and never blocks the correction loop: a producer
+// only formats its row and enqueues it (R10b), one service call commits at most
+// one solution sample plus kEventRowsPerTurn event rows, and a missing card, a
+// closed session, a busy mutex or a card that refuses the write drops the row
+// and counts it in `snapshot().dropped` instead of waiting or retrying in place.
+// A failed readback stops the rows while the mount stays reported. It reads
+// nothing on its own - the root passes one value snapshot per call, so the
+// receiver/link facts the surfaces show stay in the root - and it prints the
+// same console lines it printed from main.cpp.
 
 #include <cstddef>
 #include <cstdint>
@@ -72,16 +75,41 @@ struct DiagnosticSnapshot {
   bool ready = false;      // sd_ready: the card mounted with a session directory
   bool verified = false;   // sd_test_passed: the write/readback test passed
   char session[128] = {};
+  // Rows this optional session produced and never wrote: the pending ring was
+  // full, a newer per-second solution sample superseded one the card had not
+  // taken, or the session, the card or the survey journal's SD mutex refused the
+  // commit. A missing card or a closed session produces no row at all and is not
+  // counted - the same gate main.cpp always applied. The authoritative survey
+  // journal keeps its own writes and is not counted here.
+  uint32_t dropped = 0;
+  // Rows waiting for a bounded commit: the ring plus the one-per-second
+  // solution slot.
+  unsigned pending = 0;
 };
 
 namespace diagnostic_log {
 
+// Per-turn commit bound (R10b). Measured: a worst-case turn produced four rows
+// (link, rtcm and fix edges plus the one-second solution sample) and the
+// receiver's own profile-completion observer two more; with the host double's
+// 40 ms card one such turn cost the loop 160 ms of clock, and the observer's two
+// rows cost 80 ms inside the receiver's call. The pending ring makes every
+// producer O(1) and the commit budget makes a turn's card cost independent of
+// how many rows that turn produced: one solution sample plus kEventRowsPerTurn
+// event rows, i.e. at most 120 ms with that card and nothing at all when the
+// card is absent or failing.
+constexpr unsigned kPendingRows = 8;       // queue depth per turn's producers
+constexpr unsigned kEventRowsPerTurn = 2;  // committed event rows per service call
+
 void begin(const SdPort &port, const DiagnosticHooks &hooks, const LogTime &time);
 
-// The loop's one call: session state changes, and the per-second solution
-// sample when the window has elapsed.
+// The loop's one call: session state changes, the per-second solution sample
+// when the window has elapsed, then the bounded card commits. A row the session,
+// the mutex or the card refuses is skipped and counted in `snapshot().dropped`
+// rather than retried in place.
 void service(const DiagnosticInputs &in);
-// One solution row, without the state-change events.
+// One solution row, without the state-change events: fills the pending solution
+// slot that the next service call commits.
 void solution(const DiagnosticInputs &in);
 
 // The storage owner's session lines, called where the fact became true.

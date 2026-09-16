@@ -271,7 +271,15 @@ void report_base_failure(bool blocks_any_role) {
 }
 
 void service_input(uint32_t now_ms) {
+  // Bounded per-turn read (R10b): the documented budget first, then only while
+  // the ring still holds more than the safety margin, so this call leaves at
+  // most kInputBacklogMargin bytes unread. Yielding leaves the rest in the ring
+  // for the next turn - no byte is discarded to shorten a turn, and the counters
+  // keep counting every byte and reject the receiver read.
+  uint32_t budget = kInputBudgetBytes;
   while (gnss.available() > 0) {
+    if (budget == 0 && gnss.available() <= kInputBacklogMargin) break;
+    if (budget > 0) --budget;
     const uint8_t raw = static_cast<uint8_t>(gnss.read());
     ++byte_count;
     last_rx_ms = now_ms;

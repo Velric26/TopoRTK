@@ -214,6 +214,15 @@ class File {
 struct HostSD {
   std::map<std::string, std::string> files;
   bool fail = false;
+  // A card that answers slowly: every open charges this much of the injected
+  // clock, the same clock the firmware reads through millis(). A bound on the
+  // appends one turn attempts is therefore a bound on the time the optional
+  // writer can take from the turn it shares with the correction output.
+  uint32_t stall_ms = 0;
+  // Card activity, so a case can assert how much work one turn asked of it:
+  // every committed row is one open (append_text opens, prints, flushes and
+  // closes once per row).
+  uint32_t opens = 0;
   bool exists(const char *path) { return files.count(path) != 0; }
   void setPins(int,int,int) {}
   bool begin(const char *,bool,bool) { return !fail; }
@@ -222,6 +231,8 @@ struct HostSD {
   uint64_t usedBytes() { return 0; }
   bool mkdir(const char *) { return !fail; }
   File open(const char *path, int mode) {
+    ++opens;
+    host_now += stall_ms;   // a card that answers at all still answers late
     if (fail) return File{};
     if (mode == FILE_READ) {
       auto it = files.find(path);

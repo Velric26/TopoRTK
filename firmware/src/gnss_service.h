@@ -87,6 +87,35 @@ struct GnssObservers {
 
 namespace gnss_service {
 
+// Per-turn input bound (R10b). Measured on the host doubles: one second of the
+// receiver's Base COM2 output - the three 1 Hz sentences (GPGGA, GPRMC,
+// BESTNAVA) plus a 1005 reference and a full-size 1029-byte MSM frame - is 1492
+// bytes, 129.5 ms of 115200 8N1 line time, and arrived as one 1492-byte turn
+// before this bound existed. The UART1 RX ring is 2048 bytes (main.cpp's
+// GnssPort), i.e. 178 ms of line time.
+//
+// kInputBudgetBytes: what one turn reads unconditionally. 512 bytes is 44 ms of
+// line time and ~17x the ~30 bytes an ordinary 2.6 ms turn receives, while still
+// covering the three 1 Hz sentences or a full-size MSM frame.
+//
+// kInputBacklogMargin: past the budget a turn keeps reading only while the
+// backlog is above this margin, so the turn ends with at most this many bytes
+// unread - the invariant is `service_input` leaves the ring holding at most
+// kInputBacklogMargin bytes, unless it read less than the budget. 256 bytes is
+// 22 ms of line time, so a yielded turn leaves at least 1792 bytes (155 ms) of
+// ring headroom: neither a long turn (an HTTP response, an optional commit) nor
+// the next turn's arrival can overflow the ring and lose receiver bytes. A
+// backlog above the margin is a burst that is drained within the same turn down
+// to the margin, not deferred whole.
+//
+// Receiver bytes are never dropped to save time. The only reader that discards
+// is discard_input (the OTA pause), and a bounded turn leaves its remainder in
+// the ring for the next turn instead of clearing it, so `bytes`, `lines`,
+// `checksum_errors` and `rtcm_bad` keep counting exactly the bytes the receiver
+// read and the rejects its parser found.
+constexpr uint32_t kInputBudgetBytes = 512;
+constexpr int kInputBacklogMargin = 256;
+
 // Constructs UART1, installs the observations and schedules the first startup
 // handshake command 1500 ms later.
 void begin(const GnssPort &port, const GnssObservers &observers, uint32_t now_ms);

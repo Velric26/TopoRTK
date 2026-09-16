@@ -588,6 +588,15 @@ void setup() {
 
 void service_survey();
 void loop() {
+  // Turn precedence (R10b). The receiver's input is always read first and no
+  // byte is ever discarded to shorten a turn. The correction output is written
+  // next, in the same turn its frames were admitted, and before every optional
+  // or best-effort service (the CSV session, the web publication, the settings
+  // service). The optional session runs after all of them and commits at most
+  // one solution sample plus diagnostic_log::kEventRowsPerTurn rows - and the
+  // receiver's own input path no longer writes to the card at all - so a slow,
+  // full or failing SD card can delay COM2 admission by one bounded commit, not
+  // by the rows the turn produced.
   ota_service(millis(),!is_base(),gnss_service::snapshot().profile_running,display_ready&&!device_settings::snapshot().error&&survey_service_ready()&&web_service_ready());
   if(!ota_locked())read_usb_console();
   if(!ota_paused())gnss_service::service_input(millis());
