@@ -12,6 +12,13 @@ void diagnostic_service(uint32_t now,bool rover,IPAddress peer,bool profile_busy
 // still incomplete). The same value is published as the snapshot's "busy", and
 // the snapshot's "radio_owned" reports that UART2 share alone.
 bool diagnostic_busy();
+// Queued requests, all requiring an explicit confirmation: a local correction
+// selection ("corrections"), the wiring probe ("probe"), the fault self-test
+// ("selftest") and the designed instrument restart ("restart"). The restart is
+// admitted only when nothing else owns the instrument (no update transferring, no
+// run, no probe, and the survey/diagnostic reservation free) and executes on a
+// later service turn, so the caller's 202 and the published "restart_pending"
+// land before the chip resets.
 bool diagnostic_request(const char *json);
 bool diagnostic_snapshot(char *out,size_t capacity);
 // Latest stored report per medium for the settings snapshot; never null-values

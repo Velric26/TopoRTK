@@ -245,6 +245,43 @@ def main():
                 b.settings()['revision'] == revision_before,
                 'revision=' + str(revision_before) + ' -> ' + str(b.settings()['revision']))
 
+    # Designed software restart (esp_restart) — the escape hatch for a state that
+    # cannot be recovered in place, and the remote form of the G01 "restart only
+    # one unit" case. The instrument answers 202, publishes restart_pending, then
+    # resets; the pair must renegotiate by itself afterwards.
+    for name, client, peer in (('Rover', b, a), ('Base', a, b)):
+        boot_before = baseline(client)['boot_id']
+        status, body = client.request('/api/v1/diagnostic', 'POST',
+                                      {'op': 'restart', 'confirm': True}, auth=True)
+        admitted = status == 202
+        deadline = time.time() + 90
+        rebooted = False
+        while time.time() < deadline:
+            try:
+                if baseline(client)['boot_id'] != boot_before:
+                    rebooted = True
+                    break
+            except Exception:
+                pass  # offline during the reboot is expected
+            time.sleep(2)
+        if rebooted:
+            time.sleep(3)
+        converged = False
+        if rebooted:
+            for _ in range(6):
+                try:
+                    converged, link_i, link_j = converge(client, peer,
+                                                         client.settings()['selected_transport'],
+                                                         timeout=10)
+                except Exception:
+                    converged = False
+                if converged:
+                    break
+                time.sleep(3)
+        report.case('designed restart of the ' + name, admitted and rebooted and converged,
+                    'status=' + str(status) + ' new_boot=' + str(rebooted) +
+                    ' pair=' + str(converged))
+
     # Documented refusals stay refusals.
     settings = b.settings()
     stale = b.request('/api/v1/settings', 'POST',

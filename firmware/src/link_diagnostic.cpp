@@ -41,6 +41,10 @@ char reports[2][4096]={"null","null"};
 uint8_t latest=0;                 // medium slot the raw snapshot's last_report shows
 char unattributed[256]="null";    // pre-R9 report whose medium was never recorded
 char cancel_reason[48]={};
+// A designed software restart (esp_restart): admitted like any other disruptive
+// local action, then executed on a later service turn so the HTTP response, the
+// snapshot and the serial log leave the instrument before the chip resets.
+bool restart_pending=false;uint32_t restart_at=0;
 char quick_error[96]={};          // why the last quick-test start was refused
 bool quick_locked=false;          // a quick run owns its report settle, not the reservation
 // Records why a quick-test start was refused, for the snapshot and the operator.
@@ -158,7 +162,7 @@ bool cached_busy=false;uint32_t published=0;
 // Requests this layer still serves itself: a local link selection, the wiring
 // probe and the fault self-test. A packet or RTCM run is never armed from here,
 // because the pair operation owns that start and both peers must run one shape.
-struct Request{bool route=false,probe=false,selftest=false;uint8_t transport=0;};
+struct Request{bool route=false,probe=false,selftest=false,restart=false;uint8_t transport=0;};
 const char *state_name(){switch(engine.state){case linktest::Armed:return "armed";case linktest::Running:return "running";case linktest::Done:return "done";case linktest::Failed:return "failed";default:return "idle";}}
 void result_json(JsonObject d){
   if(paired){
@@ -224,6 +228,9 @@ void publish(uint32_t now){
   // holds UART2, which is exactly the run in flight or its bounded terminal
   // result exchange, and the same value already given to link_service.
   d["busy"]=test_busy()||radio_owned;d["radio_owned"]=radio_owned;d["persisted"]=persisted;
+  // A restart that has been admitted but not yet executed: the controller can
+  // observe it, and it stays true across the grace window.
+  d["restart_pending"]=restart_pending;
   d["radio_probe"]=probe_phase?"checking":probe_size?(std::strstr(probe_text,"SiK ")?"UART responds as SiK":"No SiK identity response; check power, baud and crossed TX/RX"):"not checked";
   d["radio_probe_response"]=probe_text;
   if(probe_phase){d["state"]="probing";d["busy"]=true;}
@@ -347,6 +354,11 @@ bool diagnostic_request(const char *json){
   }
   if(!std::strcmp(op,"selftest")){r.selftest=true;return d["confirm"]==true&&xQueueSend(queue,&r,0)==pdTRUE;}
   if(!std::strcmp(op,"probe")){r.probe=true;return d["confirm"]==true&&xQueueSend(queue,&r,0)==pdTRUE;}
+  // A designed restart of this instrument: the escape hatch for a state that
+  // cannot be recovered in place (for example a wedged operation or a reservation
+  // held by a fault). Confirm is required, and admission is the same single-slot
+  // queue as every other diagnostic action.
+  if(!std::strcmp(op,"restart")){r.restart=true;return d["confirm"]==true&&xQueueSend(queue,&r,0)==pdTRUE;}
   // A run is never armed from here: the pair operation starts it on both peers.
   return false;
 }
@@ -374,6 +386,18 @@ void diagnostic_service(uint32_t now,bool rover,IPAddress peer,bool profile_busy
       else {run_transport_selftest();survey_diagnostic_release();}
     }
     else if(request.probe){if(!test_busy()&&!probe_phase&&!profile_busy&&survey_diagnostic_acquire()){locked=true;radio_transport::begin();radio_transport::discard_input();probe_size=0;probe_text[0]=0;probe_start=now;probe_phase=1;}}
+    else if(request.restart){
+      route_error[0]=0;
+      // Same gates as every other disruptive local action: an update owns the
+      // instrument (locking or mid-transfer), a running test must finish, and the
+      // survey/diagnostic reservation is the proof that nothing else is collecting
+      // or writing. Holding it through the grace window stops anything new from
+      // starting under a chip that is about to reset.
+      if(ota_paused())std::strcpy(route_error,"Firmware update is transferring; restart refused.");
+      else if(test_busy()||probe_phase||profile_busy)std::strcpy(route_error,"Finish the current test or operation first.");
+      else if(!survey_diagnostic_acquire())std::strcpy(route_error,"Finish the current test, survey or receiver operation first.");
+      else {restart_pending=true;restart_at=now+500;}
+    }
   }
   // One ownership value per turn: the same predicate gates the stream argument,
   // this layer's own UART2 reads and writes, and the published busy state.
@@ -456,6 +480,15 @@ void diagnostic_service(uint32_t now,bool rover,IPAddress peer,bool profile_busy
   if((paired?pair_engine.state==correctiontest::Done:engine.state==linktest::Done)&&peer_received()&&!persisted_peer)save_result();
   portENTER_CRITICAL(&guard);cached_busy=test_busy()||radio_owned;portEXIT_CRITICAL(&guard);
   if(now-published>=200)publish(now);
+  // The designed restart runs here, on the service turn after the one that
+  // admitted it: the HTTP task has answered 202, the snapshot reports
+  // restart_pending and this line reaches the serial log first. esp_restart()
+  // resets the chip, which clears RAM state exactly as a power cycle would.
+  if(restart_pending&&int32_t(now-restart_at)>=0){
+    Serial.println("RESTART: requested by the controller; restarting");
+    Serial.flush();
+    esp_restart();
+  }
 }
 // The quick test is the existing engine for that medium, armed with the shape
 // the operation admitted. /transport/ (0 Wi-Fi, 1 SiK) is also the medium whose
