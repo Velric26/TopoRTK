@@ -26,6 +26,19 @@ Keep UM980 COM2 on GPIO43/TX and GPIO44/RX. Use a separate hardware UART for the
 
 The selected topology is **UM980 COM2 <-> ESP32 <-> SiK** at each end. It avoids COM1 and permits future application telemetry/control, but correction delivery then depends on ESP32 uptime. Direct UM980-to-radio wiring remains a possible alternative, not the current integration target.
 
+## Radio power control (requested 2026-09-15, needs hardware)
+
+Operator request: at power-on the instrument stays on Wi-Fi and the SiK radios are **off** — or in a low-power mode — until radio communication is requested. This keeps a Wi-Fi-selected instrument from paying an idle SiK module's current for a link it is not using, which matters on the 3S pack (one pack ran flat unnoticed on 2026-09-15; see [power](power.md)).
+
+**Electrical work this needs, none of which exists yet:**
+
+- A switched supply for the radio module (high-side load switch or P-FET on the 3S feed) driven by a free GPIO, with the GPIO recorded in the hardware documents and in `board_hardware`.
+- Inrush handling for the 1 W module, and a defined power-up settling time before any UART command is sent.
+- A rule for the UART lines while the module is unpowered: the ESP32 has to neither back-power the module through its input protection nor see a floating RX as data. Series resistance or a level-safe arrangement on GPIO17/GPIO18 is part of this task.
+- If the modules' own firmware turns out to support a dependable low-power command, that may replace the switched rail — but it must be verified on the actual module (ATI/version and a measured idle current), not assumed. Stock SiK behaviour on this point is not documented well enough to rely on.
+
+**Firmware behaviour to implement once the switch exists:** energize before a probe, a radio test or a cutover whose target is Radio (before staging, not at commit); keep the module's boot/settling inside the existing negotiation and probe windows; never toggle the rail while a frame is transmitting; and report a powered-off radio as *off*, never as a fault. Nothing about sessions, replay or admission gates changes.
+
 ## Configuration
 
 Both report `RFD SiK 2.0 on HM-TRP`. USB identities: COM14 `DU0EUNGIA`, COM15 `DU0EULJ8A` (FTDI 0403:6015). COM assignments can change. Neither radio has been physically assigned to Base/Rover or Unit A/B yet.

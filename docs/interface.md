@@ -178,6 +178,10 @@ Restarting stops correction output, any active collection and web access until t
 
 After a **flash** the reboot is already part of the flow (OTA restarts by design, and USB flashing resets the chip when the tool finishes), so this control is for the case where a clean boot is wanted without flashing a new image.
 
+## Power-on link selection and radio power (requested 2026-09-15)
+
+At power-on the instrument restores the **stored** link selection; only a fresh instrument (no stored record) defaults to Wi-Fi. The operator request recorded as [R10d](architecture-review.md) adds the other half: a Wi-Fi-selected instrument should leave the SiK radios **off** until radio communication is requested **by the operator** — via the Settings page, the touchscreen Link-mode page, a radio test or a radio probe — and energize them at that moment, with the module's boot time absorbed by the existing negotiation window. Until the switched supply exists (see [radio.md](radio.md#radio-power-control-requested-2026-09-15-needs-hardware)), the radios are powered whenever the instrument is, and a powered-off radio must never be reported as a fault once this ships.
+
 ## Data Model
 
 Document jobs, points, codes, antenna height, quality metadata, base identity, coordinate configuration, and units.

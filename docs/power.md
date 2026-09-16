@@ -80,6 +80,10 @@ Report it honestly until the pack is characterized: publish voltage and current,
 
 USB can also supply 5 V to the ESP32 and BDRTK carrier. During external-power tests, disconnect USB power or use a data-only USB cable unless the board's power-path isolation has been verified. Do not parallel an external 5 V regulator with USB 5 V unintentionally.
 
+### Switched radio rail (requested 2026-09-15, open)
+
+The SiK module is currently fed straight from the 3S pack, so it draws idle current even when Wi-Fi carries production. The operator request is that a Wi-Fi-selected instrument leaves the radios **off** until radio communication is requested. That needs a switched rail (see [radio.md](radio.md#radio-power-control-requested-2026-09-15-needs-hardware) for the electrical detail and the UART back-power caveat), the chosen GPIO recorded here and in `board_hardware`, and a measured idle-current comparison as its acceptance. The related State-of-charge item below is the other half of the same problem: the pack can currently run flat without the instrument noticing.
+
 ## Open validation items
 
 - Measure per-unit current at radio receive, radio transmit, display startup, Wi-Fi activity, and SD writes.
