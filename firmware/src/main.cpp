@@ -365,6 +365,23 @@ void handle_ui_gesture(const UiGesture &gesture) {
     change_page(ScreenPage::kDebug);
     return;
   }
+  if (action == TouchAction::kRestart) {
+    // The touchscreen asks the diagnostics layer for the same designed restart the
+    // web request uses, so the admission gates and the refusal text are identical.
+    if (ui_confirm_active(millis()) && ui_confirm_action() == TouchAction::kRestart) {
+      if (!diagnostic_request("{\"op\":\"restart\",\"confirm\":true}")) {
+        ui_presenter::set_link_hint("RESTART REFUSED. FINISH THE CURRENT TASK.");
+      } else {
+        ui_presenter::clear_link_hint();
+      }
+      ui_clear_confirm();
+    } else {
+      ui_presenter::clear_link_hint();
+      ui_arm_confirm(TouchAction::kRestart, millis());
+    }
+    draw_dynamic_screen();
+    return;
+  }
   if (action == TouchAction::kDebugToggle) {
     debug_enable_local(!debug_enabled());
     draw_dynamic_screen();
@@ -398,7 +415,7 @@ void handle_ui_gesture(const UiGesture &gesture) {
                                ? pair_session::Transport::Radio
                                : pair_session::Transport::WiFi;
     link_recovery_target = transport;
-    if (ui_link_confirm_active(millis()) && ui_link_confirm_action() == action) {
+    if (ui_confirm_active(millis()) && ui_confirm_action() == action) {
       char id[33] = {};
       make_link_request_id(id);
       link_operation::Reason reason = link_operation::Reason::None;
@@ -411,10 +428,10 @@ void handle_ui_gesture(const UiGesture &gesture) {
                       link_operation::reason_text(reason));
         ui_presenter::set_link_hint(hint);
       }
-      ui_clear_link_confirm();
+      ui_clear_confirm();
     } else {
       ui_presenter::clear_link_hint();
-      ui_arm_link_confirm(action, millis());
+      ui_arm_confirm(action, millis());
     }
   } else if (action == TouchAction::kLinkRecover) {
     // Recovery only: a local selection for a pair that cannot confirm itself.
@@ -424,16 +441,16 @@ void handle_ui_gesture(const UiGesture &gesture) {
                            !std::strcmp(operation.state, "recovery_required");
     if (!available) {
       ui_presenter::set_link_hint("LOCAL APPLY NEEDS AN UNCONFIRMED PAIR.");
-    } else if (ui_link_confirm_active(millis()) &&
-               ui_link_confirm_action() == TouchAction::kLinkRecover) {
+    } else if (ui_confirm_active(millis()) &&
+               ui_confirm_action() == TouchAction::kLinkRecover) {
       if (link_service::select(link_recovery_target, !is_base(), millis())) {
         ui_presenter::clear_link_hint();
       } else {
         ui_presenter::set_link_hint("LOCAL APPLY REFUSED. USE THE WEB SETTINGS PAGE.");
       }
-      ui_clear_link_confirm();
+      ui_clear_confirm();
     } else {
-      ui_arm_link_confirm(TouchAction::kLinkRecover, millis());
+      ui_arm_confirm(TouchAction::kLinkRecover, millis());
     }
   }
   if (action == TouchAction::kBase) pending_role = DeviceRole::kBase;

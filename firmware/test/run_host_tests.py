@@ -90,7 +90,13 @@ void peer_update_label(char *out,size_t){out[0]=0;}
 void diagnostic_begin() {}
 void diagnostic_service(uint32_t,bool,IPAddress,bool) {}
 bool diagnostic_busy() {return host_diagnostic_busy;}
-bool diagnostic_request(const char *) {return false;}
+uint32_t host_diagnostic_requests=0;char host_last_diagnostic[128]={};
+bool host_diagnostic_accept=true;
+bool diagnostic_request(const char *json) {
+  ++host_diagnostic_requests;
+  std::snprintf(host_last_diagnostic,sizeof(host_last_diagnostic),"%s",json?json:"");
+  return host_diagnostic_accept;
+}
 bool diagnostic_snapshot(char *,size_t) {return false;}
 void survey_begin(bool) {}
 void survey_update(const survey::Fix &) {}

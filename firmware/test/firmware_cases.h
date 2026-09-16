@@ -117,9 +117,23 @@ void assert_clean_page(const char *preview_path = nullptr) {
   draw_static_screen();
   draw_dynamic_screen();
   if (display->pixels != navigated_pixels) {
-    std::fprintf(stderr, "RENDER MISMATCH at %s (page %u, detail %u)\n",
+    // Report where the two renders differ: a bare abort hides which region the
+    // page failed to reproduce.
+    int16_t min_x = 32767, min_y = 32767, max_x = -1, max_y = -1;
+    size_t differing = 0;
+    for (int16_t y = 0; y < 480; ++y) {
+      for (int16_t x = 0; x < ui_width(); ++x) {
+        const size_t at = size_t(y) * ui_width() + x;
+        if (navigated_pixels[at] == display->pixels[at]) continue;
+        ++differing;
+        min_x = std::min(min_x, x); max_x = std::max(max_x, x);
+        min_y = std::min(min_y, y); max_y = std::max(max_y, y);
+      }
+    }
+    std::fprintf(stderr, "RENDER MISMATCH at %s (page %u, detail %u): %zu px in x=%d..%d y=%d..%d\n",
                  preview_path ? preview_path : "(none)",
-                 static_cast<unsigned>(current_page), ui_detail_page());
+                 static_cast<unsigned>(current_page), ui_detail_page(),
+                 differing, min_x, max_x, min_y, max_y);
     std::fflush(stderr);
   }
   assert(display->pixels == navigated_pixels);
@@ -606,11 +620,11 @@ int main() {
   assert(std::string(ui_frame.link_operation_line) == "NONE YET");
   assert(std::string(ui_frame.link_selected_line).find("WI-FI") == 0);
   tap(80, 236);  // Arm the radio switch; nothing is sent yet.
-  assert(ui_link_confirm_active(host_now) && ui_link_confirm_action() == TouchAction::kLinkRadio);
+  assert(ui_confirm_active(host_now) && ui_confirm_action() == TouchAction::kLinkRadio);
   assert(host_link_requests == 0);
   assert_clean_page(".pio/ui-link-3-confirm.ppm");
   tap(80, 236);  // Confirm: the coordinator receives the request.
-  assert(!ui_link_confirm_active(host_now));
+  assert(!ui_confirm_active(host_now));
   assert(host_link_requests == 1 && host_link_transport == 1 && host_link_revision == 7);
   assert(std::strlen(host_link_id) == 32);
   for (size_t i = 0; i < 32; ++i)
@@ -621,14 +635,14 @@ int main() {
   tap(238, 236); tap(238, 236);
   ui_build_frame(ui_frame, host_now);
   assert(host_link_requests == 2);
-  assert(std::string(ui_frame.link_mode_hint).find("NOT ACCEPTED") != std::string::npos);
+  assert(std::string(ui_frame.hint_line).find("NOT ACCEPTED") != std::string::npos);
   host_link_refuse = false;
   // An armed tap expires on its own, exactly like the key confirmation.
   tap(80, 236);
-  assert(ui_link_confirm_active(host_now));
+  assert(ui_confirm_active(host_now));
   host_now += 10001;
   ui_build_frame(ui_frame, host_now);
-  assert(!ui_link_confirm_active(host_now));
+  assert(!ui_confirm_active(host_now));
   // Apply-locally is refused while the pair record is healthy...
   host_operation_storage_ok = true;
   tap(160, 312); tap(160, 312);
@@ -641,7 +655,7 @@ int main() {
   assert(host_link_selections == 1);
   host_operation_storage_ok = true;
   change_page(ScreenPage::kMain);
-  assert(!ui_link_confirm_active(host_now));
+  assert(!ui_confirm_active(host_now));
   std::puts("PASS: touchscreen Link mode, pair-wide request shape, refusal copy, armed-tap expiry and gated local recovery");
   // Debug is enabled by default at boot; the touchscreen toggle turns it off
   // and on, including during receiver setup, and the session persists over time.
@@ -660,6 +674,32 @@ int main() {
   debugmode::Log bounded;bounded.clear(0);for(unsigned i=0;i<1000;++i)bounded.push(debugmode::Channel::Event,"test",0);assert(bounded.size()==8&&bounded.throttled==992);
   for(unsigned t=1000;t<10000;t+=1000)for(unsigned i=0;i<8;++i)bounded.push(debugmode::Channel::Event,"line",t);assert(bounded.size()==32&&bounded.overwritten>0);
   std::puts("PASS: Debug default-on at boot, touchscreen toggle during receiver setup, persistent session over time, disable clears capture, bounded capture and unchanged COM2 output");
+  // The designed restart is a two-tap control that asks the diagnostics layer, so
+  // that layer's admission gates decide whether the instrument really restarts.
+  change_page(ScreenPage::kDebug);
+  host_diagnostic_requests = 0;
+  host_diagnostic_accept = true;
+  tap(160, 372);  // arm
+  assert(ui_confirm_active(host_now) && ui_confirm_action() == TouchAction::kRestart);
+  assert(host_diagnostic_requests == 0);
+  assert_clean_page(".pio/ui-debug-restart-confirm.ppm");
+  tap(160, 372);  // confirm
+  assert(!ui_confirm_active(host_now));
+  assert(host_diagnostic_requests == 1);
+  assert(std::strstr(host_last_diagnostic, "\"op\":\"restart\"") != nullptr);
+  assert(std::strstr(host_last_diagnostic, "confirm") != nullptr);
+  // A refusal is shown where the control was tapped instead of promising a restart.
+  host_diagnostic_accept = false;
+  tap(160, 372); tap(160, 372);
+  ui_build_frame(ui_frame, host_now);
+  assert(std::string(ui_frame.hint_line).find("RESTART REFUSED") != std::string::npos);
+  host_diagnostic_accept = true;
+  tap(160, 372);
+  assert(ui_confirm_active(host_now));
+  host_now += 10001;
+  ui_build_frame(ui_frame, host_now);
+  assert(!ui_confirm_active(host_now));  // an armed tap expires on its own
+  std::puts("PASS: touchscreen restart confirmation, diagnostics-mediated admission and refusal copy");
   // The receiver's solution the previews render: the same sentences the
   // surfaces were fed, now old enough that every surface reports it stale.
   feed_line(gga_fixture(4, 28, 0.5));

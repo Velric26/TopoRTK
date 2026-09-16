@@ -74,7 +74,9 @@ struct UiFrame {
   char link_selected_line[48] = {};
   char link_peer_line[64] = {};
   char link_operation_line[80] = {};
-  char link_mode_hint[96] = {};
+  // Shared hint line for the two-tap controls (link mode and the Debug restart):
+  // the armed prompt, or the refusal text the diagnostics layer reported.
+  char hint_line[96] = {};
 };
 
 extern ScreenPage current_page;
@@ -92,13 +94,13 @@ void ui_toggle_key_reveal(uint32_t now);
 bool ui_key_confirm_active(uint32_t now);
 void ui_arm_key_confirm(uint32_t now);
 void ui_clear_key_state();
-// Link-mode selection confirmation (R6b): one tap arms the chosen action for ten
-// seconds, a second tap of the same button applies it. The composition root owns
-// what "apply" means; this module only tracks which button is armed.
-bool ui_link_confirm_active(uint32_t now);
-TouchAction ui_link_confirm_action();
-void ui_arm_link_confirm(TouchAction action, uint32_t now);
-void ui_clear_link_confirm();
+// Two-tap confirmation for a disruptive control: one tap arms the action for ten
+// seconds, a second tap of the same control applies it. The composition root owns
+// what "apply" means; this module only tracks which control is armed.
+bool ui_confirm_active(uint32_t now);
+TouchAction ui_confirm_action();
+void ui_arm_confirm(TouchAction action, uint32_t now);
+void ui_clear_confirm();
 
 void ui_draw_static(const UiFrame &frame);
 void ui_draw_dynamic(const UiFrame &frame);

@@ -19,7 +19,7 @@ uint32_t phone_key_confirm_ms = 0;
 
 namespace {
 uint8_t detail_page_index = 0;
-// Link-mode confirmation (R6b): the armed button and its ten-second window.
+// Two-tap confirmation: the armed control and its ten-second window.
 TouchAction link_confirm_action_ = TouchAction::kNone;
 uint32_t link_confirm_ms_ = 0;
 constexpr uint32_t kLinkConfirmWindowMs = 10000;
@@ -74,25 +74,25 @@ bool ui_key_confirm_active(uint32_t now) {
 
 void ui_arm_key_confirm(uint32_t now) { phone_key_confirm_ms = now; }
 
-bool ui_link_confirm_active(uint32_t now) {
+bool ui_confirm_active(uint32_t now) {
   return link_confirm_ms_ && now - link_confirm_ms_ < kLinkConfirmWindowMs;
 }
 
-TouchAction ui_link_confirm_action() { return link_confirm_action_; }
+TouchAction ui_confirm_action() { return link_confirm_action_; }
 
-void ui_arm_link_confirm(TouchAction action, uint32_t now) {
+void ui_arm_confirm(TouchAction action, uint32_t now) {
   link_confirm_action_ = action;
   link_confirm_ms_ = now;
 }
 
-void ui_clear_link_confirm() {
+void ui_clear_confirm() {
   link_confirm_action_ = TouchAction::kNone;
   link_confirm_ms_ = 0;
 }
 
 void ui_clear_key_state() {
   phone_key_shown_ms = phone_key_confirm_ms = 0;
-  ui_clear_link_confirm();
+  ui_clear_confirm();
   ui_reset_region_cache();
 }
 
@@ -176,10 +176,10 @@ void draw_phone_connection(const UiFrame &f);
 void draw_link_mode(const UiFrame &f) {
   draw_detail_row(current_page, 0, 58, "SELECTED", f.link_selected_line);
   draw_detail_row(current_page, 1, 110, "PAIR", f.link_peer_line);
-  const bool confirm = ui_link_confirm_active(f.now);
-  const bool radio_confirm = confirm && ui_link_confirm_action() == TouchAction::kLinkRadio;
-  const bool wifi_confirm = confirm && ui_link_confirm_action() == TouchAction::kLinkWifi;
-  const bool recover_confirm = confirm && ui_link_confirm_action() == TouchAction::kLinkRecover;
+  const bool confirm = ui_confirm_active(f.now);
+  const bool radio_confirm = confirm && ui_confirm_action() == TouchAction::kLinkRadio;
+  const bool wifi_confirm = confirm && ui_confirm_action() == TouchAction::kLinkWifi;
+  const bool recover_confirm = confirm && ui_confirm_action() == TouchAction::kLinkRecover;
   char signature[192] = {};
   std::snprintf(signature, sizeof(signature), "%u|%s|%u|%u|%u", confirm,
                 f.link_operation_line, f.link_recover_available, f.link_switch_busy,
@@ -199,9 +199,9 @@ void draw_link_mode(const UiFrame &f) {
   draw_button(current_page, 15, layout::kLinkRecover,
               recover_confirm ? "CONFIRM APPLY" : "APPLY LOCAL", "FOR RECOVERY", false,
               f.link_recover_available && (recover_confirm || !f.link_switch_busy));
-  if (ui_region_changed(current_page, 17, 344, f.link_mode_hint)) {
+  if (ui_region_changed(current_page, 17, 344, f.hint_line)) {
     display->fillRect(8, 344, 304, 80, colors::kBackground);
-    draw_wrapped(12, 348, 296, f.link_mode_hint, 3, colors::kSecondary);
+    draw_wrapped(12, 348, 296, f.hint_line, 3, colors::kSecondary);
   }
 }
 
@@ -257,7 +257,7 @@ void draw_settings(const UiFrame &f) {
   draw_button(current_page, 9, layout::kDebug, "DEBUG", "", debug_enabled());
 }
 
-void draw_debug_settings() {
+void draw_debug_settings(const UiFrame &f) {
   const bool enabled = debug_enabled();
   draw_label_value(current_page, 66, "DEBUG", enabled ? "ON" : "OFF");
   if (ui_region_changed(current_page, 14, 104, enabled ? "on" : "off")) {
@@ -271,10 +271,28 @@ void draw_debug_settings() {
   }
   draw_button(current_page, 10, layout::kDebugToggle, enabled ? "DISABLE DEBUG" : "ENABLE DEBUG", "", enabled);
   if (ui_region_changed(current_page, 15, 314, "debug-info")) {
-    display->fillRect(8, 314, 304, 112, colors::kBackground);
-    draw_fitted_text(12, 318, 296, "Updates: web Debug tab.", 2, colors::kSecondary);
-    draw_fitted_text(12, 342, 296, "Enabling does not pause.", 2, colors::kSecondary);
-    draw_fitted_text(12, 366, 296, "Logs stay in RAM.", 2, colors::kSecondary);
+    display->fillRect(8, 314, 304, 26, colors::kBackground);
+    draw_fitted_text(12, 316, 296, "Updates: web Debug tab.", 2, colors::kSecondary);
+  }
+  // The designed software restart: the field escape hatch for a state that cannot
+  // be recovered in place. It asks the diagnostics layer, so the same admission
+  // gates and the same refusal text apply as for the web request.
+  const bool restart_confirm =
+      ui_confirm_active(f.now) && ui_confirm_action() == TouchAction::kRestart;
+  // The subtitle stays on both states: blanking it changes the button's drawn
+  // height (its bottom row), which the page's own repaint cache then reports as
+  // stale pixels when the state changes.
+  draw_button(current_page, 11, layout::kRestart, restart_confirm ? "CONFIRM RESTART" : "RESTART",
+              restart_confirm ? "TAP AGAIN TO RESTART" : "CUTS COLLECTION AND LINK", false, true);
+  char restart_signature[128] = {};
+  std::snprintf(restart_signature, sizeof(restart_signature), "%u|%s", restart_confirm, f.hint_line);
+  if (ui_region_changed(current_page, 16, 412, restart_signature)) {
+    display->fillRect(8, 412, 304, 16, colors::kBackground);
+    if (restart_confirm) {
+      draw_fitted_text(12, 412, 296, "TAP AGAIN WITHIN 10 S.", 2, colors::kError);
+    } else if (f.hint_line[0]) {
+      draw_fitted_text(12, 412, 296, f.hint_line, 2, colors::kError);
+    }
   }
 }
 
@@ -331,7 +349,7 @@ void ui_draw_dynamic(const UiFrame &frame) {
   } else if (current_page == ScreenPage::kSettings) {
     draw_settings(frame);
   } else if (current_page == ScreenPage::kDebug) {
-    draw_debug_settings();
+    draw_debug_settings(frame);
   } else {
     draw_main_dashboard(frame);
   }

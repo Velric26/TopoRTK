@@ -298,6 +298,9 @@ void ui_presenter::build(UiFrame &f, const instrument_status::Inputs &inputs) {
       std::snprintf(f.phone_url, sizeof(f.phone_url), "http://%s", rover_ap_address());
     }
   }
+  // Both disruptive controls share one hint line: the armed prompt and the
+  // refusal the diagnostics layer returned belong where the control was tapped.
+  std::snprintf(f.hint_line, sizeof(f.hint_line), "%s", link_hint);
   if (current_page == ScreenPage::kWifiDetails && ui_detail_page() == 3) {
     const auto pair = link_service::snapshot(now);
     const auto operation = link_service::operation_view(now);
@@ -337,14 +340,14 @@ void ui_presenter::build(UiFrame &f, const instrument_status::Inputs &inputs) {
     f.link_recover_available = !operation.storage_ok ||
                                !std::strcmp(operation.state, "recovery_required");
     if (link_hint[0]) {
-      std::snprintf(f.link_mode_hint, sizeof(f.link_mode_hint), "%s", link_hint);
+      // The refusal or armed prompt already sits in the shared hint line.
     } else if (f.link_recover_available) {
-      std::strcpy(f.link_mode_hint,
+      std::strcpy(f.hint_line,
                   "PAIR NOT CONFIRMED. SET THE SAME LINK ON BOTH UNITS, OR APPLY LOCALLY.");
     } else if (f.link_switch_busy) {
-      std::strcpy(f.link_mode_hint, "A TEST OR UPDATE OWNS THE LINK. WAIT FOR IT TO FINISH.");
+      std::strcpy(f.hint_line, "A TEST OR UPDATE OWNS THE LINK. WAIT FOR IT TO FINISH.");
     } else {
-      std::strcpy(f.link_mode_hint,
+      std::strcpy(f.hint_line,
                   "ONE TAP ARMS, A SECOND CONFIRMS THE PAIR-WIDE SWITCH.");
     }
   }

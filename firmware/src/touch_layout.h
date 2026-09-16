@@ -7,7 +7,9 @@ enum class TouchAction : uint8_t {
   kNone, kHome, kGps, kLink, kSettings, kBase, kRover, kApply, kAuto, kDay, kNight,
   kShowKey, kNewKey, kDebug, kDebugToggle, kDetailPrev, kDetailNext,
   // Link-mode page (R6b): pair-wide medium selection, never a session code.
-  kLinkRadio, kLinkWifi, kLinkRecover
+  kLinkRadio, kLinkWifi, kLinkRecover,
+  // Designed instrument restart on the Debug page (two-tap confirm).
+  kRestart
 };
 
 struct TouchRect {
@@ -31,9 +33,15 @@ constexpr TouchRect kNewKey{164, 212, 148, 48};
 // button is only offered when pair confirmation cannot be obtained.
 constexpr TouchRect kLinkRadio{8, 212, 148, 48};
 constexpr TouchRect kLinkWifi{164, 212, 148, 48};
-constexpr TouchRect kLinkRecover{8, 288, 304, 48};
+// Tall enough for its "FOR RECOVERY" subtitle, which draw_button places at
+// rect.y+46: at 48 high it would overlap the hint line below.
+constexpr TouchRect kLinkRecover{8, 268, 304, 72};
 constexpr TouchRect kDebug{212,380,100,44};
 constexpr TouchRect kDebugToggle{8,244,304,56};
+// Debug page, below the compressed info line: the designed software restart. It
+// carries a subtitle, and draw_button places that at rect.y+46, so the rect is
+// tall enough to contain it.
+constexpr TouchRect kRestart{8,336,304,72};
 // GPS: one full-width button flips between its two detail pages.
 constexpr TouchRect kDetailToggle{8, 380, 304, 44};
 // Link: three pages (rows, counters, phone) navigated with PREV/NEXT.
@@ -62,6 +70,7 @@ inline TouchAction touch_action(ScreenPage page, uint8_t detail_page, int16_t x,
     }
   }
   if(page==ScreenPage::kDebug&&layout::kDebugToggle.contains(x,y))return TouchAction::kDebugToggle;
+  if(page==ScreenPage::kDebug&&layout::kRestart.contains(x,y))return TouchAction::kRestart;
   if(page==ScreenPage::kSettings&&layout::kDebug.contains(x,y))return TouchAction::kDebug;
   if (page != ScreenPage::kSettings) return TouchAction::kNone;
   if (layout::kBase.contains(x, y)) return TouchAction::kBase;
